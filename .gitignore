@@ -31,6 +31,24 @@ settings.json
 *.log
 logs/
 
+# graphify knowledge graph
+# Committed (portable, repo-relative, shared with the team):
+#   graphify-out/graph.json, GRAPH_REPORT.md, manifest.json, cost.json,
+#   .graphify_labels.json (community names reused by --update)
+# Ignored below: machine-specific paths, the extraction cache and bulky
+# regenerable views (`graphify export html` recreates graph.html).
+graphify-out/cache/
+graphify-out/graph.html
+graphify-out/obsidian/
+graphify-out/wiki/
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/.graphify_*.json
+!graphify-out/.graphify_labels.json
+graphify-out/.graphify_*.txt
+graphify-out/.needs_update
+graphify-out/*.tmp
+
 # Editors / OS
 .DS_Store
 .idea/
