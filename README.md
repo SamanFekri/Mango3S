@@ -5,8 +5,9 @@ A desktop IDE for MongoDB, built with Go, [Wails](https://wails.io) and React. T
 command shell) is inspired by Studio 3T. Mango3S is an independent, original implementation and
 shares no code, branding or assets with that product.
 
-This release covers the **P0 scope**: browsing data, querying, editing documents and running
-pipelines and shell commands safely.
+This release covers **P0** (browsing data, querying, editing documents, running pipelines and
+shell commands) and **P1**: import/export, schema analysis, SQL, code generation, explain plans,
+saved queries, query history and background jobs.
 
 ---
 
@@ -23,6 +24,15 @@ pipelines and shell commands safely.
 | **Aggregation editor** | Stages built from 19 operator templates. Edit, enable/disable, reorder, duplicate and delete stages; preview the output of any stage; run the full pipeline with paging and `allowDiskUse`; edit the whole pipeline as text |
 | **Shell (IntelliShell-style)** | `show dbs/collections`, `use`, `db.<coll>.<method>(…)` with cursor modifiers, `db.runCommand`, … Run all or just the selection, with per-statement output |
 | **Robustness** | Typed errors with friendly messages, per-operation timeout and cancel, cursors always closed, credentials redacted from logs, loading states everywhere |
+| **Import wizard** *(P1)* | JSON array, NDJSON/mongoexport and CSV/TSV. Preview the first 20 documents; per-column CSV types (auto, string, int, long, double, decimal, bool, date, ObjectId, JSON) or skip; insert or upsert by `_id`; optional drop-first and stop-on-error; batched writes |
+| **Export wizard** *(P1)* | Filter, sort, skip and limit; pick fields from a sampled list; JSON array or NDJSON, canonical or relaxed Extended JSON, pretty-print; CSV with delimiter and header options. Written to a temp file and renamed on success, so failed or canceled exports leave nothing behind |
+| **Background jobs** *(P1)* | Imports and exports run off the UI thread with live progress (bytes or documents), elapsed time, result summary, meaningful errors and Cancel, all in the status-bar Jobs panel |
+| **Schema explorer** *(P1)* | `$sample`-based analysis (optional filter): every field path incl. inside arrays of documents, presence %, BSON-type distribution, array element types, numeric/date ranges, string and array lengths, distinct counts, unique hints, sample values |
+| **SQL query** *(P1)* | A documented SQL `SELECT` subset translated to `find` or an aggregation pipeline. Shows the generated mongosh, runs with paging, positioned errors for unsupported constructs ([reference](#sql-subset)) |
+| **Query → code** *(P1)* | Generates runnable code for mongosh, Node.js, Python (PyMongo), Java (sync driver), C# (.NET driver) and Go (driver v2) from a query, pipeline or SQL, with each driver's native BSON types |
+| **Explain plans** *(P1)* | Runs `explain` with `executionStats` (pipelines with `$out`/`$merge` are only planned). Shows summary metrics, a stage tree with per-stage stats, aggregation stages, and diagnostics such as collection scans, in-memory sorts, low selectivity, unanchored regexes and covered queries, with ESR index suggestions |
+| **Library & history** *(P1)* | Save queries, pipelines, shell scripts and SQL by name; rename, delete and reopen them in the right tab. Every run is recorded in a searchable history (500 entries) with duration and errors. Both persist across restarts |
+| **IntelliShell assist** *(P1)* | Context-aware completion: collections after `db.`, collection methods with signatures, cursor methods after `).`, `show` targets, operators, BSON helpers, and the referenced collection's field names. Alt+↑/↓ recalls history; a side panel lists past scripts; scripts can be saved |
 
 ### Value syntax
 
@@ -43,6 +53,72 @@ Extended JSON.
 
 Documents are displayed in the same syntax and round-trip exactly. `int32`, `int64`, `double`
 and `decimal` stay distinct, so opening and saving a document never changes a field's type.
+
+---
+
+## P1 reference
+
+### Import and export formats
+
+| Format | Import | Export | BSON types |
+|---|---|---|---|
+| JSON array `[ {...}, ... ]` | ✓ | ✓ | Exact with canonical Extended JSON; relaxed folds int64/double into plain numbers |
+| NDJSON / JSON lines / mongoexport | ✓ | ✓ (mongoimport-compatible) | Same as above |
+| CSV / TSV (header row required) | ✓ | ✓ | Lossy: types are inferred or set per column; dotted headers ↔ nested documents; arrays and sub-documents as JSON cells |
+
+CSV `auto` inference: `true`/`false` → bool, integers → int32 or int64, decimals → double,
+24-hex → ObjectId, full ISO timestamps → date, `[...]`/`{...}` → parsed value, everything else →
+string. Bare dates like `2024-01-31` stay strings unless the column type is `date`. Empty cells
+are omitted unless "keep blanks" is set.
+
+Imports read with a streaming decoder and write batches of 1,000 documents (unordered). In insert
+mode, duplicates and other per-document failures are counted and reported (first 20 messages),
+and the rest of the batch is still written. A malformed JSON document stops the import and
+reports its position (`document 1203 (byte 98231)`); CSV rows that fail conversion are skipped,
+or stop the import when "stop on error" is set.
+
+### SQL subset
+
+```sql
+SELECT [DISTINCT] * | field [AS alias], ... | COUNT(*) | COUNT(f) | SUM(f) | AVG(f) | MIN(f) | MAX(f)
+FROM collection
+[WHERE condition]
+[GROUP BY field, ...] [HAVING condition]
+[ORDER BY field | alias | aggregate [ASC|DESC], ...]
+[LIMIT n [OFFSET m] | LIMIT m, n]
+```
+
+- **Conditions:** `= != <> < <= > >=`, `AND`, `OR`, `NOT`, parentheses, `IN (...)`,
+  `NOT IN`, `LIKE` / `ILIKE` with `%` and `_`, `IS [NOT] NULL`, `[NOT] BETWEEN a AND b`.
+  Field-to-field comparisons become `$expr`.
+- **Values:** numbers, `'strings'` (`''` escapes a quote), `TRUE`, `FALSE`, `OBJECTID('…')`,
+  `DATE '2024-01-31'` / `TIMESTAMP('…')`.
+- **Names:** `address.city` for nested fields; `"odd name"` or `` `odd name` `` for anything else.
+- **Translation:** without aggregates or `DISTINCT`, a `find` with filter, projection (aliases
+  use `$field` projections), sort, skip and limit. Otherwise a pipeline:
+  `$match → $group → $match (HAVING) → $project → $sort → $skip → $limit`.
+- **Rejected with a positioned error:** `JOIN`, subqueries, `UNION`/`INTERSECT`/`EXCEPT`, `WITH`,
+  `CASE`, functions other than the five aggregates, arithmetic, table aliases, and any
+  non-`SELECT` statement.
+- **Semantics to know:** `= NULL` is rejected in favor of `IS NULL`. `IS NULL` also matches
+  missing fields (MongoDB semantics). `LIKE` is case-sensitive; use `ILIKE` for case-insensitive
+  matching.
+
+### Code generation targets
+
+| Target | Output |
+|---|---|
+| mongosh | `use(...)` + `db.coll.find(...)`/`.aggregate(...)` |
+| Node.js | ES module, `mongodb` package, `for await` over the cursor, only the BSON imports it needs |
+| Python | PyMongo with `bson` types (`Int64`, `Decimal128`, `Regex`, timezone-aware `datetime`, `Binary.from_uuid`) |
+| Java | Sync driver, `Document`/`append`, `Arrays.asList`, `Decimal128.parse`, `Date.from(Instant.parse(...))` |
+| C# | .NET driver, `BsonDocument` initializers, `PipelineDefinition` for aggregations |
+| Go | Driver v2, `bson.D{{Key, Value}}`, helper funcs for ObjectId/Decimal128, `time.Date(...)` |
+
+All snippets read the connection string from `MONGODB_URI`. The Go output is compiled
+(`go vet`) against the real driver in the test suite, and the JavaScript and Python outputs are
+syntax-checked with `node --check` and `py_compile` when those tools are installed. Java and C#
+are covered by golden-output tests (compiling them would need their driver packages).
 
 ---
 
@@ -102,8 +178,15 @@ make docker-test        # the same integration suite, entirely inside Docker
 | `internal/config`, `internal/secrets`, `internal/logging` | Profile CRUD, atomic 0600 writes, URI credential splitting, AES-GCM store (no plaintext on disk, ciphertexts bound to their entry), log redaction |
 | `internal/api` | Password lands in the secret store and never in `connections.json` or logs; JSON error encoding; cancellation; superseded operations; missing-secret handling |
 | `internal/{query,aggregate,documents,shell,model,mongox,apperr}` | Paging arithmetic, pipeline building and validation, `_id` immutability and literal `_id` matching, shell grammar, client options, unreachable-server classification |
-| `internal/integration` (tag `integration`) | Real-server CRUD with type fidelity, duplicate key → CONFLICT, paging with skip/limit, aggregation incl. stage preview and `$out`, shell scripts, read-only enforcement, cancel/timeout, the full API facade, authentication (set `MONGO_AUTH_URI`) |
-| `frontend/src/**/*.test.ts(x)` | Query builder, pipeline and tab reducers, Extended JSON cell rendering, error parsing, results view (paging, selection, read-only), builder UI, full-app connect → browse → query flow |
+| `internal/transfer` | JSON array/NDJSON/canonical/relaxed round trips over a mixed-type dataset, BOMs, malformed input positions, CSV nesting/types/blanks/TSV, CSV export → import round trip, cell formatting, type inference, previews |
+| `internal/jobs` | Progress, throttled events, failure and panic capture, cancel running and queued jobs, pruning, shutdown (run with `-race`) |
+| `internal/schema` | Presence, type mix, numeric/date/decimal ranges, array element types, fields inside arrays of documents, cardinality caps, ordering |
+| `internal/sqlq` | 23 find translations, 5 aggregate translations (GROUP BY/HAVING/DISTINCT/ORDER BY aggregates), 27 rejected constructs with messages, error positions, LIKE → regex |
+| `internal/codegen` | Type rendering in all six languages, aggregation output, balanced delimiters; Go output compiled against the driver; JS/Python syntax-checked |
+| `internal/explain` | Classic, slot-based (SBE), aggregation `$cursor`, sharded and unknown explain shapes; diagnostics; ESR index suggestions; regex detection |
+| `internal/library` | Saved items and history persist across restarts; validation; de-duplicated re-runs; search, limit, clear |
+| `internal/integration` (tag `integration`) | Real-server CRUD with type fidelity, duplicate key → CONFLICT, paging with skip/limit, aggregation incl. stage preview and `$out`, shell scripts, read-only enforcement, cancel/timeout, the full API facade, authentication (set `MONGO_AUTH_URI`). **P1:** 2,500-document export→import round trips (canonical array, canonical NDJSON, relaxed), filtered CSV export of nested fields → re-import, insert/upsert/stop-on-error/drop-first, canceled export leaves no file, schema accuracy on known data, explain before/after creating an index, `$out` not executed by explain, SQL find + GROUP BY/HAVING, code from SQL, history and library after restart |
+| `frontend/src/**/*.test.ts(x)` | Query builder, pipeline and tab reducers, Extended JSON cell rendering, error parsing, results view (paging, selection, read-only), builder UI, full-app connect → browse → query flow. **P1:** shell completion rules, history recall, library → tab mapping, job progress and cancel in the status bar, library tab |
 
 To run the authentication test:
 `docker compose --profile auth up -d mongo-auth`, then
@@ -115,20 +198,30 @@ To run the authentication test:
 
 ```
 ┌──────────────────────── React + TypeScript (frontend/src) ───────────────────────┐
-│ views/   CollectionView · AggregationView · ShellView · SettingsView · Welcome    │
+│ views/   Collection · Aggregation · Shell · Schema · SQL · Library · Settings      │
 │ components/  Sidebar · ConnectionManager · ResultsView · QueryBuilder · CodeEditor│
-│ state/AppContext (settings, profiles, sessions, tabs, toasts, confirm)            │
-│ lib/  backend.ts (typed bindings + error normalization) · queryBuilder · pipeline │
+│              ImportWizard · ExportWizard · JobsPanel · ExplainDialog · CodeDialog  │
+│ state/AppContext (settings, profiles, sessions, tabs, jobs, toasts, dialogs)      │
+│ lib/  backend.ts (typed bindings, job events) · queryBuilder · pipeline ·         │
+│       shellComplete · library                                                     │
 └───────────────────────────────┬──────────────────────────────────────────────────┘
                  Wails bindings │ (frontend/wailsjs, generated)
 ┌───────────────────────────────▼──────────────────────────────────────────────────┐
 │ internal/api      Facade bound to the UI: timeouts, cancellation registry,        │
-│                   profile/credential workflow, JSON error encoding                │
+│                   profile/credential workflow, JSON error encoding, history       │
+│                   recording, "jobs:update" events                                 │
 ├──────────────┬──────────────┬──────────────┬───────────────┬─────────────────────┤
 │ explorer     │ documents    │ query        │ aggregate     │ shell               │
 │ dbs, colls,  │ CRUD by _id  │ find + paging│ stages →      │ mongosh-subset      │
 │ stats, fields│              │ count        │ pipeline      │ parser + executor   │
+├──────────────┬──────────────┬──────────────┬───────────────┬─────────────────────┤
+│ transfer     │ schema       │ sqlq         │ explain       │ codegen             │
+│ JSON/CSV     │ $sample      │ SQL → find / │ plan tree +   │ 6 languages,        │
+│ adapters,    │ analyzer     │ pipeline     │ diagnostics   │ native BSON types   │
+│ import/export│              │              │               │                     │
 ├──────────────┴──────────────┴──────────────┴───────────────┴─────────────────────┤
+│ jobs     background runner: cancel, throttled progress   library  saved + history │
+├───────────────────────────────────────────────────────────────────────────────────┤
 │ mongox   connection manager (one client per open profile) · Source interface      │
 │ mql      shared value model: parse/format shell syntax ⇄ BSON (order-preserving)  │
 │ model    Document/Page DTOs, paging math       apperr  typed, user-facing errors  │
@@ -158,6 +251,17 @@ To run the authentication test:
 - **Errors are data.** Every backend error becomes an `apperr.Error{code, message, detail}`,
   serialized as JSON across the bridge. The UI shows a friendly title per code, with the driver
   detail expandable.
+- **P1 reuses P0 services, it doesn't fork them.** SQL execution feeds its translation into the
+  existing query and aggregate services; export reuses `query.Parse`; explain and code generation
+  reuse `aggregate.Build`. So paging, timeouts, read-only checks and the value parser behave the
+  same everywhere.
+- **Long work is a job, not a call.** Imports and exports outlive a single UI request. The `jobs`
+  manager gives each one its own cancellable context, a concurrency limit (two at a time, the
+  rest queue), panic recovery and progress updates throttled to about 7 per second. These are
+  pushed to the UI as `jobs:update` events, so the desktop UI never blocks.
+- **Streaming everywhere.** Readers yield one document at a time and writers consume one at a
+  time; imports batch writes and exports iterate a cursor. Memory use is independent of
+  dataset size.
 
 ### Repository layout
 
@@ -167,6 +271,7 @@ internal/
   api/                       UI facade (bound methods) + tests
   apperr/ config/ logging/ secrets/ model/ mql/ mongox/
   explorer/ documents/ query/ aggregate/ shell/
+  jobs/ transfer/ schema/ sqlq/ codegen/ explain/ library/     P1 features
   integration/               end-to-end tests (build tag: integration)
 frontend/
   src/{lib,components,views,state}/   React app (+ *.test.ts[x])
@@ -191,6 +296,8 @@ on macOS, `%AppData%\Mango3S` on Windows, `~/.config/Mango3S` on Linux. Override
 | `connections.json` | Connection profiles **without passwords** ([sample](config/sample-connections.json)) |
 | `logs/mango3s.log` | JSON logs, rotated at 5 MB |
 | `secrets.enc`, `secret.key` | Only when the file secret backend is used |
+| `library.json` | Saved queries, pipelines, scripts and SQL |
+| `history.json` | The last 500 executions (queries, pipelines, scripts, SQL) |
 
 To start from the samples, copy `config/sample-*.json` into the config directory as
 `settings.json` and `connections.json`. Then enter passwords in the connection dialog; the
@@ -245,17 +352,32 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
   Execution stops at the first failing statement.
 - The table view renders values from relaxed Extended JSON. 64-bit integers above 2⁵³ may display
   rounded there; the JSON view and the editors are always exact.
-- The operation timeout (default 60 s) applies to every backend call, including the shell.
+- The operation timeout (default 60 s) applies to every backend call, including the shell, SQL,
+  schema analysis and explain. Background imports and exports have no timeout; cancel them from
+  the Jobs panel.
+- Explain uses `executionStats`, so it **runs** the query (writes are excluded: `$out`/`$merge`
+  pipelines are explained with `queryPlanner` only). For sharded clusters it shows the first
+  shard's plan.
+- Schema statistics describe a random sample, not the whole collection; distinct counts are
+  capped at 1,000 per field.
+- History records page 0 of each query or pipeline run (not page navigation) and skips canceled
+  runs. Re-running the newest entry updates it rather than adding a duplicate.
+- Job history is in-memory (the last 50 finished jobs); the jobs themselves stop when the app
+  exits.
 
-## Not supported in P0
+## Not supported (yet)
 
 - **Shell:** this is a MongoDB command interpreter, not a JavaScript engine. No variables, loops,
   functions, `it` paging, `load()`, or `print`. `help` lists what's supported.
-- Import/export (CSV, JSON, BSON, SQL), SQL query, schema analysis, explain-plan visualizer
-  (`find().explain()` in the shell returns the raw plan), index management UI (use the shell),
-  user/role management, data comparison, task scheduler, query history and favorites, SSH
-  tunnels, connection-string import from other tools, in-place cell editing in the table view, and
-  multiple windows. These are P1/P2 candidates.
+- **Import/export:** BSON/mongodump archives, SQL dumps, Excel, exporting aggregation results
+  (export runs a find query), and multi-collection or scheduled exports.
+- **SQL:** joins, subqueries, expressions and functions beyond `COUNT/SUM/AVG/MIN/MAX`, and
+  `INSERT/UPDATE/DELETE` (see [SQL subset](#sql-subset)).
+- **Code generation:** languages beyond the six listed; generated snippets contain the query
+  only, not connection options such as TLS settings.
+- **P2 candidates:** index management UI (use the shell), user/role management, data compare and
+  sync, task scheduler, SSH tunnels, connection import from other tools, in-place table-cell
+  editing, and multiple windows.
 - SSH tunnelling and X.509 / Kerberos / LDAP authentication through dedicated form fields. Options
   the Go driver accepts in the connection string (for example `tls=true&tlsCAFile=…`,
   `authMechanism=MONGODB-X509`) still work.

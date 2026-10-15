@@ -148,3 +148,222 @@ export interface AppInfo {
   logFile: string
   secretBackend: string
 }
+
+// ---- P1 ----------------------------------------------------------------------
+
+export type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
+
+export interface Job {
+  id: string
+  kind: string
+  title: string
+  state: JobState
+  done: number
+  total: number
+  unit: string
+  message: string
+  error?: string
+  result?: string
+  createdAt: string
+  startedAt: string
+  finishedAt: string
+}
+
+export type TransferFormat = 'json' | 'csv'
+
+export interface ColumnSpec {
+  name: string
+  type: string
+  skip: boolean
+}
+
+export interface ImportOptions {
+  connId: string
+  db: string
+  coll: string
+  path: string
+  format: TransferFormat | ''
+  delimiter: string
+  columns: ColumnSpec[]
+  keepBlanks: boolean
+  mode: 'insert' | 'upsert'
+  dropFirst: boolean
+  stopOnError: boolean
+  batchSize: number
+}
+
+export interface ExportOptions {
+  connId: string
+  db: string
+  coll: string
+  filter: string
+  projection: string
+  sort: string
+  skip: number
+  limit: number
+  path: string
+  format: TransferFormat
+  jsonMode: 'array' | 'lines'
+  canonical: boolean
+  pretty: boolean
+  delimiter: string
+  noHeader: boolean
+  fields: string[]
+}
+
+export interface ColumnPreview {
+  name: string
+  inferred: string
+  samples: string[]
+}
+
+export interface ImportPreview {
+  format: TransferFormat
+  sizeBytes: number
+  documents: Doc[]
+  columns: ColumnPreview[]
+  error?: string
+}
+
+export interface TypeStat {
+  type: string
+  count: number
+  percent: number
+}
+
+export interface SchemaField {
+  path: string
+  name: string
+  depth: number
+  count: number
+  presence: number
+  types: TypeStat[]
+  elementTypes?: TypeStat[]
+  minLength?: number
+  maxLength?: number
+  avgLength?: number
+  min?: string
+  max?: string
+  distinct: number
+  distinctCapped: boolean
+  unique: boolean
+  samples: string[]
+}
+
+export interface SchemaReport {
+  sampled: number
+  estimatedDocs: number
+  fields: SchemaField[]
+  durationMs: number
+}
+
+export interface SQLTranslation {
+  kind: 'find' | 'aggregate'
+  collection: string
+  shell: string
+}
+
+export interface SQLResult {
+  translation: SQLTranslation
+  page: Page
+}
+
+export interface CodeLanguage {
+  id: string
+  label: string
+  ext: string
+}
+
+export interface CodeRequest {
+  language: string
+  source: 'query' | 'aggregate' | 'sql'
+  db: string
+  coll: string
+  query?: QueryRequest
+  stages?: Stage[]
+  sql?: string
+}
+
+export interface ExplainDetail {
+  key: string
+  value: string
+}
+
+export interface ExplainStage {
+  name: string
+  details: ExplainDetail[]
+  nReturned?: number
+  docsExamined?: number
+  keysExamined?: number
+  timeMs?: number
+  children: ExplainStage[]
+}
+
+export interface ExplainPlan {
+  namespace: string
+  root: ExplainStage | null
+  pipeline: ExplainStage[]
+  summary: {
+    executionTimeMs?: number
+    nReturned?: number
+    docsExamined?: number
+    keysExamined?: number
+    indexesUsed: string[]
+    collScan: boolean
+    inMemorySort: boolean
+    covered: boolean
+    rejectedPlans: number
+    engine: string
+  }
+  diagnostics: { level: 'good' | 'info' | 'warning'; title: string; detail: string }[]
+  raw: string
+}
+
+export interface ExplainRequest {
+  kind: 'find' | 'aggregate'
+  query?: QueryRequest
+  connId?: string
+  db?: string
+  coll?: string
+  stages?: Stage[]
+}
+
+export type ItemKind = 'query' | 'aggregation' | 'script' | 'sql'
+
+export interface QueryPayload {
+  filter: string
+  projection: string
+  sort: string
+  skip: number
+  limit: number
+}
+
+export interface SavedItem {
+  id: string
+  kind: ItemKind
+  name: string
+  description: string
+  db: string
+  coll: string
+  query?: QueryPayload
+  stages?: Stage[]
+  text?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HistoryEntry {
+  id: string
+  kind: ItemKind
+  connName: string
+  db: string
+  coll: string
+  summary: string
+  query?: QueryPayload
+  stages?: Stage[]
+  text?: string
+  at: string
+  durationMs: number
+  ok: boolean
+  error?: string
+}

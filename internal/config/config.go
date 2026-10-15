@@ -285,6 +285,12 @@ func NewID() string {
 	return hex.EncodeToString(b)
 }
 
+// ReadJSON loads path into v; a missing or empty file leaves v unchanged.
+func ReadJSON(path string, v any) error { return readJSON(path, v) }
+
+// WriteJSON atomically writes v to path with 0600 permissions.
+func WriteJSON(path string, v any) error { return writeJSON(path, v) }
+
 func readJSON(path string, v any) error {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {

@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { backend } from '../lib/backend'
+import { backend, onJobUpdate } from '../lib/backend'
 import { errorTitle, toAppError, type AppError } from '../lib/errors'
 import { tabsReducer, type TabsAction, type TabsState } from '../lib/tabs'
-import type { AppInfo, Profile, SessionInfo, Settings } from '../lib/types'
+import type { AppInfo, Job, Profile, SessionInfo, Settings } from '../lib/types'
 
 export interface Toast {
   id: number
@@ -23,6 +23,17 @@ export interface ConfirmOptions {
 
 interface ConfirmRequest extends ConfirmOptions {
   resolve: (ok: boolean) => void
+}
+
+export interface PromptOptions {
+  title: string
+  label: string
+  initial?: string
+  confirmLabel?: string
+}
+
+interface PromptRequest extends PromptOptions {
+  resolve: (value: string | null) => void
 }
 
 interface AppState {
@@ -51,6 +62,13 @@ interface AppState {
 
   connectionManagerOpen: boolean
   openConnectionManager: (open: boolean) => void
+
+  /** Background jobs, newest first. */
+  jobs: Job[]
+  refreshJobs: () => void
+  prompt: (o: PromptOptions) => Promise<string | null>
+  promptRequest: PromptRequest | null
+  resolvePrompt: (value: string | null) => void
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -73,6 +91,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null)
   const [connectionManagerOpen, openConnectionManager] = useState(false)
+  const [jobMap, setJobMap] = useState<Record<string, Job>>({})
+  const jobMapRef = useRef<Record<string, Job>>({})
+  const [promptRequest, setPromptRequest] = useState<PromptRequest | null>(null)
   const toastSeq = useRef(0)
 
   const dismissToast = useCallback((id: number) => setToasts((ts) => ts.filter((t) => t.id !== id)), [])
@@ -110,6 +131,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     backend.listConnections().then(setSessions).catch(() => undefined)
     reloadProfiles()
   }, [reloadProfiles, toastError])
+
+  // Background jobs: initial list plus live updates pushed by the backend.
+  const refreshJobs = useCallback(() => {
+    backend
+      .listJobs()
+      .then((list) => {
+        jobMapRef.current = Object.fromEntries(list.map((j) => [j.id, j]))
+        setJobMap(jobMapRef.current)
+      })
+      .catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    refreshJobs()
+    return onJobUpdate((j) => {
+      const prev = jobMapRef.current[j.id]
+      if (prev && prev.state !== j.state) {
+        if (j.state === 'succeeded') toast({ kind: 'success', title: j.title, message: j.result })
+        else if (j.state === 'failed') toast({ kind: 'error', title: `${j.title} failed`, message: j.error })
+      }
+      jobMapRef.current = { ...jobMapRef.current, [j.id]: j }
+      setJobMap(jobMapRef.current)
+    })
+  }, [refreshJobs, toast])
+  const jobs = useMemo(() => Object.values(jobMap).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [jobMap])
+
+  const prompt = useCallback(
+    (o: PromptOptions) => new Promise<string | null>((resolve) => setPromptRequest({ ...o, resolve })),
+    [],
+  )
+  const resolvePrompt = useCallback(
+    (value: string | null) => {
+      promptRequest?.resolve(value)
+      setPromptRequest(null)
+    },
+    [promptRequest],
+  )
 
   // Apply theme and editor font size.
   useEffect(() => {
@@ -196,10 +253,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resolveConfirm,
       connectionManagerOpen,
       openConnectionManager,
+      jobs,
+      refreshJobs,
+      prompt,
+      promptRequest,
+      resolvePrompt,
     }),
     [
       settings, saveSettings, appInfo, profiles, reloadProfiles, sessions, connect, disconnect, connecting,
       tabs, toast, toastError, toasts, dismissToast, confirm, confirmRequest, resolveConfirm, connectionManagerOpen,
+      jobs, refreshJobs, prompt, promptRequest, resolvePrompt,
     ],
   )
 

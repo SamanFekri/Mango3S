@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CodeEditor } from '../components/CodeEditor'
 import { Modal, Spinner } from '../components/common'
+import { CodeDialog } from '../components/CodeDialog'
 import { DocumentEditor, INSERT_TEMPLATE } from '../components/DocumentEditor'
+import { ExplainDialog } from '../components/ExplainDialog'
+import { ExportWizard } from '../components/ExportWizard'
+import { ImportWizard } from '../components/ImportWizard'
 import { QueryBuilder } from '../components/QueryBuilder'
 import { ResultsView, type ViewMode } from '../components/ResultsView'
 import { backend } from '../lib/backend'
@@ -9,7 +13,7 @@ import { toAppError, type AppError } from '../lib/errors'
 import { formatBytes, formatCount } from '../lib/format'
 import { emptyBuilder, type BuilderState } from '../lib/queryBuilder'
 import type { Tab } from '../lib/tabs'
-import type { CollectionStats, Doc, Page, QueryRequest } from '../lib/types'
+import type { CodeRequest, CollectionStats, Doc, ExplainRequest, Page, QueryRequest } from '../lib/types'
 import { useApp } from '../state/AppContext'
 
 interface EditorState {
@@ -19,7 +23,7 @@ interface EditorState {
 }
 
 export function CollectionView({ tab }: { tab: Tab }) {
-  const { settings, sessions, toast, toastError, confirm, dispatchTabs } = useApp()
+  const { settings, sessions, toast, toastError, confirm, dispatchTabs, prompt } = useApp()
   const connId = tab.connId!
   const db = tab.db!
   const coll = tab.coll!
@@ -27,11 +31,20 @@ export function CollectionView({ tab }: { tab: Tab }) {
   const readOnly = !!session?.readOnly
   const opId = `query-${tab.id}`
 
-  const [filter, setFilter] = useState('{}')
-  const [projection, setProjection] = useState('')
-  const [sort, setSort] = useState('')
-  const [skip, setSkip] = useState(0)
-  const [limit, setLimit] = useState(0)
+  const init = tab.init?.query
+  const [filter, setFilter] = useState(init?.filter || '{}')
+  const [projection, setProjection] = useState(init?.projection ?? '')
+  const [sort, setSort] = useState(init?.sort ?? '')
+  const [skip, setSkip] = useState(init?.skip ?? 0)
+  const [limit, setLimit] = useState(init?.limit ?? 0)
+  const [savedId, setSavedId] = useState(tab.init?.savedId)
+  const [dialog, setDialog] = useState<
+    | { kind: 'explain'; req: ExplainRequest }
+    | { kind: 'code'; req: Omit<CodeRequest, 'language'> }
+    | { kind: 'export'; req: QueryRequest }
+    | { kind: 'import' }
+    | null
+  >(null)
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
   const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'json')
 
@@ -162,6 +175,18 @@ export function CollectionView({ tab }: { tab: Tab }) {
     }
   }
 
+  const saveQuery = async () => {
+    const name = await prompt({ title: 'Save query', label: 'Name', initial: tab.init?.savedName ?? `${coll} query`, confirmLabel: 'Save' })
+    if (!name) return
+    try {
+      const item = await backend.saveItem({ id: savedId, kind: 'query', name, db, coll, query: { filter, projection, sort, skip, limit } })
+      setSavedId(item.id)
+      toast({ kind: 'success', title: `Saved "${item.name}"` })
+    } catch (err) {
+      toastError(err, 'Save failed')
+    }
+  }
+
   const openStats = async () => {
     setStats('loading')
     try {
@@ -187,6 +212,26 @@ export function CollectionView({ tab }: { tab: Tab }) {
         <button className="small ghost" onClick={openStats}>
           Stats &amp; indexes
         </button>
+        <button className="small ghost" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'schema', connId, connName: tab.connName, db, coll }, reuse: true })}>
+          Schema
+        </button>
+        <button className="small ghost" onClick={() => setDialog({ kind: 'explain', req: { kind: 'find', query: buildReq(0) } })}>
+          Explain
+        </button>
+        <button className="small ghost" onClick={() => setDialog({ kind: 'code', req: { source: 'query', db, coll, query: buildReq(0) } })}>
+          Code
+        </button>
+        <button className="small ghost" onClick={saveQuery}>
+          Save
+        </button>
+        <button className="small ghost" onClick={() => setDialog({ kind: 'export', req: buildReq(0) })}>
+          Export…
+        </button>
+        {!readOnly && (
+          <button className="small ghost" onClick={() => setDialog({ kind: 'import' })}>
+            Import…
+          </button>
+        )}
         <button
           className="small ghost"
           onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'aggregation', connId, connName: tab.connName, db, coll } })}
@@ -303,6 +348,11 @@ export function CollectionView({ tab }: { tab: Tab }) {
           }}
         />
       )}
+
+      {dialog?.kind === 'explain' && <ExplainDialog request={dialog.req} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'code' && <CodeDialog request={dialog.req} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'export' && <ExportWizard query={dialog.req} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'import' && <ImportWizard connId={connId} db={db} coll={coll} onClose={() => setDialog(null)} />}
 
       {stats && (
         <Modal title={`${db}.${coll}`} onClose={() => setStats(null)}>

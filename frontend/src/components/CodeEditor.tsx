@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import type { RefObject } from 'react'
-import { autocompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
+import { autocompletion, type Completion, type CompletionContext, type CompletionSource } from '@codemirror/autocomplete'
 import { javascript } from '@codemirror/lang-javascript'
+import { sql as sqlLang } from '@codemirror/lang-sql'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
-import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view'
+import { EditorView, keymap, placeholder as placeholderExt, type KeyBinding } from '@codemirror/view'
 import { basicSetup, minimalSetup } from 'codemirror'
 
 const OPERATORS = [
@@ -57,6 +58,11 @@ export interface CodeEditorProps {
   ariaLabel?: string
   editorRef?: RefObject<EditorView | null>
   autoFocus?: boolean
+  language?: 'javascript' | 'sql'
+  /** Replaces the default operator/field completion (e.g. the shell's context-aware source). */
+  completionSource?: CompletionSource
+  /** Extra key bindings, checked before the defaults. */
+  keyBindings?: KeyBinding[]
 }
 
 export function CodeEditor({
@@ -72,12 +78,19 @@ export function CodeEditor({
   ariaLabel,
   editorRef,
   autoFocus,
+  language = 'javascript',
+  completionSource,
+  keyBindings,
 }: CodeEditorProps) {
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
   const onRunRef = useRef(onRun)
   const fieldsRef = useRef<string[]>(fields ?? [])
+  const sourceRef = useRef(completionSource)
+  const keysRef = useRef(keyBindings)
+  sourceRef.current = completionSource
+  keysRef.current = keyBindings
   const readOnlyComp = useRef(new Compartment())
   onChangeRef.current = onChange
   onRunRef.current = onRun
@@ -86,6 +99,7 @@ export function CodeEditor({
   useEffect(() => {
     if (!host.current) return
     const complete = (ctx: CompletionContext) => {
+      if (sourceRef.current) return sourceRef.current(ctx)
       const word = ctx.matchBefore(/[$\w.]+/)
       if (!word || (word.from === word.to && !ctx.explicit)) return null
       const options: Completion[] = [
@@ -101,12 +115,17 @@ export function CodeEditor({
         doc: value,
         extensions: [
           compact ? minimalSetup : basicSetup,
-          javascript(),
+          language === 'sql' ? sqlLang() : javascript(),
           theme,
           EditorView.lineWrapping,
-          autocompletion({ override: [complete], activateOnTyping: true }),
+          language === 'sql' ? [] : autocompletion({ override: [complete], activateOnTyping: true }),
           Prec.highest(
             keymap.of([
+              // Delegate to the latest keyBindings prop without recreating the editor.
+              ...(keysRef.current ?? []).map((b) => ({
+                ...b,
+                run: (v: EditorView) => keysRef.current?.find((k) => k.key === b.key)?.run?.(v) ?? false,
+              })),
               {
                 key: 'Mod-Enter',
                 run: () => {

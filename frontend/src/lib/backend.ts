@@ -1,6 +1,7 @@
 // Typed wrapper around the Wails-generated bindings. All UI code calls the
 // backend through this module so errors are normalized in one place.
 import * as App from '../../wailsjs/go/api/App'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { toAppError } from './errors'
 import type {
   AggregateRequest,
@@ -8,8 +9,21 @@ import type {
   CollectionInfo,
   CollectionStats,
   DatabaseInfo,
+  CodeLanguage,
+  CodeRequest,
   Doc,
+  ExplainPlan,
+  ExplainRequest,
+  ExportOptions,
+  HistoryEntry,
+  ImportOptions,
+  ImportPreview,
+  Job,
   Page,
+  SavedItem,
+  SchemaReport,
+  SQLResult,
+  SQLTranslation,
   Profile,
   ProfileInput,
   QueryRequest,
@@ -74,6 +88,39 @@ export const backend = {
   runShell: (opId: string, conn: string, db: string, script: string) =>
     wrap<ShellResult>(a.RunShell(opId, conn, db, script)),
   cancel: (opId: string) => wrap<boolean>(a.CancelOperation(opId)),
+
+  // P1
+  listJobs: () => wrap<Job[]>(a.ListJobs()),
+  cancelJob: (id: string) => wrap<boolean>(a.CancelJob(id)),
+  clearFinishedJobs: () => wrap<void>(a.ClearFinishedJobs()),
+  chooseImportFile: () => wrap<string>(a.ChooseImportFile()),
+  chooseExportFile: (defaultName: string) => wrap<string>(a.ChooseExportFile(defaultName)),
+  previewImport: (o: ImportOptions) => wrap<ImportPreview>(a.PreviewImport(o)),
+  startImport: (o: ImportOptions) => wrap<Job>(a.StartImport(o)),
+  startExport: (o: ExportOptions) => wrap<Job>(a.StartExport(o)),
+  analyzeSchema: (opId: string, req: { connId: string; db: string; coll: string; sampleSize: number; filter: string }) =>
+    wrap<SchemaReport>(a.AnalyzeSchema(opId, req)),
+  translateSQL: (sql: string) => wrap<SQLTranslation>(a.TranslateSQL(sql)),
+  runSQL: (opId: string, req: { connId: string; db: string; sql: string; page: number; pageSize: number }) =>
+    wrap<SQLResult>(a.RunSQL(opId, req)),
+  codeLanguages: () => wrap<CodeLanguage[]>(a.CodeLanguages()),
+  generateCode: (req: CodeRequest) => wrap<string>(a.GenerateCode(req)),
+  explain: (opId: string, req: ExplainRequest) => wrap<ExplainPlan>(a.Explain(opId, req)),
+  listSaved: (kind = '') => wrap<SavedItem[]>(a.ListSaved(kind)),
+  saveItem: (item: Partial<SavedItem> & Pick<SavedItem, 'kind' | 'name'>) =>
+    wrap<SavedItem>(a.SaveItem({ id: '', description: '', db: '', coll: '', ...item })),
+  deleteItem: (id: string) => wrap<void>(a.DeleteItem(id)),
+  listHistory: (kind = '', search = '', limit = 200) => wrap<HistoryEntry[]>(a.ListHistory(kind, search, limit)),
+  clearHistory: () => wrap<void>(a.ClearHistory()),
+}
+
+/** Subscribes to backend job updates; returns an unsubscribe function. */
+export function onJobUpdate(cb: (j: Job) => void): () => void {
+  try {
+    return EventsOn('jobs:update', cb)
+  } catch {
+    return () => undefined // not running inside Wails (tests, plain browser)
+  }
 }
 
 export type Backend = typeof backend

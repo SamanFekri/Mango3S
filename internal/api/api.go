@@ -13,18 +13,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+
 	"mango3s/internal/aggregate"
 	"mango3s/internal/apperr"
 	"mango3s/internal/config"
 	"mango3s/internal/documents"
+	"mango3s/internal/explain"
 	"mango3s/internal/explorer"
+	"mango3s/internal/jobs"
+	"mango3s/internal/library"
 	"mango3s/internal/logging"
 	"mango3s/internal/model"
 	"mango3s/internal/mongox"
 	"mango3s/internal/mql"
 	"mango3s/internal/query"
+	"mango3s/internal/schema"
 	"mango3s/internal/secrets"
 	"mango3s/internal/shell"
+	"mango3s/internal/transfer"
 )
 
 // Version is set at build time with -ldflags "-X mango3s/internal/api.Version=...".
@@ -56,6 +63,14 @@ type App struct {
 	agg      aggregate.Service
 	shell    shell.Service
 
+	// P1
+	jobs     *jobs.Manager
+	transfer *transfer.Service
+	schema   *schema.Service
+	explain  *explain.Service
+	library  *library.Store
+	history  *library.History
+
 	settingsMu sync.RWMutex
 	settings   config.Settings
 
@@ -78,7 +93,13 @@ func New(d Deps) *App {
 		agg:      aggregate.New(d.Conns),
 		shell:    shell.New(d.Conns),
 		ops:      newOpRegistry(),
+		jobs:     jobs.NewManager(d.Log, 2),
+		schema:   schema.New(d.Conns),
+		explain:  explain.New(d.Conns),
+		library:  library.NewStore(d.Store.Dir()),
+		history:  library.NewHistory(d.Store.Dir(), 500),
 	}
+	a.transfer = transfer.New(d.Conns, a.jobs)
 	st, err := d.Store.LoadSettings()
 	if err != nil {
 		a.log.Warn("settings could not be loaded; using defaults", "err", err)
@@ -100,12 +121,15 @@ func NewLifecycle(a *App) Lifecycle { return Lifecycle{app: a} }
 // Startup stores the runtime context.
 func (l Lifecycle) Startup(ctx context.Context) {
 	l.app.ctx = ctx
+	// Push job progress to the UI; the frontend listens for "jobs:update".
+	l.app.jobs.SetEmitter(func(j jobs.Job) { runtime.EventsEmit(ctx, "jobs:update", j) })
 	l.app.log.Info("Mango3S started", "version", Version)
 }
 
 // Shutdown cancels running operations and closes all connections.
 func (l Lifecycle) Shutdown(ctx context.Context) {
 	l.app.ops.cancelAll()
+	l.app.jobs.Shutdown(5 * time.Second)
 	c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	l.app.conns.CloseAll(c)
@@ -484,9 +508,14 @@ func (a *App) DropDatabase(connID, db string) error {
 
 // RunQuery executes a find query and returns one page.
 func (a *App) RunQuery(opID string, req query.Request) (model.Page, error) {
-	return call(a, "RunQuery", opID, func(ctx context.Context) (model.Page, error) {
+	start := time.Now()
+	page, err := call(a, "RunQuery", opID, func(ctx context.Context) (model.Page, error) {
 		return a.query.Find(ctx, req)
 	})
+	if req.Page == 0 {
+		a.recordQuery(req, time.Since(start), err)
+	}
+	return page, err
 }
 
 // CountQuery counts documents matching the query (honoring skip/limit).
@@ -547,9 +576,14 @@ func (a *App) FormatDocument(text string) (string, error) {
 
 // RunAggregation runs a pipeline (or a prefix of it) and returns one page.
 func (a *App) RunAggregation(opID string, req aggregate.Request) (model.Page, error) {
-	return call(a, "RunAggregation", opID, func(ctx context.Context) (model.Page, error) {
+	start := time.Now()
+	page, err := call(a, "RunAggregation", opID, func(ctx context.Context) (model.Page, error) {
 		return a.agg.Run(ctx, req)
 	})
+	if req.Page == 0 && req.UpTo < 0 {
+		a.recordAggregation(req, time.Since(start), err)
+	}
+	return page, err
 }
 
 // PipelineToText renders stages as a mongosh pipeline array.
@@ -566,7 +600,10 @@ func (a *App) PipelineFromText(text string) ([]aggregate.Stage, error) {
 
 // RunShell executes shell commands against the given database.
 func (a *App) RunShell(opID, connID, db, script string) (shell.Result, error) {
-	return call(a, "RunShell", opID, func(ctx context.Context) (shell.Result, error) {
+	start := time.Now()
+	res, err := call(a, "RunShell", opID, func(ctx context.Context) (shell.Result, error) {
 		return a.shell.Execute(ctx, connID, db, script, a.currentSettings().PageSize)
 	})
+	a.recordShell(connID, db, script, res, time.Since(start), err)
+	return res, err
 }

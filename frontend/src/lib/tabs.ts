@@ -1,4 +1,15 @@
-export type TabKind = 'welcome' | 'collection' | 'aggregation' | 'shell' | 'settings'
+import type { QueryPayload, Stage } from './types'
+
+export type TabKind = 'welcome' | 'collection' | 'aggregation' | 'shell' | 'settings' | 'schema' | 'sql' | 'library'
+
+/** Content a tab opens with, e.g. from a saved item or the history. */
+export interface TabInit {
+  query?: QueryPayload
+  stages?: Stage[]
+  text?: string
+  savedId?: string
+  savedName?: string
+}
 
 export interface Tab {
   id: string
@@ -8,6 +19,7 @@ export interface Tab {
   connName?: string
   db?: string
   coll?: string
+  init?: TabInit
 }
 
 export interface TabsState {
@@ -41,6 +53,12 @@ export function tabTitle(t: Omit<Tab, 'id' | 'title'>): string {
       return `${t.coll ?? 'Aggregate'} · pipeline`
     case 'shell':
       return `Shell · ${t.connName ?? t.connId ?? ''}`
+    case 'schema':
+      return `${t.coll ?? ''} · schema`
+    case 'sql':
+      return `SQL · ${t.db ?? ''}`
+    case 'library':
+      return 'Library'
   }
 }
 
@@ -51,7 +69,7 @@ function sameTarget(a: Omit<Tab, 'id' | 'title'>, b: Tab): boolean {
 export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
   switch (action.type) {
     case 'open': {
-      const singleton = action.tab.kind === 'settings' || action.tab.kind === 'welcome'
+      const singleton = action.tab.kind === 'settings' || action.tab.kind === 'welcome' || action.tab.kind === 'library'
       if (singleton || action.reuse) {
         const existing = state.tabs.find((t) => sameTarget(action.tab, t))
         if (existing) return { ...state, activeId: existing.id }

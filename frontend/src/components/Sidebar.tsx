@@ -5,6 +5,8 @@ import { formatBytes } from '../lib/format'
 import type { CollectionInfo, DatabaseInfo, SessionInfo } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { Modal, Spinner } from './common'
+import { ExportWizard } from './ExportWizard'
+import { ImportWizard } from './ImportWizard'
 
 interface MenuItem {
   label: string
@@ -29,6 +31,7 @@ export function Sidebar() {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [filter, setFilter] = useState('')
   const [createFor, setCreateFor] = useState<{ conn: SessionInfo; db?: string } | null>(null)
+  const [transfer, setTransfer] = useState<{ kind: 'import' | 'export'; conn: SessionInfo; db: string; coll?: string } | null>(null)
 
   const loadDbs = useCallback(async (connId: string) => {
     setDbs((d) => ({ ...d, [connId]: { ...d[connId], loading: true, error: undefined } }))
@@ -177,6 +180,10 @@ export function Sidebar() {
               label: 'Open shell',
               action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db: 'test' } }),
             },
+            {
+              label: 'SQL query',
+              action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }),
+            },
             { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
             { label: 'Disconnect', action: () => disconnect(s.id) },
           ]
@@ -220,6 +227,11 @@ export function Sidebar() {
                       label: 'Open shell here',
                       action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db: db.name } }),
                     },
+                    {
+                      label: 'SQL query',
+                      action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: db.name } }),
+                    },
+                    { label: 'Import into new collection…', action: () => setTransfer({ kind: 'import', conn: s, db: db.name }), disabled: s.readOnly },
                     { label: 'Drop database…', action: () => dropDb(s, db.name), danger: true, disabled: s.readOnly },
                   ]
                   return (
@@ -259,6 +271,21 @@ export function Sidebar() {
                                   type: 'open',
                                   tab: { kind: 'aggregation', connId: s.id, connName: s.name, db: db.name, coll: coll.name },
                                 }),
+                            },
+                            {
+                              label: 'Schema',
+                              action: () =>
+                                dispatchTabs({
+                                  type: 'open',
+                                  tab: { kind: 'schema', connId: s.id, connName: s.name, db: db.name, coll: coll.name },
+                                  reuse: true,
+                                }),
+                            },
+                            { label: 'Export…', action: () => setTransfer({ kind: 'export', conn: s, db: db.name, coll: coll.name }) },
+                            {
+                              label: 'Import…',
+                              action: () => setTransfer({ kind: 'import', conn: s, db: db.name, coll: coll.name }),
+                              disabled: s.readOnly || coll.type === 'view',
                             },
                             {
                               label: 'Drop collection…',
@@ -338,6 +365,24 @@ export function Sidebar() {
             </li>
           ))}
         </ul>
+      )}
+
+      {transfer?.kind === 'import' && (
+        <ImportWizard
+          connId={transfer.conn.id}
+          db={transfer.db}
+          coll={transfer.coll}
+          onClose={() => {
+            setTransfer(null)
+            loadColls(transfer.conn.id, transfer.db)
+          }}
+        />
+      )}
+      {transfer?.kind === 'export' && transfer.coll && (
+        <ExportWizard
+          query={{ connId: transfer.conn.id, db: transfer.db, coll: transfer.coll, filter: '{}', projection: '', sort: '', skip: 0, limit: 0, page: 0, pageSize: 50 }}
+          onClose={() => setTransfer(null)}
+        />
       )}
 
       {createFor && (

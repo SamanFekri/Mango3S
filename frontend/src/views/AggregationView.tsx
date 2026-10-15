@@ -1,23 +1,29 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
+import { CodeDialog } from '../components/CodeDialog'
 import { CodeEditor } from '../components/CodeEditor'
+import { ExplainDialog } from '../components/ExplainDialog'
 import { ErrorBanner, Spinner } from '../components/common'
 import { ResultsView, type ViewMode } from '../components/ResultsView'
 import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
 import { STAGE_TEMPLATES, newStage, pipelineReducer, toStages } from '../lib/pipeline'
 import type { Tab } from '../lib/tabs'
-import type { AggregateRequest, Page } from '../lib/types'
+import type { AggregateRequest, CodeRequest, ExplainRequest, Page } from '../lib/types'
 import { useApp } from '../state/AppContext'
 
 export function AggregationView({ tab }: { tab: Tab }) {
-  const { settings, sessions } = useApp()
+  const { settings, sessions, prompt, toast, toastError } = useApp()
   const connId = tab.connId!
   const db = tab.db!
   const coll = tab.coll!
   const readOnly = !!sessions.find((s) => s.id === connId)?.readOnly
   const opId = `agg-${tab.id}`
 
-  const [stages, dispatch] = useReducer(pipelineReducer, undefined, () => [newStage('$match')])
+  const [stages, dispatch] = useReducer(pipelineReducer, undefined, () =>
+    tab.init?.stages?.length ? pipelineReducer([], { type: 'replace', stages: tab.init.stages }) : [newStage('$match')],
+  )
+  const [savedId, setSavedId] = useState(tab.init?.savedId)
+  const [dialog, setDialog] = useState<{ kind: 'explain'; req: ExplainRequest } | { kind: 'code'; req: Omit<CodeRequest, 'language'> } | null>(null)
   const [allowDiskUse, setAllowDiskUse] = useState(false)
   const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'json')
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
@@ -76,6 +82,18 @@ export function AggregationView({ tab }: { tab: Tab }) {
 
   const enabledCount = stages.filter((s) => s.enabled).length
 
+  const savePipeline = async () => {
+    const name = await prompt({ title: 'Save pipeline', label: 'Name', initial: tab.init?.savedName ?? `${coll} pipeline`, confirmLabel: 'Save' })
+    if (!name) return
+    try {
+      const item = await backend.saveItem({ id: savedId, kind: 'aggregation', name, db, coll, stages: toStages(stages) })
+      setSavedId(item.id)
+      toast({ kind: 'success', title: `Saved "${item.name}"` })
+    } catch (err) {
+      toastError(err, 'Save failed')
+    }
+  }
+
   return (
     <div className="view aggregation-view">
       <div className="view-header">
@@ -92,6 +110,15 @@ export function AggregationView({ tab }: { tab: Tab }) {
           <input type="checkbox" checked={allowDiskUse} onChange={(e) => setAllowDiskUse(e.target.checked)} />
           allowDiskUse
         </label>
+        <button className="small ghost" disabled={!!textMode} onClick={() => setDialog({ kind: 'explain', req: { kind: 'aggregate', connId, db, coll, stages: toStages(stages) } })}>
+          Explain
+        </button>
+        <button className="small ghost" disabled={!!textMode} onClick={() => setDialog({ kind: 'code', req: { source: 'aggregate', db, coll, stages: toStages(stages) } })}>
+          Code
+        </button>
+        <button className="small ghost" disabled={!!textMode} onClick={savePipeline}>
+          Save
+        </button>
         {textMode ? (
           <>
             <button className="small" onClick={() => setTextMode(null)}>
@@ -212,6 +239,8 @@ export function AggregationView({ tab }: { tab: Tab }) {
           emptyHint={previewing >= 0 ? undefined : 'Run the pipeline, or preview the output of a single stage.'}
         />
       </div>
+      {dialog?.kind === 'explain' && <ExplainDialog request={dialog.req} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'code' && <CodeDialog request={dialog.req} onClose={() => setDialog(null)} />}
     </div>
   )
 }

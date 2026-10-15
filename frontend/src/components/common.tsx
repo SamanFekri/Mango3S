@@ -107,6 +107,33 @@ export function ConfirmDialog() {
   )
 }
 
+export function PromptDialog() {
+  const { promptRequest: req, resolvePrompt } = useApp()
+  const [value, setValue] = useState('')
+  useEffect(() => setValue(req?.initial ?? ''), [req])
+  if (!req) return null
+  const submit = () => value.trim() && resolvePrompt(value.trim())
+  return (
+    <Modal
+      title={req.title}
+      onClose={() => resolvePrompt(null)}
+      footer={
+        <>
+          <button onClick={() => resolvePrompt(null)}>Cancel</button>
+          <button className="primary" disabled={!value.trim()} onClick={submit}>
+            {req.confirmLabel ?? 'OK'}
+          </button>
+        </>
+      }
+    >
+      <label className="field">
+        <span>{req.label}</span>
+        <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
+      </label>
+    </Modal>
+  )
+}
+
 export function Toasts() {
   const { toasts, dismissToast } = useApp()
   return (

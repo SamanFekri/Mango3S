@@ -1,14 +1,18 @@
 import { Component, useEffect } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
-import { ConfirmDialog, Toasts } from './components/common'
+import { ConfirmDialog, PromptDialog, Toasts } from './components/common'
 import { ConnectionManager } from './components/ConnectionManager'
+import { JobsIndicator } from './components/JobsPanel'
 import { Sidebar } from './components/Sidebar'
 import type { Tab } from './lib/tabs'
 import { AppProvider, useApp } from './state/AppContext'
 import { AggregationView } from './views/AggregationView'
 import { CollectionView } from './views/CollectionView'
+import { LibraryView } from './views/LibraryView'
+import { SchemaView } from './views/SchemaView'
 import { SettingsView } from './views/SettingsView'
 import { ShellView } from './views/ShellView'
+import { SqlView } from './views/SqlView'
 import { WelcomeView } from './views/WelcomeView'
 
 class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -49,6 +53,12 @@ function TabContent({ tab }: { tab: Tab }) {
       return <AggregationView tab={tab} />
     case 'shell':
       return <ShellView tab={tab} />
+    case 'schema':
+      return <SchemaView tab={tab} />
+    case 'sql':
+      return <SqlView tab={tab} />
+    case 'library':
+      return <LibraryView />
   }
 }
 
@@ -88,6 +98,9 @@ function TabBar() {
         </div>
       ))}
       <span className="spacer" />
+      <button className="small ghost tabbar-btn" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'library' } })} title="Saved queries and history">
+        Library
+      </button>
       <button className="small ghost tabbar-btn" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'settings' } })} title="Settings">
         ⚙
       </button>
@@ -111,6 +124,7 @@ function StatusBar() {
         </span>
       )}
       <span className="spacer" />
+      <JobsIndicator />
       {appInfo && <span>v{appInfo.version}</span>}
     </footer>
   )
@@ -151,6 +165,7 @@ function Shell() {
       <StatusBar />
       {connectionManagerOpen && <ConnectionManager />}
       <ConfirmDialog />
+      <PromptDialog />
       <Toasts />
     </div>
   )
