@@ -1,0 +1,572 @@
+// Package api is the thin facade bound to the Wails frontend. Every exported
+// method of *App becomes a TypeScript function. It wires services together,
+// applies timeouts and cancellation, and encodes errors as JSON so the UI can
+// read the error code.
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"log/slog"
+	"strings"
+	"sync"
+	"time"
+
+	"mango3s/internal/aggregate"
+	"mango3s/internal/apperr"
+	"mango3s/internal/config"
+	"mango3s/internal/documents"
+	"mango3s/internal/explorer"
+	"mango3s/internal/logging"
+	"mango3s/internal/model"
+	"mango3s/internal/mongox"
+	"mango3s/internal/mql"
+	"mango3s/internal/query"
+	"mango3s/internal/secrets"
+	"mango3s/internal/shell"
+)
+
+// Version is set at build time with -ldflags "-X mango3s/internal/api.Version=...".
+var Version = "0.1.0-dev"
+
+// Deps are the collaborators of App.
+type Deps struct {
+	Log      *slog.Logger
+	LogLevel *slog.LevelVar
+	LogPath  string
+	Store    *config.Store
+	Secrets  secrets.Store
+	Conns    *mongox.Manager
+}
+
+// App is bound to the frontend.
+type App struct {
+	ctx      context.Context
+	log      *slog.Logger
+	logLevel *slog.LevelVar
+	logPath  string
+	store    *config.Store
+	secrets  secrets.Store
+	conns    *mongox.Manager
+
+	explorer explorer.Service
+	docs     documents.Service
+	query    query.Service
+	agg      aggregate.Service
+	shell    shell.Service
+
+	settingsMu sync.RWMutex
+	settings   config.Settings
+
+	ops *opRegistry
+}
+
+// New constructs the facade and its services.
+func New(d Deps) *App {
+	a := &App{
+		ctx:      context.Background(),
+		log:      d.Log,
+		logLevel: d.LogLevel,
+		logPath:  d.LogPath,
+		store:    d.Store,
+		secrets:  d.Secrets,
+		conns:    d.Conns,
+		explorer: explorer.New(d.Conns),
+		docs:     documents.New(d.Conns),
+		query:    query.New(d.Conns),
+		agg:      aggregate.New(d.Conns),
+		shell:    shell.New(d.Conns),
+		ops:      newOpRegistry(),
+	}
+	st, err := d.Store.LoadSettings()
+	if err != nil {
+		a.log.Warn("settings could not be loaded; using defaults", "err", err)
+	}
+	a.settings = st
+	if a.logLevel != nil {
+		a.logLevel.Set(logging.ParseLevel(st.LogLevel))
+	}
+	return a
+}
+
+// Lifecycle exposes startup/shutdown hooks without binding them to the UI.
+type Lifecycle struct{ app *App }
+
+// NewLifecycle returns the hooks for the desktop runtime. It is a function
+// rather than a method so that Wails does not expose it to the frontend.
+func NewLifecycle(a *App) Lifecycle { return Lifecycle{app: a} }
+
+// Startup stores the runtime context.
+func (l Lifecycle) Startup(ctx context.Context) {
+	l.app.ctx = ctx
+	l.app.log.Info("Mango3S started", "version", Version)
+}
+
+// Shutdown cancels running operations and closes all connections.
+func (l Lifecycle) Shutdown(ctx context.Context) {
+	l.app.ops.cancelAll()
+	c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	l.app.conns.CloseAll(c)
+	l.app.log.Info("Mango3S stopped")
+}
+
+// ---- errors, timeouts, cancellation -------------------------------------
+
+// encode converts any error into a JSON-encoded apperr.Error string. Wails
+// rejects the JS promise with this string; the frontend parses it.
+func (a *App) encode(op string, err error) error {
+	if err == nil {
+		return nil
+	}
+	ae := apperr.From(err)
+	ae.Message = logging.Redact(ae.Message)
+	ae.Detail = logging.Redact(ae.Detail)
+	switch ae.Code {
+	case apperr.CodeInvalidInput, apperr.CodeCanceled, apperr.CodeNotFound, apperr.CodeReadOnly:
+		a.log.Debug("operation rejected", "op", op, "code", ae.Code, "err", ae.Message)
+	default:
+		a.log.Warn("operation failed", "op", op, "code", ae.Code, "err", ae.Message, "detail", ae.Detail)
+	}
+	b, _ := json.Marshal(ae)
+	return errors.New(string(b))
+}
+
+func (a *App) currentSettings() config.Settings {
+	a.settingsMu.RLock()
+	defer a.settingsMu.RUnlock()
+	return a.settings
+}
+
+func (a *App) timeout() time.Duration {
+	return time.Duration(a.currentSettings().QueryTimeoutSeconds) * time.Second
+}
+
+// call runs fn with the configured timeout, registered under opID (if any) so
+// CancelOperation can abort it, and logs its duration.
+func call[T any](a *App, op, opID string, fn func(ctx context.Context) (T, error)) (T, error) {
+	ctx, done := a.ops.start(a.ctx, opID, a.timeout())
+	defer done()
+	start := time.Now()
+	v, err := fn(ctx)
+	a.log.Debug("operation", "op", op, "ms", time.Since(start).Milliseconds(), "ok", err == nil)
+	if err != nil {
+		var zero T
+		return zero, a.encode(op, err)
+	}
+	return v, nil
+}
+
+// opRegistry tracks cancelable operations by a frontend-chosen ID.
+type opRegistry struct {
+	mu  sync.Mutex
+	ops map[string]*runningOp
+}
+
+type runningOp struct{ cancel context.CancelFunc }
+
+func newOpRegistry() *opRegistry { return &opRegistry{ops: map[string]*runningOp{}} }
+
+func (r *opRegistry) start(parent context.Context, opID string, timeout time.Duration) (context.Context, func()) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	if opID == "" {
+		return ctx, cancel
+	}
+	op := &runningOp{cancel: cancel}
+	r.mu.Lock()
+	if prev, ok := r.ops[opID]; ok {
+		prev.cancel() // a re-run with the same ID supersedes the previous run
+	}
+	r.ops[opID] = op
+	r.mu.Unlock()
+	return ctx, func() {
+		cancel()
+		r.mu.Lock()
+		// Only remove our own registration; a newer run may have replaced it.
+		if r.ops[opID] == op {
+			delete(r.ops, opID)
+		}
+		r.mu.Unlock()
+	}
+}
+
+func (r *opRegistry) cancel(opID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	op, ok := r.ops[opID]
+	if ok {
+		op.cancel()
+		delete(r.ops, opID)
+	}
+	return ok
+}
+
+func (r *opRegistry) cancelAll() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, op := range r.ops {
+		op.cancel()
+		delete(r.ops, id)
+	}
+}
+
+// CancelOperation aborts a running query, aggregation or shell script.
+func (a *App) CancelOperation(opID string) bool {
+	ok := a.ops.cancel(opID)
+	if ok {
+		a.log.Info("operation canceled by user", "opId", opID)
+	}
+	return ok
+}
+
+// ---- app & settings -------------------------------------------------------
+
+// AppInfo describes the installation.
+type AppInfo struct {
+	Version       string `json:"version"`
+	ConfigDir     string `json:"configDir"`
+	LogFile       string `json:"logFile"`
+	SecretBackend string `json:"secretBackend"`
+}
+
+// GetAppInfo returns version and paths.
+func (a *App) GetAppInfo() AppInfo {
+	return AppInfo{Version: Version, ConfigDir: a.store.Dir(), LogFile: a.logPath, SecretBackend: a.secrets.Backend()}
+}
+
+// GetSettings returns the current settings.
+func (a *App) GetSettings() config.Settings { return a.currentSettings() }
+
+// SaveSettings validates, persists and applies settings.
+func (a *App) SaveSettings(s config.Settings) (config.Settings, error) {
+	saved, err := a.store.SaveSettings(s)
+	if err != nil {
+		return config.Settings{}, a.encode("SaveSettings", err)
+	}
+	a.settingsMu.Lock()
+	a.settings = saved
+	a.settingsMu.Unlock()
+	if a.logLevel != nil {
+		a.logLevel.Set(logging.ParseLevel(saved.LogLevel))
+	}
+	return saved, nil
+}
+
+// ---- connection profiles --------------------------------------------------
+
+// ProfileInput is the connection form. Password semantics: a non-empty
+// Password replaces the stored one; ClearPassword removes it; otherwise the
+// stored password is kept.
+type ProfileInput struct {
+	ID                    string `json:"id"`
+	Name                  string `json:"name"`
+	URI                   string `json:"uri"`
+	Username              string `json:"username"`
+	Password              string `json:"password"`
+	ClearPassword         bool   `json:"clearPassword"`
+	AuthSource            string `json:"authSource"`
+	AuthMechanism         string `json:"authMechanism"`
+	ConnectTimeoutSeconds int    `json:"connectTimeoutSeconds"`
+	ReadOnly              bool   `json:"readOnly"`
+}
+
+// toProfile strips credentials out of the URI into the returned username and
+// password (the explicit form fields take precedence).
+func (in ProfileInput) toProfile() (config.Profile, string, error) {
+	uri, user, pass, err := config.SplitCredentials(in.URI)
+	if err != nil {
+		return config.Profile{}, "", err
+	}
+	username := strings.TrimSpace(in.Username)
+	if username == "" {
+		username = user
+	} else if user != "" && user != username {
+		return config.Profile{}, "", apperr.Invalid("The username in the connection string (%q) differs from the Username field (%q).", user, username)
+	}
+	password := in.Password
+	if password == "" {
+		password = pass
+	}
+	p := config.Profile{
+		ID:                    in.ID,
+		Name:                  strings.TrimSpace(in.Name),
+		URI:                   uri,
+		Username:              username,
+		AuthSource:            strings.TrimSpace(in.AuthSource),
+		AuthMechanism:         strings.TrimSpace(in.AuthMechanism),
+		ConnectTimeoutSeconds: in.ConnectTimeoutSeconds,
+		ReadOnly:              in.ReadOnly,
+	}
+	if p.ConnectTimeoutSeconds <= 0 {
+		p.ConnectTimeoutSeconds = 10
+	}
+	return p, password, p.Validate()
+}
+
+// ListProfiles returns saved connection profiles (never passwords).
+func (a *App) ListProfiles() ([]config.Profile, error) {
+	list, err := a.store.ListProfiles()
+	return list, a.encode("ListProfiles", err)
+}
+
+// SaveProfile creates or updates a profile; the password goes to the secret store.
+func (a *App) SaveProfile(in ProfileInput) (config.Profile, error) {
+	p, password, err := in.toProfile()
+	if err != nil {
+		return config.Profile{}, a.encode("SaveProfile", err)
+	}
+	if p.ID != "" {
+		existing, err := a.store.GetProfile(p.ID)
+		if err != nil {
+			return config.Profile{}, a.encode("SaveProfile", err)
+		}
+		p.HasPassword = existing.HasPassword
+	}
+	saved, err := a.store.SaveProfile(p)
+	if err != nil {
+		return config.Profile{}, a.encode("SaveProfile", err)
+	}
+	switch {
+	case password != "":
+		if err := a.secrets.Set(saved.ID, password); err != nil {
+			return saved, a.encode("SaveProfile", apperr.Wrap(apperr.CodeSecretBackend, err,
+				"The profile was saved, but the password could not be stored securely."))
+		}
+		saved.HasPassword = true
+	case in.ClearPassword:
+		if err := a.secrets.Delete(saved.ID); err != nil {
+			return saved, a.encode("SaveProfile", apperr.Wrap(apperr.CodeSecretBackend, err, "The stored password could not be removed."))
+		}
+		saved.HasPassword = false
+	}
+	if saved.HasPassword != p.HasPassword {
+		if saved, err = a.store.SaveProfile(saved); err != nil {
+			return config.Profile{}, a.encode("SaveProfile", err)
+		}
+	}
+	a.log.Info("profile saved", "profile", saved.Name, "uri", saved.URI, "hasPassword", saved.HasPassword)
+	return saved, nil
+}
+
+// DeleteProfile disconnects and removes a profile and its stored password.
+func (a *App) DeleteProfile(id string) error {
+	_ = a.conns.Disconnect(a.ctx, id)
+	if err := a.secrets.Delete(id); err != nil {
+		a.log.Warn("could not delete stored password", "err", err)
+	}
+	return a.encode("DeleteProfile", a.store.DeleteProfile(id))
+}
+
+func (a *App) passwordFor(p config.Profile) (string, error) {
+	if !p.HasPassword || p.ID == "" {
+		return "", nil
+	}
+	pw, err := a.secrets.Get(p.ID)
+	if errors.Is(err, secrets.ErrNotFound) {
+		return "", apperr.New(apperr.CodeSecretBackend, "The saved password for %q is missing. Edit the connection and enter it again.", p.Name)
+	}
+	if err != nil {
+		return "", apperr.Wrap(apperr.CodeSecretBackend, err, "The saved password could not be read from the secret store.")
+	}
+	return pw, nil
+}
+
+// TestConnection checks the form values without saving them.
+func (a *App) TestConnection(in ProfileInput) (mongox.TestResult, error) {
+	return call(a, "TestConnection", "", func(ctx context.Context) (mongox.TestResult, error) {
+		p, password, err := in.toProfile()
+		if err != nil {
+			return mongox.TestResult{}, err
+		}
+		if password == "" && !in.ClearPassword && p.ID != "" && p.Username != "" {
+			if existing, err := a.store.GetProfile(p.ID); err == nil {
+				if password, err = a.passwordFor(existing); err != nil {
+					return mongox.TestResult{}, err
+				}
+			}
+		}
+		return a.conns.Test(ctx, p, password)
+	})
+}
+
+// Connect opens a saved profile.
+func (a *App) Connect(profileID string) (mongox.SessionInfo, error) {
+	return call(a, "Connect", "connect:"+profileID, func(ctx context.Context) (mongox.SessionInfo, error) {
+		p, err := a.store.GetProfile(profileID)
+		if err != nil {
+			return mongox.SessionInfo{}, err
+		}
+		pw, err := a.passwordFor(p)
+		if err != nil {
+			return mongox.SessionInfo{}, err
+		}
+		s, err := a.conns.Connect(ctx, p, pw)
+		if err != nil {
+			return mongox.SessionInfo{}, err
+		}
+		return mongox.SessionInfo{ID: s.ProfileID, Name: s.Name, ReadOnly: s.ReadOnly,
+			ServerVersion: s.ServerVersion, Topology: s.Topology, ConnectedAt: s.ConnectedAt}, nil
+	})
+}
+
+// Disconnect closes a connection.
+func (a *App) Disconnect(connID string) error {
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	return a.encode("Disconnect", a.conns.Disconnect(ctx, connID))
+}
+
+// ListConnections returns open connections.
+func (a *App) ListConnections() []mongox.SessionInfo { return a.conns.List() }
+
+// ---- explorer --------------------------------------------------------------
+
+// ListDatabases lists databases visible to the user.
+func (a *App) ListDatabases(connID string) ([]explorer.DatabaseInfo, error) {
+	return call(a, "ListDatabases", "", func(ctx context.Context) ([]explorer.DatabaseInfo, error) {
+		return a.explorer.ListDatabases(ctx, connID)
+	})
+}
+
+// ListCollections lists collections and views of a database.
+func (a *App) ListCollections(connID, db string) ([]explorer.CollectionInfo, error) {
+	return call(a, "ListCollections", "", func(ctx context.Context) ([]explorer.CollectionInfo, error) {
+		return a.explorer.ListCollections(ctx, connID, db)
+	})
+}
+
+// CollectionStats returns size, count and index information.
+func (a *App) CollectionStats(connID, db, coll string) (explorer.CollectionStats, error) {
+	return call(a, "CollectionStats", "", func(ctx context.Context) (explorer.CollectionStats, error) {
+		return a.explorer.CollectionStats(ctx, connID, db, coll)
+	})
+}
+
+// SampleFields returns field paths from a random sample (for autocomplete and the query builder).
+func (a *App) SampleFields(connID, db, coll string) ([]string, error) {
+	return call(a, "SampleFields", "", func(ctx context.Context) ([]string, error) {
+		return a.explorer.SampleFields(ctx, connID, db, coll, 100)
+	})
+}
+
+// CreateCollection creates a collection (and implicitly its database).
+func (a *App) CreateCollection(connID, db, coll string) error {
+	_, err := call(a, "CreateCollection", "", func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, a.explorer.CreateCollection(ctx, connID, db, coll)
+	})
+	return err
+}
+
+// DropCollection drops a collection.
+func (a *App) DropCollection(connID, db, coll string) error {
+	_, err := call(a, "DropCollection", "", func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, a.explorer.DropCollection(ctx, connID, db, coll)
+	})
+	if err == nil {
+		a.log.Info("collection dropped", "db", db, "coll", coll)
+	}
+	return err
+}
+
+// DropDatabase drops a database.
+func (a *App) DropDatabase(connID, db string) error {
+	_, err := call(a, "DropDatabase", "", func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, a.explorer.DropDatabase(ctx, connID, db)
+	})
+	if err == nil {
+		a.log.Info("database dropped", "db", db)
+	}
+	return err
+}
+
+// ---- documents & queries ----------------------------------------------------
+
+// RunQuery executes a find query and returns one page.
+func (a *App) RunQuery(opID string, req query.Request) (model.Page, error) {
+	return call(a, "RunQuery", opID, func(ctx context.Context) (model.Page, error) {
+		return a.query.Find(ctx, req)
+	})
+}
+
+// CountQuery counts documents matching the query (honoring skip/limit).
+func (a *App) CountQuery(opID string, req query.Request) (int64, error) {
+	return call(a, "CountQuery", opID, func(ctx context.Context) (int64, error) {
+		return a.query.Count(ctx, req)
+	})
+}
+
+// QueryToShell renders the query as mongosh code.
+func (a *App) QueryToShell(req query.Request) (string, error) {
+	s, err := query.ToShell(req)
+	return s, a.encode("QueryToShell", err)
+}
+
+// GetDocument fetches one document by _id.
+func (a *App) GetDocument(connID, db, coll, id string) (model.Document, error) {
+	return call(a, "GetDocument", "", func(ctx context.Context) (model.Document, error) {
+		return a.docs.Get(ctx, connID, db, coll, id)
+	})
+}
+
+// InsertDocuments inserts one document or an array of documents.
+func (a *App) InsertDocuments(connID, db, coll, text string) ([]string, error) {
+	return call(a, "InsertDocuments", "", func(ctx context.Context) ([]string, error) {
+		return a.docs.Insert(ctx, connID, db, coll, text)
+	})
+}
+
+// ReplaceDocument replaces the document with the given _id.
+func (a *App) ReplaceDocument(connID, db, coll, id, text string) (model.Document, error) {
+	return call(a, "ReplaceDocument", "", func(ctx context.Context) (model.Document, error) {
+		return a.docs.Replace(ctx, connID, db, coll, id, text)
+	})
+}
+
+// DeleteDocuments deletes documents by _id.
+func (a *App) DeleteDocuments(connID, db, coll string, ids []string) (int64, error) {
+	n, err := call(a, "DeleteDocuments", "", func(ctx context.Context) (int64, error) {
+		return a.docs.Delete(ctx, connID, db, coll, ids)
+	})
+	if err == nil {
+		a.log.Info("documents deleted", "db", db, "coll", coll, "count", n)
+	}
+	return n, err
+}
+
+// FormatDocument validates shell-syntax text and returns it pretty-printed.
+func (a *App) FormatDocument(text string) (string, error) {
+	v, err := mql.ParseValue(text)
+	if err != nil {
+		return "", a.encode("FormatDocument", apperr.Wrap(apperr.CodeInvalidInput, err, err.Error()))
+	}
+	return mql.Pretty(v), nil
+}
+
+// ---- aggregation & shell ---------------------------------------------------
+
+// RunAggregation runs a pipeline (or a prefix of it) and returns one page.
+func (a *App) RunAggregation(opID string, req aggregate.Request) (model.Page, error) {
+	return call(a, "RunAggregation", opID, func(ctx context.Context) (model.Page, error) {
+		return a.agg.Run(ctx, req)
+	})
+}
+
+// PipelineToText renders stages as a mongosh pipeline array.
+func (a *App) PipelineToText(stages []aggregate.Stage) (string, error) {
+	s, err := aggregate.ToText(stages)
+	return s, a.encode("PipelineToText", err)
+}
+
+// PipelineFromText parses a pipeline array into editable stages.
+func (a *App) PipelineFromText(text string) ([]aggregate.Stage, error) {
+	s, err := aggregate.FromText(text)
+	return s, a.encode("PipelineFromText", err)
+}
+
+// RunShell executes shell commands against the given database.
+func (a *App) RunShell(opID, connID, db, script string) (shell.Result, error) {
+	return call(a, "RunShell", opID, func(ctx context.Context) (shell.Result, error) {
+		return a.shell.Execute(ctx, connID, db, script, a.currentSettings().PageSize)
+	})
+}

@@ -1,0 +1,207 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
+import { backend } from '../lib/backend'
+import { errorTitle, toAppError, type AppError } from '../lib/errors'
+import { tabsReducer, type TabsAction, type TabsState } from '../lib/tabs'
+import type { AppInfo, Profile, SessionInfo, Settings } from '../lib/types'
+
+export interface Toast {
+  id: number
+  kind: 'info' | 'success' | 'error'
+  title: string
+  message?: string
+}
+
+export interface ConfirmOptions {
+  title: string
+  message: ReactNode
+  confirmLabel?: string
+  danger?: boolean
+  /** When set, the user must type this text to enable the confirm button. */
+  typeToConfirm?: string
+}
+
+interface ConfirmRequest extends ConfirmOptions {
+  resolve: (ok: boolean) => void
+}
+
+interface AppState {
+  settings: Settings | null
+  saveSettings: (s: Settings) => Promise<void>
+  appInfo: AppInfo | null
+
+  profiles: Profile[]
+  reloadProfiles: () => Promise<void>
+  sessions: SessionInfo[]
+  connect: (profileId: string) => Promise<SessionInfo | null>
+  disconnect: (connId: string) => Promise<void>
+  connecting: Set<string>
+
+  tabs: TabsState
+  dispatchTabs: (a: TabsAction) => void
+
+  toast: (t: Omit<Toast, 'id'>) => void
+  toastError: (err: unknown, title?: string) => AppError
+  toasts: Toast[]
+  dismissToast: (id: number) => void
+
+  confirm: (o: ConfirmOptions) => Promise<boolean>
+  confirmRequest: ConfirmRequest | null
+  resolveConfirm: (ok: boolean) => void
+
+  connectionManagerOpen: boolean
+  openConnectionManager: (open: boolean) => void
+}
+
+const Ctx = createContext<AppState | null>(null)
+
+export function useApp(): AppState {
+  const v = useContext(Ctx)
+  if (!v) throw new Error('useApp must be used inside <AppProvider>')
+  return v
+}
+
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [settings, setSettings] = useState<Settings | null>(null)
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [connecting, setConnecting] = useState<Set<string>>(new Set())
+  const [tabs, dispatchTabs] = useReducer(tabsReducer, { tabs: [], activeId: null }, (s) =>
+    tabsReducer(s, { type: 'open', tab: { kind: 'welcome' } }),
+  )
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null)
+  const [connectionManagerOpen, openConnectionManager] = useState(false)
+  const toastSeq = useRef(0)
+
+  const dismissToast = useCallback((id: number) => setToasts((ts) => ts.filter((t) => t.id !== id)), [])
+
+  const toast = useCallback(
+    (t: Omit<Toast, 'id'>) => {
+      toastSeq.current += 1
+      const id = toastSeq.current
+      setToasts((ts) => [...ts.slice(-4), { ...t, id }])
+      window.setTimeout(() => dismissToast(id), t.kind === 'error' ? 9000 : 4000)
+    },
+    [dismissToast],
+  )
+
+  const toastError = useCallback(
+    (err: unknown, title?: string) => {
+      const e = toAppError(err)
+      if (e.code !== 'CANCELED') toast({ kind: 'error', title: title ?? errorTitle(e), message: e.message })
+      return e
+    },
+    [toast],
+  )
+
+  const reloadProfiles = useCallback(async () => {
+    try {
+      setProfiles(await backend.listProfiles())
+    } catch (err) {
+      toastError(err, 'Could not load connections')
+    }
+  }, [toastError])
+
+  useEffect(() => {
+    backend.getSettings().then(setSettings).catch((err) => toastError(err, 'Could not load settings'))
+    backend.getAppInfo().then(setAppInfo).catch(() => undefined)
+    backend.listConnections().then(setSessions).catch(() => undefined)
+    reloadProfiles()
+  }, [reloadProfiles, toastError])
+
+  // Apply theme and editor font size.
+  useEffect(() => {
+    if (!settings) return
+    const root = document.documentElement
+    root.dataset.theme = settings.theme
+    root.style.setProperty('--editor-font-size', `${settings.editorFontSize}px`)
+  }, [settings])
+
+  const saveSettings = useCallback(
+    async (s: Settings) => {
+      const saved = await backend.saveSettings(s)
+      setSettings(saved)
+    },
+    [],
+  )
+
+  const connect = useCallback(
+    async (profileId: string) => {
+      setConnecting((c) => new Set(c).add(profileId))
+      try {
+        const info = await backend.connect(profileId)
+        setSessions((ss) => [...ss.filter((s) => s.id !== info.id), info].sort((a, b) => a.name.localeCompare(b.name)))
+        toast({ kind: 'success', title: `Connected to ${info.name}`, message: `MongoDB ${info.serverVersion} · ${info.topology}` })
+        return info
+      } catch (err) {
+        toastError(err, 'Connection failed')
+        return null
+      } finally {
+        setConnecting((c) => {
+          const n = new Set(c)
+          n.delete(profileId)
+          return n
+        })
+      }
+    },
+    [toast, toastError],
+  )
+
+  const disconnect = useCallback(
+    async (connId: string) => {
+      try {
+        await backend.disconnect(connId)
+      } catch (err) {
+        toastError(err, 'Disconnect failed')
+      }
+      setSessions((ss) => ss.filter((s) => s.id !== connId))
+      dispatchTabs({ type: 'closeConnection', connId })
+    },
+    [toastError],
+  )
+
+  const confirm = useCallback(
+    (o: ConfirmOptions) => new Promise<boolean>((resolve) => setConfirmRequest({ ...o, resolve })),
+    [],
+  )
+  const resolveConfirm = useCallback(
+    (ok: boolean) => {
+      confirmRequest?.resolve(ok)
+      setConfirmRequest(null)
+    },
+    [confirmRequest],
+  )
+
+  const value = useMemo<AppState>(
+    () => ({
+      settings,
+      saveSettings,
+      appInfo,
+      profiles,
+      reloadProfiles,
+      sessions,
+      connect,
+      disconnect,
+      connecting,
+      tabs,
+      dispatchTabs,
+      toast,
+      toastError,
+      toasts,
+      dismissToast,
+      confirm,
+      confirmRequest,
+      resolveConfirm,
+      connectionManagerOpen,
+      openConnectionManager,
+    }),
+    [
+      settings, saveSettings, appInfo, profiles, reloadProfiles, sessions, connect, disconnect, connecting,
+      tabs, toast, toastError, toasts, dismissToast, confirm, confirmRequest, resolveConfirm, connectionManagerOpen,
+    ],
+  )
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+}

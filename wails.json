@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Mango3S",
+  "outputfilename": "mango3s",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "saman",
+    "email": "samanf74@gmail.com"
+  },
+  "info": {
+    "companyName": "Mango3S",
+    "productName": "Mango3S",
+    "productVersion": "0.1.0",
+    "comments": "A desktop MongoDB IDE"
+  }
+}

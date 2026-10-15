@@ -1,0 +1,40 @@
+# Build output
+build/bin/
+frontend/dist/*
+!frontend/dist/.gitkeep
+
+# Dependencies
+frontend/node_modules/
+node_modules/
+
+# Go
+*.test
+*.out
+coverage.*
+/vendor/
+
+# Frontend tooling
+frontend/package.json.md5
+frontend/.vite/
+frontend/coverage/
+*.tsbuildinfo
+
+# Local configuration, secrets and logs — never commit these
+.env
+.env.*
+!.env.example
+secrets.enc
+secret.key
+connections.json
+settings.json
+!config/*.json
+*.log
+logs/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+Thumbs.db

@@ -1,0 +1,165 @@
+import { Component, useEffect } from 'react'
+import type { ErrorInfo, ReactNode } from 'react'
+import { ConfirmDialog, Toasts } from './components/common'
+import { ConnectionManager } from './components/ConnectionManager'
+import { Sidebar } from './components/Sidebar'
+import type { Tab } from './lib/tabs'
+import { AppProvider, useApp } from './state/AppContext'
+import { AggregationView } from './views/AggregationView'
+import { CollectionView } from './views/CollectionView'
+import { SettingsView } from './views/SettingsView'
+import { ShellView } from './views/ShellView'
+import { WelcomeView } from './views/WelcomeView'
+
+class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('UI error', error, info.componentStack)
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="view">
+          <div className="error-banner" role="alert">
+            <div>
+              <strong>This tab crashed</strong>
+              <div className="error-message">{this.state.error.message}</div>
+            </div>
+            <button onClick={() => this.setState({ error: null })}>Retry</button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function TabContent({ tab }: { tab: Tab }) {
+  switch (tab.kind) {
+    case 'welcome':
+      return <WelcomeView />
+    case 'settings':
+      return <SettingsView />
+    case 'collection':
+      return <CollectionView tab={tab} />
+    case 'aggregation':
+      return <AggregationView tab={tab} />
+    case 'shell':
+      return <ShellView tab={tab} />
+  }
+}
+
+function TabBar() {
+  const { tabs, dispatchTabs } = useApp()
+  return (
+    <div className="tabbar" role="tablist">
+      {tabs.tabs.map((t, i) => (
+        <div
+          key={t.id}
+          role="tab"
+          aria-selected={t.id === tabs.activeId}
+          className={t.id === tabs.activeId ? 'tab active' : 'tab'}
+          onClick={() => dispatchTabs({ type: 'activate', id: t.id })}
+          onAuxClick={(e) => e.button === 1 && dispatchTabs({ type: 'close', id: t.id })}
+          draggable
+          onDragStart={(e) => e.dataTransfer.setData('text/tab-index', String(i))}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            const from = Number(e.dataTransfer.getData('text/tab-index'))
+            if (!Number.isNaN(from)) dispatchTabs({ type: 'move', from, to: i })
+          }}
+          title={t.connName && t.db ? `${t.connName} / ${t.db}${t.coll ? ' / ' + t.coll : ''}` : t.title}
+        >
+          <span className={`tab-icon ${t.kind}`} aria-hidden />
+          <span className="tab-title">{t.title}</span>
+          <button
+            className="tab-close"
+            aria-label={`Close ${t.title}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              dispatchTabs({ type: 'close', id: t.id })
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <span className="spacer" />
+      <button className="small ghost tabbar-btn" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'settings' } })} title="Settings">
+        ⚙
+      </button>
+    </div>
+  )
+}
+
+function StatusBar() {
+  const { sessions, appInfo, tabs } = useApp()
+  const active = tabs.tabs.find((t) => t.id === tabs.activeId)
+  const session = sessions.find((s) => s.id === active?.connId)
+  return (
+    <footer className="statusbar">
+      <span>
+        {sessions.length} connection{sessions.length === 1 ? '' : 's'} open
+      </span>
+      {session && (
+        <span>
+          {session.name} · MongoDB {session.serverVersion} · {session.topology}
+          {session.readOnly ? ' · read-only' : ''}
+        </span>
+      )}
+      <span className="spacer" />
+      {appInfo && <span>v{appInfo.version}</span>}
+    </footer>
+  )
+}
+
+function Shell() {
+  const { tabs, dispatchTabs, connectionManagerOpen } = useApp()
+
+  // Global shortcuts: Cmd/Ctrl+W closes the active tab.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'w' && tabs.activeId) {
+        e.preventDefault()
+        dispatchTabs({ type: 'close', id: tabs.activeId })
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [tabs.activeId, dispatchTabs])
+
+  return (
+    <div className="app">
+      <Sidebar />
+      <main className="main">
+        <TabBar />
+        <div className="tab-panels">
+          {tabs.tabs.length === 0 && <div className="empty-state">Open a collection from the explorer.</div>}
+          {/* Inactive tabs stay mounted so their editors and results survive tab switches. */}
+          {tabs.tabs.map((t) => (
+            <div key={t.id} className="tab-panel" role="tabpanel" hidden={t.id !== tabs.activeId}>
+              <TabErrorBoundary>
+                <TabContent tab={t} />
+              </TabErrorBoundary>
+            </div>
+          ))}
+        </div>
+      </main>
+      <StatusBar />
+      {connectionManagerOpen && <ConnectionManager />}
+      <ConfirmDialog />
+      <Toasts />
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <AppProvider>
+      <Shell />
+    </AppProvider>
+  )
+}

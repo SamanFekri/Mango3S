@@ -1,0 +1,69 @@
+# Development and test services for Mango3S.
+#
+#   docker compose up -d mongo                      # MongoDB with sample data on localhost:27017
+#   docker compose --profile auth up -d mongo-auth  # MongoDB with authentication on localhost:27018
+#   docker compose --profile test up --build --exit-code-from integration-tests
+#   docker compose --profile gui up --build app     # Linux + X11 only (experimental)
+#   docker compose down -v                          # stop and delete data
+name: mango3s
+
+services:
+  mongo:
+    image: mongo:8.0
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  mongo-auth:
+    profiles: ["auth"]
+    image: mongo:8.0
+    ports:
+      - "${MONGO_AUTH_PORT:-27018}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change-me}
+    volumes:
+      - mongo-auth-data:/data/db
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  integration-tests:
+    profiles: ["test"]
+    build:
+      context: .
+      target: integration
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  app:
+    profiles: ["gui"]
+    build:
+      context: .
+      target: runtime
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - app-config:/home/app/.config/Mango3S
+    network_mode: host
+
+volumes:
+  mongo-data:
+  mongo-auth-data:
+  app-config:

@@ -1,0 +1,9 @@
+{
+  "theme": "system",
+  "pageSize": 50,
+  "queryTimeoutSeconds": 60,
+  "confirmDeletes": true,
+  "defaultView": "json",
+  "editorFontSize": 13,
+  "logLevel": "info"
+}

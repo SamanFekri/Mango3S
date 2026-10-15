@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+.idea
+.DS_Store
+build/bin
+dist
+frontend/node_modules
+frontend/dist/*
+!frontend/dist/.gitkeep
+frontend/coverage
+*.log
+.env
+.env.*

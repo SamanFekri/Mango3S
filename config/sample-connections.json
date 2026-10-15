@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "id": "0f3c2a91d4b7e650",
+      "name": "Local (docker compose)",
+      "uri": "mongodb://localhost:27017",
+      "connectTimeoutSeconds": 10,
+      "readOnly": false,
+      "hasPassword": false,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "7a1e9c03b25f84d6",
+      "name": "Local with auth (read-only)",
+      "uri": "mongodb://localhost:27018/?directConnection=true",
+      "username": "admin",
+      "authSource": "admin",
+      "authMechanism": "SCRAM-SHA-256",
+      "connectTimeoutSeconds": 10,
+      "readOnly": true,
+      "hasPassword": false,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "c4d58e2f9a6b1730",
+      "name": "Atlas cluster",
+      "uri": "mongodb+srv://cluster0.example.mongodb.net/?retryWrites=true&w=majority&appName=Mango3S",
+      "username": "app_reader",
+      "connectTimeoutSeconds": 20,
+      "readOnly": true,
+      "hasPassword": false,
+      "createdAt": "2026-01-01T00:00:00Z",
+      "updatedAt": "2026-01-01T00:00:00Z"
+    }
+  ]
+}
