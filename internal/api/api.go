@@ -191,7 +191,12 @@ func (a *App) timeout() time.Duration {
 // call runs fn with the configured timeout, registered under opID (if any) so
 // CancelOperation can abort it, and logs its duration.
 func call[T any](a *App, op, opID string, fn func(ctx context.Context) (T, error)) (T, error) {
-	ctx, done := a.ops.start(a.ctx, opID, a.timeout())
+	return callWithTimeout(a, op, opID, a.timeout(), fn)
+}
+
+// callWithTimeout is call with an explicit timeout (AI requests can be slow).
+func callWithTimeout[T any](a *App, op, opID string, timeout time.Duration, fn func(ctx context.Context) (T, error)) (T, error) {
+	ctx, done := a.ops.start(a.ctx, opID, timeout)
 	defer done()
 	start := time.Now()
 	v, err := fn(ctx)

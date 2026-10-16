@@ -14,6 +14,15 @@ export interface Settings {
   aiEnabled: boolean
   aiModel: string
   aiAllowSamples: boolean
+  aiProvider: AIProviderId
+  aiTimeoutSeconds: number
+  claudeCodePath: string
+  claudeCodeModel: string
+  codexPath: string
+  codexModel: string
+  localUrl: string
+  localApi: 'ollama' | 'openai'
+  localModel: string
   schedulerEnabled: boolean
 }
 
@@ -903,12 +912,44 @@ export interface TaskRun {
   finishedAt: string
 }
 
+export type AIProviderId = 'anthropic' | 'claudeCode' | 'codex' | 'local'
+
 export interface AIStatus {
   enabled: boolean
+  provider: AIProviderId
+  providerName: string
+  ready: boolean
+  detail: string
   model: string
+  /** The context goes to a remote service (false for a model on this computer). */
+  leavesDevice: boolean
   hasKey: boolean
   keySource: 'stored' | 'environment' | 'none'
   allowSamples: boolean
+  localHasKey: boolean
+}
+
+export interface CLIInfo {
+  name: string
+  found: boolean
+  path: string
+  version: string
+  signedIn: boolean | null
+  account: string
+  message: string
+}
+
+export interface LocalServer {
+  name: string
+  url: string
+  api: 'ollama' | 'openai'
+  models: string[]
+}
+
+export interface AIProviders {
+  claudeCode: CLIInfo
+  codex: CLIInfo
+  localServers: LocalServer[]
 }
 
 export interface AIRequest {

@@ -86,13 +86,15 @@ export function AIDialog({
     }
   }
 
-  const usable = status?.enabled && status.hasKey
+  const usable = status?.enabled && status.ready
 
   return (
     <Modal title="Ask AI" onClose={onClose} wide>
       {status && !usable && (
         <div className="info-banner">
-          {status.enabled ? 'Add an Anthropic API key in Settings → AI (or set ANTHROPIC_API_KEY).' : 'AI assistance is off. Enable it in Settings → AI.'}
+          {status.enabled
+            ? `${status.providerName} is not ready${status.detail ? `: ${status.detail}` : ''}. Check Settings → AI.`
+            : 'AI assistance is off. Enable it in Settings → AI.'}
           <button
             className="small"
             onClick={() => {
@@ -147,7 +149,9 @@ export function AIDialog({
       {context && (
         <details open className="sent-context">
           <summary>
-            Sent to {status?.model}: collection name and {context.fields.length} field names/types{context.samples.length ? `, ${context.samples.length} masked samples` : ''}. No connection details or credentials.
+            {status?.leavesDevice ? 'Sent to' : 'Given to the local model'} {status?.providerName}
+            {status?.model ? ` (${status.model})` : ''}: collection name and {context.fields.length} field names/types
+            {context.samples.length ? `, ${context.samples.length} masked samples` : ''}. No connection details or credentials.
           </summary>
           <pre className="doc-text small">{context.fields.map((f) => `${f.path}: ${f.types.join('|')} (${f.presence}%)`).join('\n')}</pre>
           {context.samples.map((s, i) => (

@@ -58,7 +58,7 @@ const base: AIProposal = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  backend.getAIStatus.mockResolvedValue({ enabled: true, model: 'claude-opus-5-5', hasKey: true, keySource: 'stored', allowSamples: false })
+  backend.getAIStatus.mockResolvedValue({ enabled: true, ready: true, provider: 'anthropic', providerName: 'Anthropic API', model: 'claude-opus-5-5', hasKey: true, keySource: 'stored', allowSamples: false, leavesDevice: true })
 })
 
 async function generate(p: AIProposal, onUse = vi.fn()) {
@@ -111,7 +111,7 @@ describe('AIDialog', () => {
   })
 
   it('cannot generate while AI is disabled', async () => {
-    backend.getAIStatus.mockResolvedValue({ enabled: false, model: 'm', hasKey: true, keySource: 'stored', allowSamples: false })
+    backend.getAIStatus.mockResolvedValue({ enabled: false, ready: true, provider: 'anthropic', providerName: 'Anthropic API', model: 'm', hasKey: true, keySource: 'stored', allowSamples: false })
     render(<AIDialog connId="c1" db="shop" coll="orders" onUse={vi.fn()} onClose={vi.fn()} />)
     expect(await screen.findByText(/AI assistance is off/)).toBeInTheDocument()
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'x' } })
@@ -163,5 +163,21 @@ describe('TasksView', () => {
     expect(await screen.findByText('approved')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Run now' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+  })
+})
+
+describe('AIDialog with other providers', () => {
+  it('explains what is missing for the chosen provider and blocks generating', async () => {
+    backend.getAIStatus.mockResolvedValue({ enabled: true, ready: false, provider: 'claudeCode', providerName: 'Claude Code', detail: 'Installed but not signed in. Run `claude` once and sign in.', model: '', hasKey: false, keySource: 'none', allowSamples: false, leavesDevice: true })
+    render(<AIDialog connId="c1" db="shop" coll="orders" onUse={vi.fn()} onClose={vi.fn()} />)
+    expect(await screen.findByText(/Claude Code is not ready: Installed but not signed in/)).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'x' } })
+    expect(screen.getByRole('button', { name: /Generate/ })).toBeDisabled()
+  })
+
+  it('uses a ready local model like any other provider', async () => {
+    backend.getAIStatus.mockResolvedValue({ enabled: true, ready: true, provider: 'local', providerName: 'Local model', model: 'qwen2.5-coder:7b', hasKey: false, keySource: 'none', allowSamples: false, leavesDevice: false })
+    await generate({ ...base, model: 'qwen2.5-coder:7b' })
+    expect(screen.getByRole('button', { name: 'Load into query editor' })).toBeInTheDocument()
   })
 })

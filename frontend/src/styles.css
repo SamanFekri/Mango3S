@@ -2553,3 +2553,45 @@ tr.clickable {
   gap: 8px;
   margin-top: 4px;
 }
+
+/* ---------- AI provider choice ---------- */
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  white-space: normal;
+}
+.provider-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.provider-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cli-status {
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  word-break: break-all;
+}
+.chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.success-text {
+  color: var(--success);
+}

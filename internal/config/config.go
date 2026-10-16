@@ -57,8 +57,28 @@ type Settings struct {
 	AIEnabled        bool   `json:"aiEnabled"`
 	AIModel          string `json:"aiModel"`
 	AIAllowSamples   bool   `json:"aiAllowSamples"`   // allow sending masked sample documents
+	// AIProvider picks who generates queries: anthropic (API key),
+	// claudeCode / codex (the user's installed CLI and its sign-in) or local
+	// (an Ollama or OpenAI-compatible server, e.g. LM Studio, llama.cpp).
+	AIProvider       string `json:"aiProvider"`
+	AITimeoutSeconds int    `json:"aiTimeoutSeconds"`
+	ClaudeCodePath   string `json:"claudeCodePath"`  // empty = find it
+	ClaudeCodeModel  string `json:"claudeCodeModel"` // empty = the CLI's default; e.g. sonnet, opus
+	CodexPath        string `json:"codexPath"`
+	CodexModel       string `json:"codexModel"`
+	LocalURL         string `json:"localUrl"` // e.g. http://localhost:11434
+	LocalAPI         string `json:"localApi"` // ollama | openai
+	LocalModel       string `json:"localModel"`
 	SchedulerEnabled bool   `json:"schedulerEnabled"` // run approved scheduled tasks while the app is open
 }
+
+// AI providers.
+const (
+	AIProviderAnthropic  = "anthropic"
+	AIProviderClaudeCode = "claudeCode"
+	AIProviderCodex      = "codex"
+	AIProviderLocal      = "local"
+)
 
 // DefaultSettings returns the factory defaults.
 func DefaultSettings() Settings {
@@ -71,6 +91,10 @@ func DefaultSettings() Settings {
 		EditorFontSize:      13,
 		LogLevel:            "info",
 		AIModel:             "claude-opus-5-5",
+		AIProvider:          AIProviderAnthropic,
+		AITimeoutSeconds:    180,
+		LocalURL:            "http://localhost:11434",
+		LocalAPI:            "ollama",
 		SchedulerEnabled:    true,
 	}
 }
@@ -102,6 +126,24 @@ func (s Settings) Normalize() Settings {
 	s.AIModel = strings.TrimSpace(s.AIModel)
 	if s.AIModel == "" {
 		s.AIModel = d.AIModel
+	}
+	switch s.AIProvider {
+	case AIProviderAnthropic, AIProviderClaudeCode, AIProviderCodex, AIProviderLocal:
+	default:
+		s.AIProvider = d.AIProvider
+	}
+	if s.AITimeoutSeconds < 10 || s.AITimeoutSeconds > 1800 {
+		s.AITimeoutSeconds = d.AITimeoutSeconds
+	}
+	s.LocalURL = strings.TrimRight(strings.TrimSpace(s.LocalURL), "/")
+	if s.LocalURL == "" {
+		s.LocalURL = d.LocalURL
+	}
+	if s.LocalAPI != "openai" {
+		s.LocalAPI = "ollama"
+	}
+	for _, f := range []*string{&s.ClaudeCodePath, &s.ClaudeCodeModel, &s.CodexPath, &s.CodexModel, &s.LocalModel} {
+		*f = strings.TrimSpace(*f)
 	}
 	switch s.LogLevel {
 	case "debug", "info", "warn", "error":

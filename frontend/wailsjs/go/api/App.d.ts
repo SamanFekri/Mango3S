@@ -51,6 +51,8 @@ export function ClearFinishedJobs():Promise<void>;
 
 export function ClearHistory():Promise<void>;
 
+export function ClearLocalAIKey():Promise<void>;
+
 export function CodeLanguages():Promise<Array<codegen.Language>>;
 
 export function CollectionStats(arg1:string,arg2:string,arg3:string):Promise<explorer.CollectionStats>;
@@ -72,6 +74,8 @@ export function DeleteMaskRuleSet(arg1:string):Promise<void>;
 export function DeleteProfile(arg1:string):Promise<void>;
 
 export function DeleteTask(arg1:string):Promise<void>;
+
+export function DetectAIProviders():Promise<api.AIProviders>;
 
 export function DetectTools(arg1:config.ToolsConfig,arg2:string):Promise<Array<tools.Info>>;
 
@@ -130,6 +134,8 @@ export function ListDatabases(arg1:string):Promise<Array<explorer.DatabaseInfo>>
 export function ListHistory(arg1:string,arg2:string,arg3:number):Promise<Array<library.Entry>>;
 
 export function ListJobs():Promise<Array<jobs.Job>>;
+
+export function ListLocalModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function ListMaskRuleSets():Promise<Array<masking.RuleSet>>;
 
@@ -209,6 +215,8 @@ export function SaveTask(arg1:scheduler.Task):Promise<scheduler.Task>;
 
 export function SetAIKey(arg1:string):Promise<void>;
 
+export function SetLocalAIKey(arg1:string):Promise<void>;
+
 export function SetTaskEnabled(arg1:string,arg2:boolean):Promise<scheduler.Task>;
 
 export function SetUnsavedWork(arg1:boolean):Promise<void>;
@@ -228,6 +236,8 @@ export function StartRestore(arg1:string,arg2:string,arg3:string):Promise<jobs.J
 export function StartSync(arg1:string,arg2:string):Promise<jobs.Job>;
 
 export function StartTransform(arg1:string,arg2:string):Promise<jobs.Job>;
+
+export function TestAI(arg1:string):Promise<string>;
 
 export function TestConnection(arg1:api.ProfileInput):Promise<mongox.TestResult>;
 

@@ -40,13 +40,9 @@ func (a *App) ClearFinishedJobs() { a.jobs.ClearFinished() }
 
 // ChooseImportFile opens a native file picker. An empty result means canceled.
 func (a *App) ChooseImportFile() (string, error) {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "Import documents",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "JSON or CSV (*.json, *.ndjson, *.jsonl, *.csv, *.tsv)", Pattern: "*.json;*.ndjson;*.jsonl;*.csv;*.tsv;*.txt"},
-			{DisplayName: "All files", Pattern: "*"},
-		},
-	})
+	// No extension filter: exports often have other or no extensions. Unknown
+	// extensions default to JSON and the wizard lets the user pick CSV/TSV.
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{Title: "Import documents"})
 	return path, a.encode("ChooseImportFile", err)
 }
 

@@ -141,7 +141,7 @@ func (s *Service) Generate(ctx context.Context, p Provider, req Request) (*Propo
 	if err != nil {
 		return nil, err
 	}
-	prop, err := Validate(raw, req)
+	prop, err := Validate(ExtractJSON(raw), req)
 	if err != nil {
 		return nil, err
 	}

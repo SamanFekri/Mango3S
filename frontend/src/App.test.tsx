@@ -48,6 +48,10 @@ const backend = vi.hoisted(() => ({
   getField: vi.fn(),
   updateField: vi.fn(),
   parseCollectionQuery: vi.fn(),
+  detectAIProviders: vi.fn(),
+  listLocalModels: vi.fn(),
+  testAI: vi.fn(),
+  chooseFile: vi.fn(),
   runShellPage: vi.fn(),
 }))
 
@@ -71,6 +75,8 @@ beforeEach(() => {
   backend.getAppInfo.mockResolvedValue({ version: 'test', configDir: '/tmp', logFile: '', secretBackend: 'file' })
   backend.getSettings.mockResolvedValue({
     theme: 'dark', pageSize: 50, queryTimeoutSeconds: 60, confirmDeletes: true, defaultView: 'tree', editorFontSize: 13, logLevel: 'info',
+    aiEnabled: true, aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiTimeoutSeconds: 180, claudeCodePath: '', claudeCodeModel: '', codexPath: '', codexModel: '',
+    localUrl: 'http://localhost:11434', localApi: 'ollama', localModel: '', aiAllowSamples: false, schedulerEnabled: true,
   })
   backend.listProfiles.mockResolvedValue([profile])
   backend.listConnections.mockResolvedValue([])
@@ -89,7 +95,13 @@ beforeEach(() => {
     { id: 's1', kind: 'sql', name: 'Big orders', description: '', db: 'shop', coll: '', text: 'SELECT * FROM orders', createdAt: '', updatedAt: new Date().toISOString() },
   ])
   backend.listHistory.mockResolvedValue([])
-  backend.getAIStatus.mockResolvedValue({ enabled: false, model: 'claude-opus-5-5', hasKey: false, keySource: 'none', allowSamples: false })
+  backend.getAIStatus.mockResolvedValue({ enabled: false, ready: false, provider: 'anthropic', providerName: 'Anthropic API', model: 'claude-opus-5-5', hasKey: false, keySource: 'none', allowSamples: false, leavesDevice: true })
+  backend.detectAIProviders.mockResolvedValue({
+    claudeCode: { name: 'Claude Code', found: true, path: '/Users/me/.local/bin/claude', version: '2.1.220', signedIn: true, account: 'claude.ai (pro)', message: '' },
+    codex: { name: 'Codex', found: false, path: '', version: '', signedIn: null, account: '', message: 'Not installed. Install the Codex CLI.' },
+    localServers: [{ name: 'Ollama', url: 'http://localhost:11434', api: 'ollama', models: ['qwen2.5-coder:7b', 'llama3.2'] }],
+  })
+  backend.listLocalModels.mockResolvedValue(['qwen2.5-coder:7b', 'llama3.2'])
   backend.getMCPInfo.mockResolvedValue({
     policy: { enabled: false, profiles: [], databases: [], tools: [], allowWrites: false, maxDocs: 50, maxWriteDocs: 100, maskRuleSetId: '', auditLog: true },
     catalog: [{ name: 'find', description: 'Find documents', write: false }],
@@ -401,5 +413,35 @@ describe('collection query editor', () => {
     expect(screen.getByTitle('0 = no limit')).toHaveValue(7)
     fireEvent.click(screen.getByRole('radio', { name: 'Query' }))
     expect(screen.getByRole('textbox', { name: 'Query' }).textContent).toContain('.limit(7)')
+  })
+})
+
+describe('AI settings', () => {
+  it('detects Claude Code, Codex and local servers and saves the chosen provider', async () => {
+    backend.saveSettings.mockImplementation(async (s: unknown) => s)
+    render(<App />)
+    fireEvent.click(await screen.findByTitle(/Settings \(/))
+    const group = await screen.findByRole('radiogroup', { name: 'AI provider' })
+    const card = (name: RegExp) => within(group).getByRole('radio', { name })
+    await waitFor(() => expect(card(/Claude Code/)).toHaveTextContent('signed in'))
+    expect(card(/Codex/)).toHaveTextContent('not installed')
+    expect(card(/Local model/)).toHaveTextContent('Ollama')
+
+    fireEvent.click(card(/Claude Code/))
+    expect(screen.getByText(/2\.1\.220/)).toBeInTheDocument()
+    expect(screen.getByText(/signed in with claude.ai \(pro\)/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Test/ })).toBeDisabled() // unsaved changes must be saved first
+
+    fireEvent.click(card(/Local model/))
+    fireEvent.click(await screen.findByRole('button', { name: /Ollama · 2 models/ }))
+    expect(screen.getByRole('combobox', { name: 'Local model' })).toHaveValue('qwen2.5-coder:7b')
+    expect(screen.queryByText(/This server is not on this computer/)).toBeNull()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Server URL' }), { target: { value: 'http://gpu-box.lan:11434' } })
+    expect(screen.getByText(/This server is not on this computer/)).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Server URL' }), { target: { value: 'http://localhost:11434' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /Save settings/ }))
+    await waitFor(() => expect(backend.saveSettings).toHaveBeenCalled())
+    expect(backend.saveSettings.mock.calls[0][0]).toMatchObject({ aiProvider: 'local', localUrl: 'http://localhost:11434', localApi: 'ollama', localModel: 'qwen2.5-coder:7b' })
   })
 })

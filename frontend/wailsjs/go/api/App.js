@@ -50,6 +50,10 @@ export function ClearHistory() {
   return window['go']['api']['App']['ClearHistory']();
 }
 
+export function ClearLocalAIKey() {
+  return window['go']['api']['App']['ClearLocalAIKey']();
+}
+
 export function CodeLanguages() {
   return window['go']['api']['App']['CodeLanguages']();
 }
@@ -92,6 +96,10 @@ export function DeleteProfile(arg1) {
 
 export function DeleteTask(arg1) {
   return window['go']['api']['App']['DeleteTask'](arg1);
+}
+
+export function DetectAIProviders() {
+  return window['go']['api']['App']['DetectAIProviders']();
 }
 
 export function DetectTools(arg1, arg2) {
@@ -208,6 +216,10 @@ export function ListHistory(arg1, arg2, arg3) {
 
 export function ListJobs() {
   return window['go']['api']['App']['ListJobs']();
+}
+
+export function ListLocalModels(arg1, arg2) {
+  return window['go']['api']['App']['ListLocalModels'](arg1, arg2);
 }
 
 export function ListMaskRuleSets() {
@@ -366,6 +378,10 @@ export function SetAIKey(arg1) {
   return window['go']['api']['App']['SetAIKey'](arg1);
 }
 
+export function SetLocalAIKey(arg1) {
+  return window['go']['api']['App']['SetLocalAIKey'](arg1);
+}
+
 export function SetTaskEnabled(arg1, arg2) {
   return window['go']['api']['App']['SetTaskEnabled'](arg1, arg2);
 }
@@ -404,6 +420,10 @@ export function StartSync(arg1, arg2) {
 
 export function StartTransform(arg1, arg2) {
   return window['go']['api']['App']['StartTransform'](arg1, arg2);
+}
+
+export function TestAI(arg1) {
+  return window['go']['api']['App']['TestAI'](arg1);
 }
 
 export function TestConnection(arg1) {

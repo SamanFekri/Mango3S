@@ -65,6 +65,30 @@ export namespace aggregate {
 
 export namespace ai {
 	
+	export class CLIInfo {
+	    name: string;
+	    found: boolean;
+	    path: string;
+	    version: string;
+	    signedIn?: boolean;
+	    account: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CLIInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.found = source["found"];
+	        this.path = source["path"];
+	        this.version = source["version"];
+	        this.signedIn = source["signedIn"];
+	        this.account = source["account"];
+	        this.message = source["message"];
+	    }
+	}
 	export class Check {
 	    name: string;
 	    ok: boolean;
@@ -132,6 +156,24 @@ export namespace ai {
 		}
 	}
 	
+	export class LocalServer {
+	    name: string;
+	    url: string;
+	    api: string;
+	    models: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalServer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.url = source["url"];
+	        this.api = source["api"];
+	        this.models = source["models"];
+	    }
+	}
 	export class Proposal {
 	    id: string;
 	    kind: string;
@@ -271,12 +313,52 @@ export namespace ai {
 
 export namespace api {
 	
+	export class AIProviders {
+	    claudeCode: ai.CLIInfo;
+	    codex: ai.CLIInfo;
+	    localServers: ai.LocalServer[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AIProviders(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.claudeCode = this.convertValues(source["claudeCode"], ai.CLIInfo);
+	        this.codex = this.convertValues(source["codex"], ai.CLIInfo);
+	        this.localServers = this.convertValues(source["localServers"], ai.LocalServer);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AIStatus {
 	    enabled: boolean;
+	    provider: string;
+	    providerName: string;
+	    ready: boolean;
+	    detail: string;
 	    model: string;
+	    leavesDevice: boolean;
 	    hasKey: boolean;
 	    keySource: string;
 	    allowSamples: boolean;
+	    localHasKey: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AIStatus(source);
@@ -285,10 +367,16 @@ export namespace api {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
+	        this.provider = source["provider"];
+	        this.providerName = source["providerName"];
+	        this.ready = source["ready"];
+	        this.detail = source["detail"];
 	        this.model = source["model"];
+	        this.leavesDevice = source["leavesDevice"];
 	        this.hasKey = source["hasKey"];
 	        this.keySource = source["keySource"];
 	        this.allowSamples = source["allowSamples"];
+	        this.localHasKey = source["localHasKey"];
 	    }
 	}
 	export class AppInfo {
@@ -1289,6 +1377,15 @@ export namespace config {
 	    aiEnabled: boolean;
 	    aiModel: string;
 	    aiAllowSamples: boolean;
+	    aiProvider: string;
+	    aiTimeoutSeconds: number;
+	    claudeCodePath: string;
+	    claudeCodeModel: string;
+	    codexPath: string;
+	    codexModel: string;
+	    localUrl: string;
+	    localApi: string;
+	    localModel: string;
 	    schedulerEnabled: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -1308,6 +1405,15 @@ export namespace config {
 	        this.aiEnabled = source["aiEnabled"];
 	        this.aiModel = source["aiModel"];
 	        this.aiAllowSamples = source["aiAllowSamples"];
+	        this.aiProvider = source["aiProvider"];
+	        this.aiTimeoutSeconds = source["aiTimeoutSeconds"];
+	        this.claudeCodePath = source["claudeCodePath"];
+	        this.claudeCodeModel = source["claudeCodeModel"];
+	        this.codexPath = source["codexPath"];
+	        this.codexModel = source["codexModel"];
+	        this.localUrl = source["localUrl"];
+	        this.localApi = source["localApi"];
+	        this.localModel = source["localModel"];
 	        this.schedulerEnabled = source["schedulerEnabled"];
 	    }
 	}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -17,6 +18,7 @@ import (
 	"mango3s/internal/ai"
 	"mango3s/internal/apperr"
 	"mango3s/internal/backup"
+	"mango3s/internal/config"
 	"mango3s/internal/compare"
 	"mango3s/internal/jobs"
 	"mango3s/internal/masking"
@@ -627,25 +629,198 @@ func (a *App) registerTaskTypes() {
 
 // ---- AI ------------------------------------------------------------------------------
 
-// AIStatus describes the AI configuration (never the key itself).
+// AIStatus describes the AI configuration (never a key or token).
 type AIStatus struct {
 	Enabled      bool   `json:"enabled"`
-	Model        string `json:"model"`
-	HasKey       bool   `json:"hasKey"`
-	KeySource    string `json:"keySource"` // stored | environment | none
+	Provider     string `json:"provider"`     // anthropic | claudeCode | codex | local
+	ProviderName string `json:"providerName"` // e.g. "Claude Code"
+	Ready        bool   `json:"ready"`        // configured well enough to try
+	Detail       string `json:"detail"`       // what is (not) set up
+	Model        string `json:"model"`        // model in use, as far as known
+	LeavesDevice bool   `json:"leavesDevice"` // the context is sent to a remote service
+	HasKey       bool   `json:"hasKey"`       // Anthropic API key available
+	KeySource    string `json:"keySource"`    // stored | environment | none
 	AllowSamples bool   `json:"allowSamples"`
+	LocalHasKey  bool   `json:"localHasKey"` // an API key is stored for the local server
 }
 
-// GetAIStatus reports whether AI assistance is usable.
+const secretLocalAIKey = "mango3s:ai:local"
+
+// GetAIStatus reports whether AI assistance is usable with the chosen provider.
+// For the CLIs it checks installation and sign-in without sending a request.
 func (a *App) GetAIStatus() AIStatus {
 	st := a.currentSettings()
-	s := AIStatus{Enabled: st.AIEnabled, Model: st.AIModel, AllowSamples: st.AIAllowSamples, KeySource: "none"}
+	s := AIStatus{Enabled: st.AIEnabled, Provider: st.AIProvider, AllowSamples: st.AIAllowSamples, KeySource: "none"}
 	if _, err := a.secrets.Get(secretAIKey); err == nil {
 		s.HasKey, s.KeySource = true, "stored"
 	} else if os.Getenv("ANTHROPIC_API_KEY") != "" {
 		s.HasKey, s.KeySource = true, "environment"
 	}
+	if _, err := a.secrets.Get(secretLocalAIKey); err == nil {
+		s.LocalHasKey = true
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
+	defer cancel()
+	switch st.AIProvider {
+	case config.AIProviderClaudeCode:
+		info := detectCLI(ctx, config.AIProviderClaudeCode, st.ClaudeCodePath, false)
+		s.ProviderName, s.Model, s.LeavesDevice = "Claude Code", orDefault(st.ClaudeCodeModel, "Claude Code's default model"), true
+		s.Ready = info.Found && (info.SignedIn == nil || *info.SignedIn)
+		s.Detail = cliDetail(info)
+	case config.AIProviderCodex:
+		info := detectCLI(ctx, config.AIProviderCodex, st.CodexPath, false)
+		s.ProviderName, s.Model, s.LeavesDevice = "Codex", orDefault(st.CodexModel, "Codex's default model"), true
+		s.Ready = info.Found && (info.SignedIn == nil || *info.SignedIn)
+		s.Detail = cliDetail(info)
+	case config.AIProviderLocal:
+		s.ProviderName, s.Model, s.LeavesDevice = "Local model", st.LocalModel, !ai.IsLoopback(st.LocalURL)
+		s.Ready = st.LocalModel != ""
+		s.Detail = st.LocalURL + " (" + st.LocalAPI + " API)"
+		if !s.Ready {
+			s.Detail += " — choose a model"
+		}
+	default:
+		s.ProviderName, s.Model, s.LeavesDevice = "Anthropic API", st.AIModel, true
+		s.Ready = s.HasKey
+		if !s.HasKey {
+			s.Detail = "No API key. Add one below or set ANTHROPIC_API_KEY."
+		}
+	}
 	return s
+}
+
+func orDefault(v, d string) string {
+	if v == "" {
+		return d
+	}
+	return v
+}
+
+func cliDetail(i ai.CLIInfo) string {
+	if !i.Found {
+		return i.Message
+	}
+	d := i.Name + " " + i.Version + " at " + i.Path
+	switch {
+	case i.SignedIn != nil && *i.SignedIn:
+		d += " · signed in"
+		if i.Account != "" {
+			d += " with " + i.Account
+		}
+	case i.Message != "":
+		d += " · " + i.Message
+	}
+	return d
+}
+
+// CLI detection runs `--version` and a sign-in check; cache it briefly so
+// opening the AI dialog stays fast. Detect in Settings refreshes it.
+var cliCache = struct {
+	sync.Mutex
+	at   map[string]time.Time
+	info map[string]ai.CLIInfo
+}{at: map[string]time.Time{}, info: map[string]ai.CLIInfo{}}
+
+func detectCLI(ctx context.Context, which, override string, force bool) ai.CLIInfo {
+	key := which + "|" + override
+	cliCache.Lock()
+	if t, ok := cliCache.at[key]; ok && !force && time.Since(t) < 30*time.Second {
+		info := cliCache.info[key]
+		cliCache.Unlock()
+		return info
+	}
+	cliCache.Unlock()
+	var info ai.CLIInfo
+	if which == config.AIProviderClaudeCode {
+		info = ai.DetectClaudeCode(ctx, override)
+	} else {
+		info = ai.DetectCodex(ctx, override)
+	}
+	cliCache.Lock()
+	cliCache.at[key], cliCache.info[key] = time.Now(), info
+	cliCache.Unlock()
+	return info
+}
+
+// AIProviders is what Settings → AI can offer on this computer.
+type AIProviders struct {
+	ClaudeCode   ai.CLIInfo       `json:"claudeCode"`
+	Codex        ai.CLIInfo       `json:"codex"`
+	LocalServers []ai.LocalServer `json:"localServers"`
+}
+
+// DetectAIProviders looks for Claude Code, Codex and running local model
+// servers (Ollama, LM Studio, llama.cpp, vLLM, Jan). Nothing is sent to a model.
+func (a *App) DetectAIProviders() AIProviders {
+	st := a.currentSettings()
+	ctx, cancel := context.WithTimeout(a.ctx, 25*time.Second)
+	defer cancel()
+	var out AIProviders
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); out.ClaudeCode = detectCLI(ctx, config.AIProviderClaudeCode, st.ClaudeCodePath, true) }()
+	go func() { defer wg.Done(); out.Codex = detectCLI(ctx, config.AIProviderCodex, st.CodexPath, true) }()
+	go func() { defer wg.Done(); out.LocalServers = ai.DetectLocalServers(ctx) }()
+	wg.Wait()
+	return out
+}
+
+// ListLocalModels lists the models of a local model server.
+func (a *App) ListLocalModels(url, api string) ([]string, error) {
+	key, _ := a.secrets.Get(secretLocalAIKey)
+	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
+	defer cancel()
+	m, err := ai.ListLocalModels(ctx, url, api, key)
+	return m, a.encode("ListLocalModels", err)
+}
+
+// SetLocalAIKey stores an API key for an OpenAI-compatible server that needs one.
+func (a *App) SetLocalAIKey(key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return a.encode("SetLocalAIKey", apperr.Invalid("Enter the server's API key."))
+	}
+	return a.encode("SetLocalAIKey", a.secrets.Set(secretLocalAIKey, key))
+}
+
+// ClearLocalAIKey removes the local server's API key.
+func (a *App) ClearLocalAIKey() error {
+	err := a.secrets.Delete(secretLocalAIKey)
+	if errors.Is(err, secrets.ErrNotFound) {
+		err = nil
+	}
+	return a.encode("ClearLocalAIKey", err)
+}
+
+// TestAI sends a tiny request to the chosen provider and checks that the
+// answer has the expected shape. It uses a little of the provider's quota.
+func (a *App) TestAI(opID string) (string, error) {
+	provider, err := a.aiProvider()
+	if err != nil {
+		return "", a.encode("TestAI", err)
+	}
+	return callWithTimeout(a, "TestAI", opID, a.aiTimeout(), func(ctx context.Context) (string, error) {
+		req := ai.Request{DB: "test", Coll: "orders", Prompt: "all orders with status \"A\"", Mode: ai.KindFind}
+		c := ai.Context{Collection: "test.orders", Fields: []ai.FieldSummary{{Path: "status", Types: []string{"string"}, Presence: 100}}}
+		start := time.Now()
+		raw, usage, err := provider.Generate(ctx, ai.SystemPrompt, ai.UserMessage(req, c), ai.AnswerSchema())
+		if err != nil {
+			return "", err
+		}
+		p, err := ai.Validate(ai.ExtractJSON(raw), req)
+		if err != nil {
+			return "", err
+		}
+		model := usage.Model
+		if model == "" {
+			model = "the model"
+		}
+		return fmt.Sprintf("%s answered in %.1fs with a %s query: %s", model, time.Since(start).Seconds(), p.Kind, p.Filter), nil
+	})
+}
+
+func (a *App) aiTimeout() time.Duration {
+	return time.Duration(a.currentSettings().AITimeoutSeconds) * time.Second
 }
 
 // SetAIKey stores the Anthropic API key in the secret store.
@@ -669,14 +844,37 @@ func (a *App) aiProvider() (ai.Provider, error) {
 	if !st.AIEnabled {
 		return nil, apperr.New(apperr.CodeUnsupported, "AI assistance is turned off. Enable it in Settings → AI.")
 	}
+	if a.aiOverride != nil {
+		return a.aiOverride, nil
+	}
+	switch st.AIProvider {
+	case config.AIProviderClaudeCode:
+		info := detectCLI(a.ctx, config.AIProviderClaudeCode, st.ClaudeCodePath, false)
+		if !info.Found {
+			return nil, apperr.New(apperr.CodeUnsupported, "Claude Code: %s", info.Message)
+		}
+		if info.SignedIn != nil && !*info.SignedIn {
+			return nil, apperr.New(apperr.CodeAuthFailed, "Claude Code is not signed in. Run `claude` in a terminal and sign in.")
+		}
+		return &ai.ClaudeCode{Path: info.Path, Model: st.ClaudeCodeModel}, nil
+	case config.AIProviderCodex:
+		info := detectCLI(a.ctx, config.AIProviderCodex, st.CodexPath, false)
+		if !info.Found {
+			return nil, apperr.New(apperr.CodeUnsupported, "Codex: %s", info.Message)
+		}
+		if info.SignedIn != nil && !*info.SignedIn {
+			return nil, apperr.New(apperr.CodeAuthFailed, "Codex is not signed in. Run `codex login` in a terminal.")
+		}
+		return &ai.Codex{Path: info.Path, Model: st.CodexModel}, nil
+	case config.AIProviderLocal:
+		key, _ := a.secrets.Get(secretLocalAIKey)
+		return &ai.Local{URL: st.LocalURL, API: st.LocalAPI, Model: st.LocalModel, APIKey: key}, nil
+	}
 	key, err := a.secrets.Get(secretAIKey)
 	if errors.Is(err, secrets.ErrNotFound) {
 		key = "" // fall back to the SDK credential chain (ANTHROPIC_API_KEY, ant auth profiles)
 	} else if err != nil {
 		return nil, apperr.Wrap(apperr.CodeSecretBackend, err, "Could not read the API key.")
-	}
-	if a.aiOverride != nil {
-		return a.aiOverride, nil
 	}
 	return ai.NewClaude(key, st.AIModel), nil
 }
@@ -701,7 +899,7 @@ func (a *App) GenerateAI(opID string, req ai.Request) (*ai.Proposal, error) {
 	if err != nil {
 		return nil, a.encode("GenerateAI", err)
 	}
-	return call(a, "GenerateAI", opID, func(ctx context.Context) (*ai.Proposal, error) {
+	return callWithTimeout(a, "GenerateAI", opID, a.aiTimeout(), func(ctx context.Context) (*ai.Proposal, error) {
 		p, err := a.p2.ai.Generate(ctx, provider, a.aiRequest(req))
 		if err == nil {
 			a.log.Info("AI proposal", "kind", p.Kind, "valid", p.Valid, "write", p.IsWrite, "inputTokens", p.InputTokens, "outputTokens", p.OutputTokens)

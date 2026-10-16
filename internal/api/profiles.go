@@ -490,19 +490,16 @@ func BeforeClose(a *App) func(ctx context.Context) bool {
 	}
 }
 
-// ChooseFile opens a native picker for connection files. kind is "cert"
-// (PEM), "key" (SSH private key), "tool" (an executable) or "folder".
-// An empty result means canceled.
+// ChooseFile opens a native picker for connection files. kind is "cert",
+// "key", "tool" or "folder". No extension filter is applied: SSH keys
+// (id_ed25519), certificates and tools often have no or unusual extensions,
+// and macOS treats filters as a strict allow-list. An empty result means canceled.
 func (a *App) ChooseFile(kind, title string) (string, error) {
 	if kind == "folder" {
 		p, err := wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
 		return p, a.encode("ChooseFile", err)
 	}
-	var filters []wruntime.FileFilter
-	if kind == "cert" {
-		filters = append(filters, wruntime.FileFilter{DisplayName: "PEM certificates (*.pem, *.crt, *.cer, *.key)", Pattern: "*.pem;*.crt;*.cer;*.key"})
-	}
-	filters = append(filters, wruntime.FileFilter{DisplayName: "All files", Pattern: "*"})
-	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, Filters: filters, ShowHiddenFiles: kind == "key"})
+	// Hidden files are shown so ~/.ssh and dotfiles can be browsed.
+	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
 	return p, a.encode("ChooseFile", err)
 }
