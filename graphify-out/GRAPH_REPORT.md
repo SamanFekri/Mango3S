@@ -1,30 +1,30 @@
 # Graph Report - Mango3S  (2026-10-16)
 
 ## Corpus Check
-- 188 files · ~195,184 words
+- 192 files · ~203,001 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3070 nodes · 6881 edges · 213 communities (93 shown, 120 thin omitted)
-- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 703 edges (avg confidence: 0.8)
+- 3167 nodes · 6950 edges · 257 communities (93 shown, 164 thin omitted)
+- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 696 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `4e880ce2`
+- Built from commit: `f4b3bc86`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - transfer.go
-- Service
-- lib.test.ts
+- Invalid
+- queryBuilder.ts
 - parser
 - Parser
 - WriteJSON
 - .evalColl
 - codegen.go
 - App
-- Build
+- Compile
 - DocViews.tsx
 - Manager
 - Analyze
@@ -37,7 +37,7 @@
 - CollectionView.tsx
 - ConnectionManager.tsx
 - logging.go
-- App.tsx
+- TabErrorBoundary
 - .convertValues
 - AppContext.tsx
 - Manager
@@ -47,7 +47,7 @@
 - runtime/package.json
 - App
 - newFixture
-- Writer
+- backup.go
 - models.ts
 - wails.json
 - .Apply
@@ -57,19 +57,19 @@
 - scripts
 - 01-sample-data.js
 - frontend/package.json
-- Apply
-- shortcuts.tsx
+- tabs.ts
+- App.tsx
 - CollectionStats
-- dial_test.go
+- Wrap
 - App
 - Item
 - compare.go
 - ai.go
 - p2.go
 - migrate.go
-- Request
-- SessionInfo
+- Session
 - Compact
+- transfer_test.go
 - dialect.go
 - AppInfo
 - CollectionInfo
@@ -82,7 +82,7 @@
 - ExportOptions
 - IndexInfo
 - Language
-- Profile
+- Store
 - QueryPayload
 - Settings
 - SQLRequest
@@ -94,34 +94,34 @@
 - @testing-library/jest-dom
 - EventsOn
 - mango3s
-- Is
-- server.go
+- local.go
+- .register
 - mql/format.go
 - .UpdateField
-- shell/parse.go
-- .Replace
+- providers_test.go
+- New
 - .Find
 - csv.go
-- ParseValue
+- denied
 - App
 - migrate_test.go
 - Mango3S P2 reference
 - Store
 - privileges.go
-- Collection
-- profile.go
+- Is
+- Service
 - Service
 - wait
 - NewDocument
-- NewJSONWriter
-- Invalid
-- ProfileInput
+- Writer
+- NewID
+- newFixture
 - Proposal
-- Report
+- server.go
 - CodeRequest
 - DBResult
 - DocDiff
-- Field
+- .previewTransform
 - codegen_test.go
 - Apply
 - Options
@@ -129,9 +129,9 @@
 - tools.go
 - BuildClientOptions
 - Result
-- newApp
-- SQLResult
-- Table
+- mcpserver_test.go
+- docviews.test.tsx
+- options_test.go
 - Task
 - TestShellResultsArePaged
 - TransformRequest
@@ -161,31 +161,31 @@
 - ToolInfo
 - WritePreview
 - WriteResult
-- BuildURI
+- profile.go
 - DatabaseInfo
-- Page
-- ProfileInput
+- ParseCron
+- tunneledConn
 - Manager
-- TasksView.tsx
-- Info
+- Preview
+- DBOptions
 - WaitGroup
 - Document
-- Duration
+- Entry
 - Logger
 - profiles_test.go
-- Progress
+- FieldResult
 - Mango3S UI reference: Welcome tab, connections, editing and shortcuts
-- profiles.go
-- Profile
-- Mutex
+- MCPInfo
+- ParsedURI
+- Plan
 - Context
 - ImportOptions
-- Output
+- Profile
 - Page
 - RWMutex
-- Run
+- TransformPreview
 - ServerConfig
-- SessionInfo
+- CLIInfo
 - TableMapping
 - A
 - AdvancedConfig
@@ -221,21 +221,65 @@
 - Buffer
 - Document
 - Service
-- Service
-- TestBuildPlan
+- LocalServer
+- DBResult
 - Stage
+- Duration
+- Entry
+- ExportOptions
+- Info
+- Context
+- Proposal
+- Rand
+- Request
+- Source
+- Store
+- Plan
+- Report
+- Request
+- Result
+- Context
+- Policy
+- Proposal
+- RawMessage
+- Report
+- Request
+- Result
+- Rule
+- Service
+- Source
+- Spec
+- Store
+- Table
+- Profile
+- Item
+- Language
+- MethodInfo
+- Mutex
+- Op
+- Options
+- Outcome
+- Output
+- p2
+- Page
+- Preview
+- Provider
+- Result
+- RuleSet
+- SessionInfo
+- Store
 
 ## God Nodes (most connected - your core abstractions)
-1. `App` - 52 edges
-2. `App` - 49 edges
-3. `Invalid()` - 47 edges
-4. `Compact()` - 42 edges
-5. `useApp()` - 40 edges
-6. `Is()` - 39 edges
-7. `Scheduler` - 38 edges
-8. `call()` - 37 edges
-9. `Collection()` - 35 edges
-10. `toAppError()` - 33 edges
+1. `App` - 58 edges
+2. `App` - 50 edges
+3. `Invalid()` - 44 edges
+4. `useApp()` - 40 edges
+5. `Compact()` - 40 edges
+6. `Scheduler` - 37 edges
+7. `call()` - 35 edges
+8. `Collection()` - 35 edges
+9. `toAppError()` - 34 edges
+10. `Is()` - 34 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `newApp()` --calls--> `NewStore()`  [INFERRED]
@@ -257,31 +301,31 @@
 - **P1 features reusing P0 query/aggregate services** — readme_sql_subset, readme_code_generation, readme_explain_plans, readme_import_export_wizard, readme_p1_reuses_p0 [EXTRACTED 1.00]
 - **Docker compose dev/test stack** — docker_compose_mongo, docker_compose_mongo_auth, docker_compose_integration_tests, docker_compose_app, docker_compose_mongo_init [EXTRACTED 1.00]
 
-## Communities (213 total, 120 thin omitted)
+## Communities (257 total, 164 thin omitted)
 
 ### Community 0 - "transfer.go"
 Cohesion: 0.13
 Nodes (31): ColumnSpec, ParseDelimiter(), DetectFormat(), exportQuery(), fieldsProjection(), firstLine(), Context, D (+23 more)
 
-### Community 1 - "Service"
-Cohesion: 0.16
-Nodes (11): CollectionInfo, CollectionStats, DatabaseInfo, IndexInfo, Service, Check(), CollectPaths(), D (+3 more)
+### Community 1 - "Invalid"
+Cohesion: 0.08
+Nodes (35): Code, Error, CollectionInfo, CollectionStats, DatabaseInfo, IndexInfo, Service, Check() (+27 more)
 
-### Community 2 - "lib.test.ts"
-Cohesion: 0.10
-Nodes (35): Harness(), page, BuiltQuery, QueryBuilder(), EditorStage, newStage(), PipelineAction, pipelineReducer() (+27 more)
+### Community 2 - "queryBuilder.ts"
+Cohesion: 0.19
+Nodes (20): Harness(), BuiltQuery, QueryBuilder(), BSON_TYPES, BuilderError, buildFilter(), buildProjection(), buildSort() (+12 more)
 
 ### Community 3 - "parser"
 Cohesion: 0.08
-Nodes (43): mqlCompact(), errAt(), lex(), isLiteralFunc(), parse(), compact(), T, TestErrorPosition() (+35 more)
+Nodes (42): mqlCompact(), errAt(), lex(), isLiteralFunc(), parse(), compact(), T, TestErrorPosition() (+34 more)
 
 ### Community 5 - "Parser"
-Cohesion: 0.14
-Nodes (12): construct(), Time, isIdentPart(), isIdentStart(), narrowInt(), NewParser(), ParseDate(), regexOptions() (+4 more)
+Cohesion: 0.07
+Nodes (44): Decimal128, T, mustDec(), mustHex(), mustOID(), TestErrorPosition(), TestFormatShape(), TestParseDocumentVariants() (+36 more)
 
 ### Community 6 - "WriteJSON"
-Cohesion: 0.07
-Nodes (34): WriteJSON(), Mutex, Stage, Time, NewHistory(), NewStore(), sameRun(), T (+26 more)
+Cohesion: 0.05
+Nodes (62): Int32, WriteJSON(), Mutex, Stage, Time, NewHistory(), NewStore(), sameRun() (+54 more)
 
 ### Community 7 - ".evalColl"
 Cohesion: 0.13
@@ -292,32 +336,32 @@ Cohesion: 0.18
 Nodes (35): Language, renderer, Spec, b64(), block(), csRenderer(), escapeRegex(), floatLit() (+27 more)
 
 ### Community 9 - "App"
-Cohesion: 0.07
-Nodes (25): CodeRequest, exportTask, SQLRequest, SQLResult, SQLTranslation, Entry, ExportOptions, ImportOptions (+17 more)
+Cohesion: 0.08
+Nodes (18): CodeRequest, SQLRequest, SQLResult, SQLTranslation, ImportOptions, codeSpec(), errorMessage(), findRequest() (+10 more)
 
-### Community 11 - "Build"
-Cohesion: 0.15
-Nodes (21): Request, Service, Stage, Service, Build(), FromText(), Context, Page (+13 more)
+### Community 11 - "Compile"
+Cohesion: 0.09
+Nodes (33): canonical(), clip(), Compile(), D, Rand, info(), randomizeInt(), randomizeString() (+25 more)
 
 ### Community 12 - "DocViews.tsx"
-Cohesion: 0.09
-Nodes (45): CellEditing, CellEditor(), CellRef, EditState, FieldApi, ResultsNotice, sameRef(), scrollIntoView() (+37 more)
+Cohesion: 0.13
+Nodes (36): CellEditing, CellEditor(), CellRef, EditState, ResultsNotice, sameRef(), scrollIntoView(), step() (+28 more)
 
 ### Community 13 - "Manager"
-Cohesion: 0.17
-Nodes (11): CancelFunc, Duration, Logger, Mutex, Time, WaitGroup, NewManager(), entry (+3 more)
+Cohesion: 0.12
+Nodes (14): CancelFunc, Context, Duration, Logger, Mutex, Time, WaitGroup, NewManager() (+6 more)
 
 ### Community 14 - "Analyze"
-Cohesion: 0.15
-Nodes (30): Detail, Diagnostic, m, Plan, Request, Stage, Summary, Analyze() (+22 more)
+Cohesion: 0.08
+Nodes (52): Request, Service, Stage, Detail, Diagnostic, m, Plan, Request (+44 more)
 
 ### Community 15 - "Mango3S (MongoDB desktop IDE)"
 Cohesion: 0.06
 Nodes (38): app service (GUI, Linux X11), integration-tests service (test profile), mongo service (MongoDB 8.0, seeded), mongo-auth service (auth profile), docker/mongo-init seed scripts, /src/main.tsx entry script, index.html #root mount, Aggregation Editor (+30 more)
 
 ### Community 16 - "types.ts"
-Cohesion: 0.04
-Nodes (82): Checks(), ConfirmInput(), EndpointPicker(), JobStatus(), Stat(), useJob(), useJobDone(), a (+74 more)
+Cohesion: 0.03
+Nodes (104): AIDialog(), app, backend, base, Checks(), ConfirmInput(), EndpointPicker(), JobStatus() (+96 more)
 
 ### Community 17 - "ShellView.tsx"
 Cohesion: 0.09
@@ -325,7 +369,7 @@ Nodes (31): KIND_LABELS, needsCollection(), openAction(), timeAgo(), ctx, labels
 
 ### Community 18 - "schema.go"
 Cohesion: 0.12
-Nodes (24): Field, D, DateTime, lessPath(), New(), NewAnalyzer(), ptr(), field() (+16 more)
+Nodes (25): Field, Context, D, DateTime, lessPath(), New(), NewAnalyzer(), ptr() (+17 more)
 
 ### Community 19 - "SchemaView.tsx"
 Cohesion: 0.16
@@ -336,8 +380,8 @@ Cohesion: 0.07
 Nodes (28): compilerOptions, allowJs, allowSyntheticDefaultImports, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, jsx, lib (+20 more)
 
 ### Community 21 - "CollectionView.tsx"
-Cohesion: 0.12
-Nodes (43): AIDialog(), CodeDialog(), CodeEditor(), CodeEditorProps, HELPERS, OPERATORS, selectionOrAll(), theme (+35 more)
+Cohesion: 0.10
+Nodes (46): CodeDialog(), CodeEditor(), CodeEditorProps, HELPERS, OPERATORS, selectionOrAll(), theme, ErrorBanner() (+38 more)
 
 ### Community 22 - "ConnectionManager.tsx"
 Cohesion: 0.08
@@ -347,21 +391,17 @@ Nodes (33): blankProfile(), CONNECTION_TABS, ConnectionManager(), emptyAdvanced(
 Cohesion: 0.14
 Nodes (17): Attr, Handler, Context, LevelVar, Logger, isSecretKey(), NewRedactingHandler(), ParseLevel() (+9 more)
 
-### Community 24 - "App.tsx"
-Cohesion: 0.08
-Nodes (30): TabErrorBoundary, ConfirmDialog(), PromptDialog(), Toasts(), base(), CollectionIcon(), CollectionKind, DatabaseIcon() (+22 more)
-
 ### Community 25 - ".convertValues"
 Cohesion: 0.04
-Nodes (14): Entry, FieldResult, Info, Job, MCPInfo, ParsedURI, Plan, Preview (+6 more)
+Nodes (15): AIProviders, Field, Job, Output, ProfileInput, QuerySpec, Report, Request (+7 more)
 
 ### Community 26 - "AppContext.tsx"
-Cohesion: 0.14
-Nodes (23): onJobUpdate(), sameTarget(), SINGLETONS, tabId(), TabInit, TabKind, TabsAction, tabsReducer() (+15 more)
+Cohesion: 0.16
+Nodes (17): MCPSettings(), onJobUpdate(), TabsAction, TabsState, AppInfo, Job, SessionInfo, Settings (+9 more)
 
 ### Community 28 - ".cancel"
-Cohesion: 0.16
-Nodes (8): AppInfo, Lifecycle, opRegistry, runningOp, CancelFunc, Duration, newOpRegistry(), Mutex
+Cohesion: 0.15
+Nodes (10): AppInfo, Lifecycle, opRegistry, runningOp, CancelFunc, callWithTimeout(), Duration, Mutex (+2 more)
 
 ### Community 29 - "dependencies"
 Cohesion: 0.11
@@ -377,15 +417,15 @@ Nodes (18): author, bugs, url, description, homepage, keywords, license, main (+
 
 ### Community 32 - "App"
 Cohesion: 0.07
-Nodes (24): App, Deps, Bool, CollectionInfo, CollectionStats, DatabaseInfo, History, call() (+16 more)
+Nodes (19): Deps, Bool, CollectionInfo, CollectionStats, DatabaseInfo, History, call(), App (+11 more)
 
 ### Community 33 - "newFixture"
-Cohesion: 0.08
-Nodes (32): AEAD, fixture, App, Error, decodeErr(), Buffer, T, newFixture() (+24 more)
+Cohesion: 0.33
+Nodes (15): fixture, App, decodeErr(), Buffer, T, newFixture(), TestCancelOperation(), TestConnectFailureIsReadable() (+7 more)
 
-### Community 34 - "Writer"
-Cohesion: 0.13
-Nodes (23): Header, Info, line, ManyResult, RestoreStats, Writer, File, canonical() (+15 more)
+### Community 34 - "backup.go"
+Cohesion: 0.18
+Nodes (15): Header, Info, ManyResult, RestoreStats, Create(), Collection, Context, Time (+7 more)
 
 ### Community 35 - "models.ts"
 Cohesion: 0.13
@@ -396,8 +436,8 @@ Cohesion: 0.12
 Nodes (15): author, email, name, frontend:build, frontend:dev:serverUrl, frontend:dev:watcher, frontend:install, info (+7 more)
 
 ### Community 37 - ".Apply"
-Cohesion: 0.06
-Nodes (63): Clone(), CloneDoc(), Delete(), Exists(), Get(), D, index(), Parent() (+55 more)
+Cohesion: 0.12
+Nodes (37): Clone(), CloneDoc(), Delete(), Exists(), Get(), D, index(), Parent() (+29 more)
 
 ### Community 38 - "compilerOptions"
 Cohesion: 0.22
@@ -408,8 +448,8 @@ Cohesion: 0.25
 Nodes (7): EnvironmentInfo, NotificationAction, NotificationCategory, NotificationOptions, Position, Screen, Size
 
 ### Community 40 - "Scheduler"
-Cohesion: 0.08
-Nodes (36): NewID(), Time, ParseCron(), parseField(), CancelFunc, Context, Duration, Logger (+28 more)
+Cohesion: 0.16
+Nodes (16): CancelFunc, Context, Duration, Logger, Mutex, RawMessage, Time, WaitGroup (+8 more)
 
 ### Community 41 - "scripts"
 Cohesion: 0.29
@@ -423,93 +463,101 @@ Nodes (5): customers, orders, products, statuses, store
 Cohesion: 0.40
 Nodes (4): name, private, type, version
 
-### Community 44 - "Apply"
-Cohesion: 0.17
-Nodes (17): DocDiff, Apply(), BuildPlan(), bulk(), Collection, Context, D, Entry (+9 more)
+### Community 44 - "tabs.ts"
+Cohesion: 0.15
+Nodes (21): EditorStage, newStage(), PipelineAction, pipelineReducer(), STAGE_TEMPLATES, stageKey(), templateFor(), toStages() (+13 more)
 
-### Community 45 - "shortcuts.tsx"
-Cohesion: 0.07
-Nodes (45): backend, jobListeners, key(), profile, session, SCOPE_LABEL, ShortcutsDialog(), CODE_KEYS (+37 more)
+### Community 45 - "App.tsx"
+Cohesion: 0.05
+Nodes (72): backend, jobListeners, key(), profile, session, ConfirmDialog(), PromptDialog(), Toasts() (+64 more)
 
-### Community 47 - "dial_test.go"
-Cohesion: 0.07
-Nodes (58): Addr, ClientConfig, HostKeyCallback, Int32, buildDialer(), classifySSH(), containsAny(), Client (+50 more)
+### Community 47 - "Wrap"
+Cohesion: 0.14
+Nodes (24): ClientConfig, HostKeyCallback, Wrap(), buildDialer(), classifySSH(), containsAny(), Client, Conn (+16 more)
 
 ### Community 48 - "App"
 Cohesion: 0.05
-Nodes (18): Provider, DBResult, New(), expandPath(), App, Report, Result, Source (+10 more)
+Nodes (10): Info, App, Duration, Job, Provider, SetAIProvider(), Task, TaskType (+2 more)
 
 ### Community 50 - "compare.go"
-Cohesion: 0.10
-Nodes (43): CollectionRow, DBOptions, DBResult, DocDiff, Endpoint, Entry, FieldChange, fingerprint (+35 more)
+Cohesion: 0.05
+Nodes (73): CollectionRow, DBOptions, DBResult, DocDiff, Endpoint, Entry, FieldChange, fingerprint (+65 more)
 
 ### Community 51 - "ai.go"
-Cohesion: 0.07
-Nodes (45): answer, Check, Claude, Context, FieldSummary, Proposal, Request, Service (+37 more)
+Cohesion: 0.10
+Nodes (34): answer, Check, Claude, Context, FieldSummary, Proposal, Provider, Request (+26 more)
 
 ### Community 52 - "p2.go"
 Cohesion: 0.11
-Nodes (19): AIStatus, maskCopyTask, p2, syncTask, TransformPreview, TransformRequest, xformPlan, Func (+11 more)
+Nodes (19): AIProviders, AIStatus, exportTask, maskCopyTask, MCPInfo, p2, syncTask, xformPlan (+11 more)
 
 ### Community 53 - "migrate.go"
 Cohesion: 0.23
 Nodes (24): contains(), copyTable(), embed(), Execute(), fieldFor(), Collection, Context, D (+16 more)
 
-### Community 56 - "Compact"
-Cohesion: 0.19
-Nodes (25): Compact(), Equal(), TestParseRelaxedSyntax(), NewCSVReader(), NewJSONReader(), dataset(), D, T (+17 more)
+### Community 54 - "Session"
+Cohesion: 0.21
+Nodes (12): describe(), Client, Logger, Profile, RWMutex, Time, open(), via() (+4 more)
+
+### Community 55 - "Compact"
+Cohesion: 0.25
+Nodes (19): allDocs(), byID(), Context, D, Job, Manager, T, representative() (+11 more)
+
+### Community 56 - "transfer_test.go"
+Cohesion: 0.12
+Nodes (29): Decoder, Equal(), NewCSVReader(), D, NewJSONReader(), NewJSONWriter(), truncate(), dataset() (+21 more)
 
 ### Community 57 - "dialect.go"
 Cohesion: 0.22
 Nodes (21): DB, Redact(), beginRead(), dialectFor(), Context, Rows, Tx, Introspect() (+13 more)
 
-### Community 69 - "Profile"
-Cohesion: 0.11
-Nodes (21): profilesFile, Settings, Store, DefaultSettings(), AdvancedConfig, Profile, Mutex, ProxyConfig (+13 more)
+### Community 69 - "Store"
+Cohesion: 0.12
+Nodes (22): Profile, profilesFile, Settings, Store, DefaultSettings(), AdvancedConfig, Mutex, ProxyConfig (+14 more)
 
 ### Community 79 - "EventsOn"
 Cohesion: 0.67
 Nodes (3): EventsOn(), EventsOnce(), EventsOnMultiple()
 
-### Community 83 - "Is"
-Cohesion: 0.16
-Nodes (17): Code, Error, firstLine(), From(), Is(), New(), T, TestCheckNilIsUntypedNil() (+9 more)
+### Community 83 - "local.go"
+Cohesion: 0.20
+Nodes (14): httpStatus, Local, LocalServer, Error, asStatus(), checkURL(), DetectLocalServers(), doJSON() (+6 more)
 
-### Community 84 - "server.go"
-Cohesion: 0.07
-Nodes (45): CallToolResult, ClientSession, In, call(), connectClient(), Policy, T, TestAuditLogOmitsArguments() (+37 more)
+### Community 84 - ".register"
+Cohesion: 0.21
+Nodes (12): CheckValue(), Context, D, Logger, Policy, Profile, RawMessage, New() (+4 more)
 
 ### Community 85 - "mql/format.go"
 Cohesion: 0.20
-Nodes (14): Buffer, CanonicalJSON(), escapeRegexSlashes(), Format(), FormatDouble(), formatTime(), D, Time (+6 more)
+Nodes (13): Buffer, CanonicalJSON(), escapeRegexSlashes(), Format(), formatTime(), D, Time, Lookup() (+5 more)
 
 ### Community 86 - ".UpdateField"
-Cohesion: 0.18
-Nodes (20): Decimal128, FieldResult, FieldUpdate, FieldValue, checkParents(), describeField(), EditText(), D (+12 more)
+Cohesion: 0.20
+Nodes (19): FieldResult, FieldUpdate, FieldValue, checkParents(), describeField(), EditText(), D, Document (+11 more)
 
-### Community 87 - "shell/parse.go"
-Cohesion: 0.29
-Nodes (12): describe(), Parse(), parseArgs(), parseChain(), parseStatement(), peekIdent(), T, TestHumanBytes() (+4 more)
+### Community 87 - "providers_test.go"
+Cohesion: 0.25
+Nodes (15): call, T, TestLiveProviders(), ExtractJSON(), argAfter(), fakeRunner(), T, hasArg() (+7 more)
 
-### Community 88 - ".Replace"
-Cohesion: 0.24
-Nodes (13): D, Document, Service, Source, IDFilter(), IDsFilter(), New(), ParseID() (+5 more)
+### Community 88 - "New"
+Cohesion: 0.23
+Nodes (12): ClaudeCode, CLIInfo, Codex, cliError(), DetectClaudeCode(), DetectCodex(), emptyDir(), exeName() (+4 more)
 
 ### Community 89 - ".Find"
 Cohesion: 0.20
 Nodes (15): CollectionRef(), Context, D, Page, New(), Parse(), parseField(), T (+7 more)
 
 ### Community 90 - "csv.go"
-Cohesion: 0.18
-Nodes (12): FormatCell(), D, LeafPaths(), LookupPath(), NewCSVWriter(), setPath(), validType(), ColumnSpec (+4 more)
+Cohesion: 0.17
+Nodes (13): FormatDouble(), FormatCell(), D, LeafPaths(), LookupPath(), NewCSVWriter(), setPath(), validType() (+5 more)
 
-### Community 91 - "ParseValue"
-Cohesion: 0.20
-Nodes (19): TypeName(), T, mustDec(), mustHex(), mustOID(), TestErrorPosition(), TestParseDocumentVariants(), TestParseErrors() (+11 more)
+### Community 91 - "denied"
+Cohesion: 0.24
+Nodes (8): contains(), denied(), Mutex, NewStore(), toolInfo(), Policy, Store, ToolInfo
 
 ### Community 92 - "App"
-Cohesion: 0.13
-Nodes (9): SecretInput, FieldResult, FieldUpdate, FieldValue, App, Profile, SessionInfo, SecretKey() (+1 more)
+Cohesion: 0.06
+Nodes (32): Capability, ProfileInput, SecretInput, Credentials, FieldResult, FieldUpdate, FieldValue, NewLifecycle() (+24 more)
 
 ### Community 93 - "migrate_test.go"
 Cohesion: 0.22
@@ -524,16 +572,16 @@ Cohesion: 0.24
 Nodes (9): Duration, entry, Mutex, T, Time, New(), entry, Store (+1 more)
 
 ### Community 96 - "privileges.go"
-Cohesion: 0.31
-Nodes (9): contains(), D, granted(), MissingActions(), T, priv(), TestMissingActions(), connStatus (+1 more)
+Cohesion: 0.23
+Nodes (10): contains(), Context, D, granted(), MissingActions(), T, priv(), TestMissingActions() (+2 more)
 
-### Community 97 - "Collection"
+### Community 97 - "Is"
 Cohesion: 0.06
-Nodes (79): env, NewStore(), D, T, Time, mustTime(), rawDoc(), TestFieldLevelEditing() (+71 more)
+Nodes (67): AEAD, env, Is(), D, T, Time, mustTime(), rawDoc() (+59 more)
 
-### Community 98 - "profile.go"
-Cohesion: 0.21
-Nodes (10): HostPort, ParsedURI, ProxyConfig, ServerConfig, ShellConfig, SSHConfig, TLSConfig, ToolsConfig (+2 more)
+### Community 98 - "Service"
+Cohesion: 0.20
+Nodes (8): Service, WritePreview, WriteResult, D, Provider, MaskShape(), NewService(), Rand
 
 ### Community 99 - "Service"
 Cohesion: 0.29
@@ -547,13 +595,25 @@ Nodes (11): Job, Manager, T, newManager(), TestCancelRunningAndQueued(), TestIgn
 Cohesion: 0.24
 Nodes (9): ComputePaging(), D, NewDocument(), T, TestComputePaging(), TestNewDocument(), Document, Page (+1 more)
 
-### Community 102 - "NewJSONWriter"
-Cohesion: 0.24
-Nodes (6): Decoder, D, NewJSONWriter(), truncate(), JSONReader, JSONWriter
+### Community 102 - "Writer"
+Cohesion: 0.27
+Nodes (8): line, Writer, File, canonical(), D, Mutex, RawMessage, WriteManyWithBackup()
 
-### Community 103 - "Invalid"
-Cohesion: 0.48
-Nodes (4): AdvancedConfig, Invalid(), checkPort(), ParseTags()
+### Community 103 - "NewID"
+Cohesion: 0.28
+Nodes (3): NewID(), Run, runsFile
+
+### Community 104 - "newFixture"
+Cohesion: 0.31
+Nodes (13): Duration, Mutex, T, Time, newFixture(), TestApprovalGatesExecution(), TestCronParseAndNext(), TestNoOverlap() (+5 more)
+
+### Community 106 - "server.go"
+Cohesion: 0.24
+Nodes (13): CallToolResult, In, add(), errorResult(), textResult(), aggIn, collIn, connIn (+5 more)
+
+### Community 110 - ".previewTransform"
+Cohesion: 0.21
+Nodes (7): TransformPreview, TransformRequest, Func, expandPath(), Time, NewMCPServer(), Server
 
 ### Community 111 - "codegen_test.go"
 Cohesion: 0.34
@@ -568,72 +628,56 @@ Cohesion: 0.27
 Nodes (13): commonDirs(), Detect(), detectOne(), exe(), firstLine(), ToolsConfig, isFile(), locate() (+5 more)
 
 ### Community 116 - "BuildClientOptions"
-Cohesion: 0.17
-Nodes (21): ClientOptions, applyAdvanced(), applyAuth(), applyTLS(), BuildClientOptions(), CheckTLSFiles(), AdvancedConfig, Profile (+13 more)
+Cohesion: 0.32
+Nodes (12): ClientOptions, applyAdvanced(), applyAuth(), applyTLS(), BuildClientOptions(), CheckTLSFiles(), AdvancedConfig, Profile (+4 more)
 
-### Community 118 - "newApp"
-Cohesion: 0.27
-Nodes (9): NewLifecycle(), BeforeClose(), MenuEvent(), appMenu(), App, newApp(), runDesktop(), runMCP() (+1 more)
+### Community 118 - "mcpserver_test.go"
+Cohesion: 0.33
+Nodes (12): ClientSession, call(), connectClient(), Policy, T, TestAuditLogOmitsArguments(), TestBoundaryEnforcementBeforeConnecting(), TestCheckValueRefusesJavaScriptAndWrites() (+4 more)
 
-### Community 150 - "BuildURI"
-Cohesion: 0.31
-Nodes (10): BuildURI(), Profile, T, TestBuildURI(), TestNormalizeDefaults(), TestParseURIRoundTrip(), TestProfileValidationNamesTheTab(), TestSecretFlags() (+2 more)
+### Community 119 - "docviews.test.tsx"
+Cohesion: 0.22
+Nodes (6): ada(), fields, grace, Harness(), page(), FieldResult
 
-### Community 153 - "ProfileInput"
-Cohesion: 0.20
-Nodes (8): ProfileInput, AdvancedConfig, ProxyConfig, ServerConfig, ShellConfig, SSHConfig, TLSConfig, ToolsConfig
+### Community 120 - "options_test.go"
+Cohesion: 0.33
+Nodes (9): T, Time, TestAdvancedOptionsOverrideURI(), TestAllowInvalidHostnamesStillVerifiesTheChain(), TestAuthMechanismsAndProperties(), TestTLSErrorsAreClassified(), TestTLSFilesAreValidatedWithClearMessages(), writeCert() (+1 more)
 
-### Community 155 - "TasksView.tsx"
-Cohesion: 0.17
-Nodes (13): app, backend, base, AIProposal, Task, TaskRun, TaskSchedule, TaskType (+5 more)
+### Community 150 - "profile.go"
+Cohesion: 0.09
+Nodes (25): AdvancedConfig, HostPort, ParsedURI, ProxyConfig, ServerConfig, ShellConfig, SSHConfig, TLSConfig (+17 more)
 
-### Community 156 - "Info"
-Cohesion: 0.12
-Nodes (10): MCPInfo, DBOptions, Info, Context, Job, Policy, Proposal, Request (+2 more)
+### Community 152 - "ParseCron"
+Cohesion: 0.39
+Nodes (4): Time, ParseCron(), parseField(), Cron
 
 ### Community 161 - "profiles_test.go"
 Cohesion: 0.46
 Nodes (7): fullInput(), T, TestDuplicateAndDeleteProfile(), TestParseConnectionStringNeverReturnsThePassword(), TestProfileValidationErrorsReachTheUI(), TestSaveProfileAllTabsAndSecrets(), ProfileInput
 
-### Community 162 - "Progress"
-Cohesion: 0.26
-Nodes (3): Context, Func, Progress
-
 ### Community 163 - "Mango3S UI reference: Welcome tab, connections, editing and shortcuts"
 Cohesion: 0.25
 Nodes (7): Collection query editor and paging, Connection Manager, Keyboard shortcuts, Mango3S UI reference: Welcome tab, connections, editing and shortcuts, Result views and field editing, Unsupported and limitations, Welcome tab and workspace tabs
 
-### Community 164 - "profiles.go"
-Cohesion: 0.60
-Nodes (4): Capability, agentNote(), agentSupported(), goos()
-
-### Community 210 - "Service"
-Cohesion: 0.27
-Nodes (8): Counts, Job, Mutex, Source, Store, New(), Outcome, Service
-
-### Community 211 - "TestBuildPlan"
-Cohesion: 0.47
-Nodes (5): Result, T, result(), TestBuildPlan(), TestPlanStoreSingleUseAndExpiry()
-
 ## Knowledge Gaps
-- **230 isolated node(s):** `Welcome tab and workspace tabs`, `Connection Manager`, `Collection query editor and paging`, `Result views and field editing`, `Keyboard shortcuts` (+225 more)
+- **235 isolated node(s):** `Data-integrity model`, `Compare and sync`, `Reschema and masking`, `Migration from relational databases`, `Policies` (+230 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **120 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **164 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Invalid()` connect `Invalid` to `transfer.go`, `Service`, `Collection`, `parser`, `wait`, `Profile`, `WriteJSON`, `codegen.go`, `App`, `Build`, `dial_test.go`, `Is`, `BuildClientOptions`, `.UpdateField`, `.Replace`, `.Find`, `App`?**
-  _High betweenness centrality (0.062) - this node is a cross-community bridge._
-- **Why does `Compact()` connect `Compact` to `Service`, `Collection`, `parser`, `NewDocument`, `App`, `Build`, `Analyze`, `schema.go`, `Is`, `mql/format.go`, `.UpdateField`, `.Replace`, `.Find`, `ParseValue`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
-- **Why does `call()` connect `App` to `newFixture`, `App`, `.cancel`, `App`, `Info`, `p2.go`, `App`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
-- **Are the 44 inferred relationships involving `Invalid()` (e.g. with `.toProfile()` and `.validate()`) actually correct?**
-  _`Invalid()` has 44 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 40 inferred relationships involving `Compact()` (e.g. with `.Insert()` and `.UpdateField()`) actually correct?**
-  _`Compact()` has 40 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `Welcome tab and workspace tabs`, `Connection Manager`, `Collection query editor and paging` to the rest of the system?**
-  _230 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `New()` connect `New` to `App`, `newFixture`, `Store`, `App`, `.cancel`, `.previewTransform`, `App`, `local.go`, `p2.go`, `providers_test.go`, `App`?**
+  _High betweenness centrality (0.125) - this node is a cross-community bridge._
+- **Why does `NewID()` connect `NewID` to `Is`, `backup.go`, `Store`, `WriteJSON`, `Scheduler`, `Compile`, `Manager`, `Compact`, `dialect.go`, `Store`?**
+  _High betweenness centrality (0.104) - this node is a cross-community bridge._
+- **Why does `Run` connect `.convertValues` to `models.ts`, `.previewTransform`?**
+  _High betweenness centrality (0.090) - this node is a cross-community bridge._
+- **Are the 41 inferred relationships involving `Invalid()` (e.g. with `.validate()` and `.Validate()`) actually correct?**
+  _`Invalid()` has 41 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 38 inferred relationships involving `Compact()` (e.g. with `.Insert()` and `.UpdateField()`) actually correct?**
+  _`Compact()` has 38 INFERRED edges - model-reasoned connections that need verification._
+- **What connects `Data-integrity model`, `Compare and sync`, `Reschema and masking` to the rest of the system?**
+  _235 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `transfer.go` be split into smaller, more focused modules?**
   _Cohesion score 0.13333333333333333 - nodes in this community are weakly interconnected._
