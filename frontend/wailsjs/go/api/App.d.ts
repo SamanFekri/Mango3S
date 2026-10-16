@@ -22,9 +22,9 @@ import {recent} from '../models';
 import {library} from '../models';
 import {jobs} from '../models';
 import {masking} from '../models';
+import {shell} from '../models';
 import {aggregate} from '../models';
 import {transfer} from '../models';
-import {shell} from '../models';
 import {mcpserver} from '../models';
 
 export function AnalyzeSchema(arg1:string,arg2:schema.Request):Promise<schema.Report>;
@@ -149,6 +149,8 @@ export function MaskMethods():Promise<Array<masking.MethodInfo>>;
 
 export function MigrationTypes():Promise<Array<string>>;
 
+export function ParseCollectionQuery(arg1:string,arg2:string):Promise<shell.QuerySpec>;
+
 export function ParseConnectionString(arg1:string):Promise<config.ParsedURI>;
 
 export function PipelineFromText(arg1:string):Promise<Array<aggregate.Stage>>;
@@ -186,6 +188,8 @@ export function RunQuery(arg1:string,arg2:query.Request):Promise<model.Page>;
 export function RunSQL(arg1:string,arg2:api.SQLRequest):Promise<api.SQLResult>;
 
 export function RunShell(arg1:string,arg2:string,arg3:string,arg4:string):Promise<shell.Result>;
+
+export function RunShellPage(arg1:string,arg2:string,arg3:string,arg4:string,arg5:number):Promise<shell.Output>;
 
 export function RunTaskNow(arg1:string):Promise<scheduler.Run>;
 

@@ -17,6 +17,7 @@ import { formatBytes, formatCount } from '../lib/format'
 import { emptyBuilder, type BuilderState } from '../lib/queryBuilder'
 import type { Tab } from '../lib/tabs'
 import type { CodeRequest, CollectionStats, Doc, ExplainRequest, Page, QueryRequest } from '../lib/types'
+import { buildQueryText, type QueryParts } from '../lib/queryText'
 import { shortcutHint } from '../lib/shortcuts'
 import { useApp, useTabDirty } from '../state/AppContext'
 import { useShortcut } from '../state/shortcuts'
@@ -55,6 +56,19 @@ export function CollectionView({ tab }: { tab: Tab }) {
   const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'tree')
   const [cellDirty, setCellDirty] = useState<string | null>(null)
   const filterEditor = useRef<EditorView | null>(null)
+  const queryEditor = useRef<EditorView | null>(null)
+  // Query editor (one mongosh statement, as in Studio 3T) or the separate fields.
+  const [queryMode, setQueryModeState] = useState<'editor' | 'fields'>(() => {
+    try {
+      return localStorage.getItem('mango3s.queryMode') === 'fields' ? 'fields' : 'editor'
+    } catch {
+      return 'editor'
+    }
+  })
+  const [queryText, setQueryText] = useState(() =>
+    buildQueryText(coll, { filter: init?.filter || '{}', projection: init?.projection ?? '', sort: init?.sort ?? '', skip: init?.skip ?? 0, limit: init?.limit ?? 0 }),
+  )
+  const [queryError, setQueryError] = useState<AppError | null>(null)
 
   const [page, setPage] = useState<Page | null>(null)
   const [loading, setLoading] = useState(false)
@@ -108,7 +122,83 @@ export function CollectionView({ tab }: { tab: Tab }) {
     [opId],
   )
 
-  const run = useCallback(() => execute(buildReq(0)), [execute, buildReq])
+  const applyParts = (q: QueryParts) => {
+    setFilter(q.filter)
+    setProjection(q.projection)
+    setSort(q.sort)
+    setSkip(q.skip)
+    setLimit(q.limit)
+  }
+  /** Sets the query everywhere: the fields and the editor text. */
+  const setQuery = (q: QueryParts) => {
+    applyParts(q)
+    setQueryText(buildQueryText(coll, q))
+    setQueryError(null)
+  }
+
+  /**
+   * The query to run. In editor mode the statement is parsed on the server;
+   * a find() on this collection becomes the paged query, other collections
+   * and aggregate() open in their own tabs. Returns null when nothing should
+   * run here.
+   */
+  const resolveQuery = async (): Promise<QueryParts | null> => {
+    if (queryMode === 'fields') return { filter, projection, sort, skip, limit }
+    setQueryError(null)
+    try {
+      const spec = await backend.parseCollectionQuery(queryText, db)
+      const parts = { filter: spec.filter, projection: spec.projection, sort: spec.sort, skip: spec.skip, limit: spec.limit }
+      if (spec.kind === 'aggregate') {
+        dispatchTabs({ type: 'open', tab: { kind: 'aggregation', connId, connName: tab.connName, db: spec.db, coll: spec.coll, init: { stages: spec.stages ?? [] } } })
+        toast({ kind: 'info', title: 'Opened in the aggregation editor', message: 'Pipelines run there, page by page.' })
+        return null
+      }
+      if (spec.db !== db || spec.coll !== coll) {
+        dispatchTabs({ type: 'open', tab: { kind: 'collection', connId, connName: tab.connName, db: spec.db, coll: spec.coll, init: { query: parts } } })
+        return null
+      }
+      applyParts(parts)
+      return parts
+    } catch (err) {
+      setQueryError(toAppError(err))
+      return null
+    }
+  }
+
+  const reqFor = (q: QueryParts, pageNo = 0): QueryRequest => ({ connId, db, coll, ...q, page: pageNo, pageSize })
+
+  const run = async () => {
+    const q = await resolveQuery()
+    if (q) await execute(reqFor(q))
+  }
+  /** Runs an action with the current query (parsed from the editor if needed). */
+  const withQuery = (f: (req: QueryRequest) => void) => async () => {
+    const q = await resolveQuery()
+    if (q) f(reqFor(q))
+  }
+
+  const setQueryMode = async (mode: 'editor' | 'fields') => {
+    if (mode === queryMode) return
+    if (mode === 'fields') {
+      // Take the statement's parts over into the fields; stay if it doesn't parse.
+      try {
+        const spec = await backend.parseCollectionQuery(queryText, db)
+        if (spec.kind === 'find' && spec.coll === coll && spec.db === db) applyParts(spec)
+      } catch (err) {
+        setQueryError(toAppError(err))
+        return
+      }
+    } else {
+      setQueryText(buildQueryText(coll, { filter, projection, sort, skip, limit }))
+    }
+    setQueryError(null)
+    setQueryModeState(mode)
+    try {
+      localStorage.setItem('mango3s.queryMode', mode)
+    } catch {
+      /* per-viewer convenience only */
+    }
+  }
 
   const goto = (n: number) => execute({ ...(lastReq.current ?? buildReq(0)), page: n })
 
@@ -125,7 +215,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
 
   // Initial load: first page of the collection plus field names for autocomplete.
   useEffect(() => {
-    run()
+    void execute(buildReq(0))
     backend.sampleFields(connId, db, coll).then(setFields).catch(() => undefined)
     return () => {
       backend.cancel(opId).catch(() => undefined)
@@ -193,8 +283,10 @@ export function CollectionView({ tab }: { tab: Tab }) {
   }
 
   const copyAsShell = async () => {
+    const q = await resolveQuery()
+    if (!q) return
     try {
-      const code = await backend.queryToShell(buildReq(0))
+      const code = await backend.queryToShell(reqFor(q))
       await navigator.clipboard?.writeText(code)
       toast({ kind: 'success', title: 'Copied shell code', message: code.split('\n')[0] })
     } catch (err) {
@@ -203,6 +295,9 @@ export function CollectionView({ tab }: { tab: Tab }) {
   }
 
   const saveQuery = async (asNew = false) => {
+    const q = await resolveQuery()
+    if (!q) return
+    const { filter, projection, sort, skip, limit } = q
     const name = await prompt({ title: asNew ? 'Save query as' : 'Save query', label: 'Name', initial: tab.init?.savedName ?? `${coll} query`, confirmLabel: 'Save' })
     if (!name) return
     try {
@@ -215,6 +310,11 @@ export function CollectionView({ tab }: { tab: Tab }) {
   }
 
   const format = async () => {
+    if (queryMode === 'editor') {
+      const q = await resolveQuery()
+      if (q) setQueryText(buildQueryText(coll, q))
+      return
+    }
     try {
       const fmt = async (t: string) => (t.trim() ? backend.formatDocument(t) : t)
       const [f, p, so] = await Promise.all([fmt(filter), fmt(projection), fmt(sort)])
@@ -235,14 +335,17 @@ export function CollectionView({ tab }: { tab: Tab }) {
   useShortcut('query.save', () => void saveQuery())
   useShortcut('query.saveAs', () => void saveQuery(true))
   useShortcut('query.builder', () => setShowBuilder((b) => !b))
-  useShortcut('query.code', () => setDialog({ kind: 'code', req: { source: 'query', db, coll, query: buildReq(0) } }))
-  useShortcut('query.explain', () => setDialog({ kind: 'explain', req: { kind: 'find', query: buildReq(0) } }))
+  const openCode = withQuery((query) => setDialog({ kind: 'code', req: { source: 'query', db, coll, query } }))
+  const openExplain = withQuery((query) => setDialog({ kind: 'explain', req: { kind: 'find', query } }))
+  const openExport = withQuery((req) => setDialog({ kind: 'export', req }))
+  useShortcut('query.code', () => void openCode())
+  useShortcut('query.explain', () => void openExplain())
   useShortcut('doc.insert', () => insert())
   useShortcut('tab.aggregate', openAggregation)
   useShortcut('results.tree', () => setView('tree'))
   useShortcut('results.table', () => setView('table'))
   useShortcut('results.json', () => setView('json'))
-  useShortcut('focus.editor', () => filterEditor.current?.focus())
+  useShortcut('focus.editor', () => (queryMode === 'editor' ? queryEditor.current : filterEditor.current)?.focus())
 
   const openStats = async () => {
     setStats('loading')
@@ -275,16 +378,16 @@ export function CollectionView({ tab }: { tab: Tab }) {
         <button className="small ghost" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'schema', connId, connName: tab.connName, db, coll }, reuse: true })}>
           Schema
         </button>
-        <button className="small ghost" onClick={() => setDialog({ kind: 'explain', req: { kind: 'find', query: buildReq(0) } })} title={`Explain (${shortcutHint('query.explain')})`}>
+        <button className="small ghost" onClick={() => void openExplain()} title={`Explain (${shortcutHint('query.explain')})`}>
           Explain
         </button>
-        <button className="small ghost" onClick={() => setDialog({ kind: 'code', req: { source: 'query', db, coll, query: buildReq(0) } })} title={`Query code (${shortcutHint('query.code')})`}>
+        <button className="small ghost" onClick={() => void openCode()} title={`Query code (${shortcutHint('query.code')})`}>
           Code
         </button>
         <button className="small ghost" onClick={() => void saveQuery()} title={`Save (${shortcutHint('query.save')})`}>
           Save
         </button>
-        <button className="small ghost" onClick={() => setDialog({ kind: 'export', req: buildReq(0) })}>
+        <button className="small ghost" onClick={() => void openExport()}>
           Export…
         </button>
         {!readOnly && (
@@ -306,6 +409,29 @@ export function CollectionView({ tab }: { tab: Tab }) {
       </div>
 
       <div className="query-bar">
+        {queryMode === 'editor' ? (
+          <div className="query-editor">
+            <CodeEditor
+              value={queryText}
+              onChange={(t) => {
+                setQueryText(t)
+                setQueryError(null)
+              }}
+              onRun={() => void run()}
+              fields={fields}
+              minHeight={64}
+              maxHeight={240}
+              ariaLabel="Query"
+              editorRef={queryEditor}
+              placeholder={`db.getCollection("${coll}").find({})`}
+            />
+            {queryError && (
+              <div className="error-text small" role="alert">
+                {queryError.message}
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="query-grid">
           <label>Filter</label>
           <CodeEditor value={filter} onChange={setFilter} onRun={run} fields={fields} compact maxHeight={160} ariaLabel="Filter" placeholder="{ field: value }" editorRef={filterEditor} />
@@ -324,22 +450,25 @@ export function CollectionView({ tab }: { tab: Tab }) {
             </label>
           </div>
         </div>
+        )}
         <div className="query-actions">
-          <button className="primary" onClick={run} disabled={loading} title={`Run (${shortcutHint('query.run')} or F5)`}>
+          <button className="primary" onClick={() => void run()} disabled={loading} title={`Run (${shortcutHint('query.run')} or F5). Results are always paged.`}>
             {loading ? <Spinner small /> : '▶'} Run
           </button>
+          <div className="segmented small" role="radiogroup" aria-label="Query input">
+            <button role="radio" aria-checked={queryMode === 'editor'} className={queryMode === 'editor' ? 'active' : ''} onClick={() => void setQueryMode('editor')} title="Edit the query as one statement">
+              Query
+            </button>
+            <button role="radio" aria-checked={queryMode === 'fields'} className={queryMode === 'fields' ? 'active' : ''} onClick={() => void setQueryMode('fields')} title="Filter, projection and sort as separate fields">
+              Fields
+            </button>
+          </div>
           <button className={showBuilder ? 'active small' : 'small'} onClick={() => setShowBuilder((s) => !s)} aria-pressed={showBuilder} title={`Visual query builder (${shortcutHint('query.builder')})`}>
             Visual builder
           </button>
           <button
             className="small ghost"
-            onClick={() => {
-              setFilter('{}')
-              setProjection('')
-              setSort('')
-              setSkip(0)
-              setLimit(0)
-            }}
+            onClick={() => setQuery({ filter: '{}', projection: '', sort: '', skip: 0, limit: 0 })}
           >
             Reset
           </button>
@@ -352,12 +481,9 @@ export function CollectionView({ tab }: { tab: Tab }) {
           onChange={setBuilder}
           fields={fields}
           onApply={(q, andRun) => {
-            setFilter(q.filter)
-            setSort(q.sort)
-            setProjection(q.projection)
-            if (andRun) {
-              execute({ ...buildReq(0), filter: q.filter, sort: q.sort, projection: q.projection })
-            }
+            const parts = { filter: q.filter, projection: q.projection, sort: q.sort, skip, limit }
+            setQuery(parts)
+            if (andRun) execute(reqFor(parts))
           }}
         />
       )}
@@ -426,11 +552,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
               dispatchTabs({ type: 'open', tab: { kind: 'aggregation', connId, connName: tab.connName, db, coll, init: { stages: p.pipeline } } })
               return
             }
-            setFilter(p.filter || '{}')
-            setProjection(p.projection)
-            setSort(p.sort)
-            setLimit(p.limit)
-            setSkip(0)
+            setQuery({ filter: p.filter || '{}', projection: p.projection, sort: p.sort, skip: 0, limit: p.limit })
           }}
         />
       )}

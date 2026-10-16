@@ -53,6 +53,28 @@ fix ("SSH: …"), and the dialog switches to that tab.
 - An empty secret field keeps the stored value; "Remove the saved …" deletes it.
 - Tests check that no secret reaches `connections.json` or the logs.
 
+## Collection query editor and paging
+
+- **Query editor:** each collection tab shows its query as one statement, as in Studio 3T, e.g.
+  `db.getCollection("agent_definitions").find({})`.
+  - You can edit the whole statement: the filter, a projection argument, and `.sort()`,
+    `.skip()` and `.limit()`.
+  - `db.name.find(…)` and `db.getSiblingDB("x").getCollection("y")` also work.
+  - The statement is parsed on the server, never executed as a shell script.
+- **Where it runs:**
+  - A `find()` on the tab's collection runs as the tab's query.
+  - A `find()` on another collection opens that collection's tab.
+  - An `aggregate([…])` opens in the aggregation editor.
+  - Anything else (writes, `count()`, scripts) is rejected with a pointer to IntelliShell.
+- **Fields:** the **Query / Fields** switch shows the same query as separate filter, projection,
+  sort, skip and limit fields. Switching carries the query across, and the choice is remembered.
+- **Results are always paged:**
+  - **Collection tabs, aggregation, SQL:** one page at a time (the page size is in Settings and
+    on the results toolbar), within the query's own skip and limit.
+  - **IntelliShell:** `find()` and read-only `aggregate()` results are paged too. ‹ › re-run that
+    one statement for the previous or next page.
+  - `$out` / `$merge` pipelines run once and aren't paged.
+
 ## Result views and field editing
 
 - **Views:** Tree (the default until you choose another default in Settings), Table and JSON.

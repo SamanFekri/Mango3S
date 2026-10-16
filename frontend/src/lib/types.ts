@@ -312,6 +312,23 @@ export interface ShellOutput {
   documents?: Doc[]
   hasMore: boolean
   durationMs: number
+  /** find/aggregate results: re-run page by page with runShellPage. */
+  pageable?: boolean
+  page?: number
+  pageSize?: number
+}
+
+/** A query from the collection tab's editor, run with paging. */
+export interface QuerySpec {
+  kind: 'find' | 'aggregate'
+  db: string
+  coll: string
+  filter: string
+  projection: string
+  sort: string
+  skip: number
+  limit: number
+  stages: Stage[] | null
 }
 
 export interface ShellResult {

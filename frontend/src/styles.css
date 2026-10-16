@@ -2534,3 +2534,22 @@ tr.clickable {
   margin: 0;
   padding-left: 18px;
 }
+
+/* ---------- Collection query editor and shell paging ---------- */
+.query-editor {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.segmented.small button {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.shell-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}

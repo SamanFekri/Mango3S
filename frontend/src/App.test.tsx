@@ -47,7 +47,8 @@ const backend = vi.hoisted(() => ({
   setUnsavedWork: vi.fn(),
   getField: vi.fn(),
   updateField: vi.fn(),
-  listHistory2: vi.fn(),
+  parseCollectionQuery: vi.fn(),
+  runShellPage: vi.fn(),
 }))
 
 const jobListeners = vi.hoisted(() => [] as ((j: unknown) => void)[])
@@ -351,5 +352,54 @@ describe('connection manager', () => {
       advanced: { readPreference: 'secondaryPreferred' },
       secrets: { sshPassword: { value: 's3cret', clear: false } },
     })
+  })
+})
+
+describe('collection query editor', () => {
+  it('shows the query as one statement and runs it with paging', async () => {
+    await connectAndOpenOrders()
+    const editor = screen.getByRole('textbox', { name: 'Query' })
+    expect(editor.textContent).toBe('db.getCollection("orders").find({})')
+    backend.parseCollectionQuery.mockResolvedValue({
+      kind: 'find', db: 'shop', coll: 'orders', filter: '{ status: "A" }', projection: '', sort: '{ _id: -1 }', skip: 0, limit: 0, stages: null,
+    })
+    backend.runQuery.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /Run/ }))
+    await waitFor(() => expect(backend.runQuery).toHaveBeenCalled())
+    expect(backend.parseCollectionQuery).toHaveBeenCalledWith('db.getCollection("orders").find({})', 'shop')
+    expect(backend.runQuery.mock.calls[0][1]).toMatchObject({ coll: 'orders', filter: '{ status: "A" }', sort: '{ _id: -1 }', page: 0, pageSize: 50 })
+  })
+
+  it('opens aggregate() in the aggregation editor and other collections in their own tab', async () => {
+    await connectAndOpenOrders()
+    backend.parseCollectionQuery.mockResolvedValueOnce({
+      kind: 'aggregate', db: 'shop', coll: 'orders', filter: '', projection: '', sort: '', skip: 0, limit: 0,
+      stages: [{ operator: '$match', body: '{}', enabled: true }],
+    })
+    backend.runQuery.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /Run/ }))
+    expect(await screen.findByRole('tab', { name: /orders · pipeline/ })).toHaveAttribute('aria-selected', 'true')
+    expect(backend.runQuery).not.toHaveBeenCalled()
+  })
+
+  it('shows parse errors next to the editor without running anything', async () => {
+    await connectAndOpenOrders()
+    backend.parseCollectionQuery.mockRejectedValueOnce(new Error(JSON.stringify({ code: 'INVALID_INPUT', message: 'Only find() and aggregate() run in the collection tab.' })))
+    backend.runQuery.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /Run/ }))
+    expect(await screen.findByText('Only find() and aggregate() run in the collection tab.')).toBeInTheDocument()
+    expect(backend.runQuery).not.toHaveBeenCalled()
+  })
+
+  it('switches to separate fields with the parsed parts', async () => {
+    await connectAndOpenOrders()
+    backend.parseCollectionQuery.mockResolvedValue({
+      kind: 'find', db: 'shop', coll: 'orders', filter: '{ qty: 5 }', projection: '', sort: '', skip: 0, limit: 7, stages: null,
+    })
+    fireEvent.click(screen.getByRole('radio', { name: 'Fields' }))
+    expect(await screen.findByRole('textbox', { name: 'Filter' })).toHaveTextContent('{ qty: 5 }')
+    expect(screen.getByTitle('0 = no limit')).toHaveValue(7)
+    fireEvent.click(screen.getByRole('radio', { name: 'Query' }))
+    expect(screen.getByRole('textbox', { name: 'Query' }).textContent).toContain('.limit(7)')
   })
 })

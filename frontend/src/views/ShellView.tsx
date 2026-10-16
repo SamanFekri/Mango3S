@@ -143,7 +143,7 @@ export function ShellView({ tab }: { tab: Tab }) {
   )
 
   useEffect(() => {
-    out.current?.scrollTo({ top: out.current.scrollHeight, behavior: 'smooth' })
+    out.current?.scrollTo?.({ top: out.current.scrollHeight, behavior: 'smooth' })
   }, [outputs])
 
   const run = async (mode: 'auto' | 'all' | 'selection' | 'statement' = 'auto', text?: string) => {
@@ -213,6 +213,23 @@ export function ShellView({ tab }: { tab: Tab }) {
   useShortcut('query.save', () => void save())
   useShortcut('query.saveAs', () => void save(true))
   useShortcut('focus.editor', () => editor.current?.focus())
+
+  // Shell find/aggregate results are paged: re-run that one statement for another page.
+  const [paging, setPaging] = useState<string | null>(null)
+  const showPage = async (entryId: number, index: number, o: ShellOutput, page: number) => {
+    const key = `${entryId}-${index}`
+    setPaging(key)
+    try {
+      const next = await backend.runShellPage(`${opId}-page`, connId, entries.current.find((e) => e.id === entryId)?.db ?? db, o.statement, page)
+      setOutputs((list) => list.map((e) => (e.id === entryId ? { ...e, outputs: e.outputs.map((x, i) => (i === index ? next : x)) } : e)))
+    } catch (err) {
+      toastError(err, 'Could not load that page')
+    } finally {
+      setPaging(null)
+    }
+  }
+  const entries = useRef<Entry[]>([])
+  entries.current = outputs
 
   const insert = (text: string) => {
     const v = editor.current
@@ -284,7 +301,27 @@ export function ShellView({ tab }: { tab: Tab }) {
                           {highlight(d.text)}
                         </pre>
                       ))}
-                      {o.text && <div className="muted small">{o.text}</div>}
+                      {o.pageable && (o.hasMore || (o.page ?? 0) > 0) ? (
+                        <div className="shell-pager">
+                          <button
+                            className="small"
+                            aria-label="Previous page"
+                            disabled={(o.page ?? 0) === 0 || paging !== null}
+                            onClick={() => void showPage(entry.id, i, o, (o.page ?? 0) - 1)}
+                          >
+                            ‹
+                          </button>
+                          <span className="muted small">
+                            Page {(o.page ?? 0) + 1} · {o.text}
+                          </span>
+                          <button className="small" aria-label="Next page" disabled={!o.hasMore || paging !== null} onClick={() => void showPage(entry.id, i, o, (o.page ?? 0) + 1)}>
+                            ›
+                          </button>
+                          {paging === `${entry.id}-${i}` && <Spinner small />}
+                        </div>
+                      ) : (
+                        o.text && <div className="muted small">{o.text}</div>
+                      )}
                     </>
                   ) : (
                     <pre className={o.kind === 'error' ? 'shell-error' : 'doc-text'}>{o.kind === 'error' ? o.text : highlight(o.text ?? '')}</pre>

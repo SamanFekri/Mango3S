@@ -483,6 +483,22 @@ func (a *App) PipelineFromText(text string) ([]aggregate.Stage, error) {
 	return s, a.encode("PipelineFromText", err)
 }
 
+// RunShellPage re-runs one find/aggregate statement from the shell and
+// returns the requested page (0-based) of its results.
+func (a *App) RunShellPage(opID, connID, db, statement string, page int) (shell.Output, error) {
+	return call(a, "RunShellPage", opID, func(ctx context.Context) (shell.Output, error) {
+		return a.shell.Page(ctx, connID, db, statement, page, a.currentSettings().PageSize)
+	})
+}
+
+// ParseCollectionQuery reads the collection tab's query editor text, e.g.
+// db.getCollection("orders").find({}).sort({ _id: -1 }), into a query that
+// runs with paging.
+func (a *App) ParseCollectionQuery(text, db string) (shell.QuerySpec, error) {
+	q, err := shell.ParseQuery(text, db)
+	return q, a.encode("ParseCollectionQuery", err)
+}
+
 // RunShell executes shell commands against the given database.
 func (a *App) RunShell(opID, connID, db, script string) (shell.Result, error) {
 	start := time.Now()

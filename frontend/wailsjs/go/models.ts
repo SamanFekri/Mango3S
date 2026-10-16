@@ -2909,6 +2909,9 @@ export namespace shell {
 	    documents?: model.Document[];
 	    hasMore: boolean;
 	    durationMs: number;
+	    pageable: boolean;
+	    page: number;
+	    pageSize: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Output(source);
@@ -2922,6 +2925,55 @@ export namespace shell {
 	        this.documents = this.convertValues(source["documents"], model.Document);
 	        this.hasMore = source["hasMore"];
 	        this.durationMs = source["durationMs"];
+	        this.pageable = source["pageable"];
+	        this.page = source["page"];
+	        this.pageSize = source["pageSize"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class QuerySpec {
+	    kind: string;
+	    db: string;
+	    coll: string;
+	    filter: string;
+	    projection: string;
+	    sort: string;
+	    skip: number;
+	    limit: number;
+	    stages: aggregate.Stage[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QuerySpec(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.db = source["db"];
+	        this.coll = source["coll"];
+	        this.filter = source["filter"];
+	        this.projection = source["projection"];
+	        this.sort = source["sort"];
+	        this.skip = source["skip"];
+	        this.limit = source["limit"];
+	        this.stages = this.convertValues(source["stages"], aggregate.Stage);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

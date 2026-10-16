@@ -56,6 +56,8 @@ import type {
   SQLTranslation,
   Profile,
   ProfileInput,
+  QuerySpec,
+  ShellOutput,
   Capability,
   CollectionHistoryEntry,
   FieldResult,
@@ -136,6 +138,9 @@ export const backend = {
   pipelineToText: (stages: Stage[]) => wrap<string>(a.PipelineToText(stages)),
   pipelineFromText: (text: string) => wrap<Stage[]>(a.PipelineFromText(text)),
 
+  runShellPage: (opId: string, conn: string, db: string, statement: string, page: number) =>
+    wrap<ShellOutput>(a.RunShellPage(opId, conn, db, statement, page)),
+  parseCollectionQuery: (text: string, db: string) => wrap<QuerySpec>(a.ParseCollectionQuery(text, db)),
   runShell: (opId: string, conn: string, db: string, script: string) =>
     wrap<ShellResult>(a.RunShell(opId, conn, db, script)),
   cancel: (opId: string) => wrap<boolean>(a.CancelOperation(opId)),

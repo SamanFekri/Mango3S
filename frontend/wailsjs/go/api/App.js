@@ -246,6 +246,10 @@ export function MigrationTypes() {
   return window['go']['api']['App']['MigrationTypes']();
 }
 
+export function ParseCollectionQuery(arg1, arg2) {
+  return window['go']['api']['App']['ParseCollectionQuery'](arg1, arg2);
+}
+
 export function ParseConnectionString(arg1) {
   return window['go']['api']['App']['ParseConnectionString'](arg1);
 }
@@ -320,6 +324,10 @@ export function RunSQL(arg1, arg2) {
 
 export function RunShell(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['RunShell'](arg1, arg2, arg3, arg4);
+}
+
+export function RunShellPage(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['App']['RunShellPage'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function RunTaskNow(arg1) {

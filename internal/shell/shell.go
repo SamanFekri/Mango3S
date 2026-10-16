@@ -26,6 +26,11 @@ type Output struct {
 	Documents  []model.Document `json:"documents,omitempty"`
 	HasMore    bool             `json:"hasMore"`
 	DurationMs int64            `json:"durationMs"`
+	// Pageable outputs (find and read-only aggregate) can be re-run one
+	// page at a time with Service.Page; Page is the 0-based page shown.
+	Pageable bool `json:"pageable"`
+	Page     int  `json:"page"`
+	PageSize int  `json:"pageSize"`
 }
 
 // Result is the result of a script.
@@ -37,6 +42,9 @@ type Result struct {
 // Service executes shell scripts.
 type Service interface {
 	Execute(ctx context.Context, connID, db, script string, maxDocs int) (Result, error)
+	// Page re-runs one find/aggregate statement and returns page `page`
+	// (0-based) of pageSize documents.
+	Page(ctx context.Context, connID, db, statement string, page, pageSize int) (Output, error)
 }
 
 type service struct{ src mongox.Source }
@@ -91,6 +99,41 @@ func (s *service) Execute(ctx context.Context, connID, db, script string, maxDoc
 	return res, nil
 }
 
+func (s *service) Page(ctx context.Context, connID, db, statement string, page, pageSize int) (Output, error) {
+	sess, err := s.src.Session(connID)
+	if err != nil {
+		return Output{}, err
+	}
+	if db == "" {
+		db = DefaultDB
+	}
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	if page < 0 {
+		page = 0
+	}
+	stmts, err := Parse(statement)
+	if err != nil {
+		return Output{}, apperr.Wrap(apperr.CodeInvalidInput, err, err.Error())
+	}
+	if len(stmts) != 1 || stmts[0].kind != "db" {
+		return Output{}, apperr.Invalid("Only a single find() or aggregate() statement can be paged.")
+	}
+	ex := &executor{sess: sess, db: db, maxDocs: pageSize, page: page}
+	start := time.Now()
+	out, err := ex.run(ctx, stmts[0])
+	if err != nil {
+		return Output{}, err
+	}
+	if !out.Pageable {
+		return Output{}, apperr.Invalid("This statement's result can't be paged.")
+	}
+	out.Statement = stmts[0].text
+	out.DurationMs = time.Since(start).Milliseconds()
+	return out, nil
+}
+
 func firstLine(s string) string {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
@@ -102,7 +145,8 @@ func firstLine(s string) string {
 type executor struct {
 	sess    *mongox.Session
 	db      string
-	maxDocs int
+	maxDocs int // page size
+	page    int // page of find/aggregate results to return
 }
 
 func text(s string) Output { return Output{Kind: "text", Text: s} }
@@ -607,15 +651,13 @@ func (e *executor) find(ctx context.Context, c *mongo.Collection, m segment, cha
 		return e.command(ctx, c.Database(), bson.D{{Key: "explain", Value: findCmd}, {Key: "verbosity", Value: "queryPlanner"}})
 	}
 
-	maxDocs := int64(e.maxDocs)
-	fetch := maxDocs + 1
-	if limit > 0 && limit <= maxDocs {
-		fetch = limit
+	// Results are always paged: page e.page of e.maxDocs documents, within
+	// the statement's own skip and limit.
+	pg := model.ComputePaging(skip, limit, e.page, e.maxDocs)
+	if pg.Limit == 0 {
+		return e.paged(Output{Kind: "documents", Documents: []model.Document{}}), nil
 	}
-	opts := options.Find().SetLimit(fetch).SetBatchSize(int32(fetch))
-	if skip > 0 {
-		opts.SetSkip(skip)
-	}
+	opts := options.Find().SetSkip(pg.Skip).SetLimit(pg.Limit + 1).SetBatchSize(int32(pg.Limit + 1))
 	if proj != nil {
 		opts.SetProjection(proj)
 	}
@@ -627,29 +669,48 @@ func (e *executor) find(ctx context.Context, c *mongo.Collection, m segment, cha
 		return Output{}, err
 	}
 	defer cur.Close(context.Background())
-	return e.drain(ctx, cur)
+	out, fetched, err := e.drain(ctx, cur, int(pg.Limit))
+	if err != nil {
+		return Output{}, err
+	}
+	out.HasMore = pg.HasMore(fetched, skip, limit)
+	return e.paged(out), nil
 }
 
-func (e *executor) drain(ctx context.Context, cur *mongo.Cursor) (Output, error) {
+// paged marks a documents output as pageable and describes the page.
+func (e *executor) paged(out Output) Output {
+	out.Pageable, out.Page, out.PageSize = true, e.page, e.maxDocs
+	first := e.page*e.maxDocs + 1
+	switch {
+	case len(out.Documents) == 0 && e.page > 0:
+		out.Text = "No more documents."
+	case out.HasMore || e.page > 0:
+		out.Text = fmt.Sprintf("Documents %d–%d. Use the page buttons to see more.", first, first+len(out.Documents)-1)
+	}
+	return out
+}
+
+// drain reads up to max documents and reports how many the cursor had
+// (max+1 means there are more).
+func (e *executor) drain(ctx context.Context, cur *mongo.Cursor, max int) (Output, int, error) {
 	out := Output{Kind: "documents", Documents: []model.Document{}}
+	fetched := 0
 	for cur.Next(ctx) {
-		if len(out.Documents) >= e.maxDocs {
+		fetched++
+		if len(out.Documents) >= max {
 			out.HasMore = true
 			break
 		}
 		var d bson.D
 		if err := cur.Decode(&d); err != nil {
-			return Output{}, err
+			return Output{}, 0, err
 		}
 		out.Documents = append(out.Documents, model.NewDocument(d))
 	}
 	if err := cur.Err(); err != nil {
-		return Output{}, err
+		return Output{}, 0, err
 	}
-	if out.HasMore {
-		out.Text = fmt.Sprintf("Showing the first %d documents. Use .skip(n) and .limit(n) to see more.", e.maxDocs)
-	}
-	return out, nil
+	return out, fetched, nil
 }
 
 func (e *executor) aggregate(ctx context.Context, c *mongo.Collection, m segment) (Output, error) {
@@ -680,6 +741,13 @@ func (e *executor) aggregate(ctx context.Context, c *mongo.Collection, m segment
 			return Output{}, err
 		}
 	}
+	if !isWrite {
+		// Page the output: skip earlier pages, fetch one extra to know if more exist.
+		if e.page > 0 {
+			pipe = append(pipe, bson.D{{Key: "$skip", Value: int64(e.page * e.maxDocs)}})
+		}
+		pipe = append(pipe, bson.D{{Key: "$limit", Value: int64(e.maxDocs + 1)}})
+	}
 	opts := options.Aggregate().SetBatchSize(int32(e.maxDocs + 1))
 	if len(m.args) == 2 {
 		if o, ok := m.args[1].(bson.D); ok {
@@ -693,7 +761,14 @@ func (e *executor) aggregate(ctx context.Context, c *mongo.Collection, m segment
 		return Output{}, err
 	}
 	defer cur.Close(context.Background())
-	return e.drain(ctx, cur)
+	out, _, err := e.drain(ctx, cur, e.maxDocs)
+	if err != nil {
+		return Output{}, err
+	}
+	if isWrite {
+		return out, nil // $out / $merge run once; there is nothing to page
+	}
+	return e.paged(out), nil
 }
 
 func (e *executor) update(ctx context.Context, c *mongo.Collection, m segment) (Output, error) {
