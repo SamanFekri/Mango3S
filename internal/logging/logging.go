@@ -14,8 +14,10 @@ import (
 )
 
 var (
-	// mongodb://user:pass@host  ->  mongodb://user:****@host
-	uriUserInfo = regexp.MustCompile(`(mongodb(?:\+srv)?://)([^:@/\s]*):([^@/\s]*)@`)
+	// scheme://user:pass@host -> scheme://user:****@host (mongodb, postgres, mysql, ...)
+	uriUserInfo = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)([^:@/\s]*):([^@/\s]*)@`)
+	// Go MySQL driver DSN: user:pass@tcp(host)/db
+	mysqlDSN = regexp.MustCompile(`(^|[\s"'=])([^:@/\s"'=]+):([^@/\s]*)@(tcp|unix)\(`)
 	// password=..., pwd: ..., "password": "..."
 	keyValue = regexp.MustCompile(`(?i)("?(?:password|passwd|pwd|secret|token)"?\s*[:=]\s*"?)([^"&,\s}]+)`)
 )
@@ -23,6 +25,7 @@ var (
 // Redact masks passwords embedded in connection strings and key/value text.
 func Redact(s string) string {
 	s = uriUserInfo.ReplaceAllString(s, "$1$2:****@")
+	s = mysqlDSN.ReplaceAllString(s, "$1$2:****@$4(")
 	return keyValue.ReplaceAllString(s, "$1****")
 }
 

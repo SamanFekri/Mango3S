@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
+import { AIDialog } from '../components/AIDialog'
 import { CodeDialog } from '../components/CodeDialog'
 import { CodeEditor } from '../components/CodeEditor'
 import { ExplainDialog } from '../components/ExplainDialog'
@@ -23,7 +24,7 @@ export function AggregationView({ tab }: { tab: Tab }) {
     tab.init?.stages?.length ? pipelineReducer([], { type: 'replace', stages: tab.init.stages }) : [newStage('$match')],
   )
   const [savedId, setSavedId] = useState(tab.init?.savedId)
-  const [dialog, setDialog] = useState<{ kind: 'explain'; req: ExplainRequest } | { kind: 'code'; req: Omit<CodeRequest, 'language'> } | null>(null)
+  const [dialog, setDialog] = useState<{ kind: 'explain'; req: ExplainRequest } | { kind: 'code'; req: Omit<CodeRequest, 'language'> } | { kind: 'ai' } | null>(null)
   const [allowDiskUse, setAllowDiskUse] = useState(false)
   const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'json')
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
@@ -110,6 +111,9 @@ export function AggregationView({ tab }: { tab: Tab }) {
           <input type="checkbox" checked={allowDiskUse} onChange={(e) => setAllowDiskUse(e.target.checked)} />
           allowDiskUse
         </label>
+        <button className="small ghost" disabled={!!textMode} onClick={() => setDialog({ kind: 'ai' })}>
+          Ask AI
+        </button>
         <button className="small ghost" disabled={!!textMode} onClick={() => setDialog({ kind: 'explain', req: { kind: 'aggregate', connId, db, coll, stages: toStages(stages) } })}>
           Explain
         </button>
@@ -241,6 +245,16 @@ export function AggregationView({ tab }: { tab: Tab }) {
       </div>
       {dialog?.kind === 'explain' && <ExplainDialog request={dialog.req} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'code' && <CodeDialog request={dialog.req} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'ai' && (
+        <AIDialog
+          connId={connId}
+          db={db}
+          coll={coll}
+          initialMode="aggregate"
+          onClose={() => setDialog(null)}
+          onUse={(p) => p.kind === 'aggregate' && dispatch({ type: 'replace', stages: p.pipeline })}
+        />
+      )}
     </div>
   )
 }

@@ -3,6 +3,7 @@
 #   docker compose up -d mongo                      # MongoDB with sample data on localhost:27017
 #   docker compose --profile auth up -d mongo-auth  # MongoDB with authentication on localhost:27018
 #   docker compose --profile test up --build --exit-code-from integration-tests
+#   docker compose --profile sql up -d postgres mysql   # relational sources for migration tests
 #   docker compose --profile gui up --build app     # Linux + X11 only (experimental)
 #   docker compose down -v                          # stop and delete data
 name: mango3s
@@ -40,6 +41,43 @@ services:
       retries: 20
       start_period: 10s
 
+  # Relational sources for migration (P2). The read-only mango_reader users show
+  # that a migration needs nothing beyond SELECT.
+  postgres:
+    profiles: ["sql"]
+    image: postgres:17
+    environment:
+      POSTGRES_USER: mango
+      POSTGRES_PASSWORD: mango
+      POSTGRES_DB: shop
+    ports:
+      - "${PG_PORT:-5433}:5432"
+    volumes:
+      - ./docker/sql-init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mango -d shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mysql:
+    profiles: ["sql"]
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: shop
+      MYSQL_USER: mango
+      MYSQL_PASSWORD: mango
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - ./docker/sql-init/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   integration-tests:
     profiles: ["test"]
     build:
@@ -47,6 +85,9 @@ services:
       target: integration
     environment:
       MONGO_URI: mongodb://mongo:27017
+      # Used only when the "sql" profile is up as well; the tests skip otherwise.
+      PG_DSN: ${PG_DSN_IN_DOCKER:-}
+      MYSQL_DSN: ${MYSQL_DSN_IN_DOCKER:-}
     depends_on:
       mongo:
         condition: service_healthy

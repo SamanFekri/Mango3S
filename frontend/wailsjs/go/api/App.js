@@ -6,6 +6,10 @@ export function AnalyzeSchema(arg1, arg2) {
   return window['go']['api']['App']['AnalyzeSchema'](arg1, arg2);
 }
 
+export function ApproveTask(arg1) {
+  return window['go']['api']['App']['ApproveTask'](arg1);
+}
+
 export function CancelJob(arg1) {
   return window['go']['api']['App']['CancelJob'](arg1);
 }
@@ -20,6 +24,10 @@ export function ChooseExportFile(arg1) {
 
 export function ChooseImportFile() {
   return window['go']['api']['App']['ChooseImportFile']();
+}
+
+export function ClearAIKey() {
+  return window['go']['api']['App']['ClearAIKey']();
 }
 
 export function ClearFinishedJobs() {
@@ -58,8 +66,16 @@ export function DeleteItem(arg1) {
   return window['go']['api']['App']['DeleteItem'](arg1);
 }
 
+export function DeleteMaskRuleSet(arg1) {
+  return window['go']['api']['App']['DeleteMaskRuleSet'](arg1);
+}
+
 export function DeleteProfile(arg1) {
   return window['go']['api']['App']['DeleteProfile'](arg1);
+}
+
+export function DeleteTask(arg1) {
+  return window['go']['api']['App']['DeleteTask'](arg1);
 }
 
 export function Disconnect(arg1) {
@@ -74,6 +90,10 @@ export function DropDatabase(arg1, arg2) {
   return window['go']['api']['App']['DropDatabase'](arg1, arg2);
 }
 
+export function ExecuteAIWrite(arg1, arg2) {
+  return window['go']['api']['App']['ExecuteAIWrite'](arg1, arg2);
+}
+
 export function Explain(arg1, arg2) {
   return window['go']['api']['App']['Explain'](arg1, arg2);
 }
@@ -82,24 +102,60 @@ export function FormatDocument(arg1) {
   return window['go']['api']['App']['FormatDocument'](arg1);
 }
 
+export function GenerateAI(arg1, arg2) {
+  return window['go']['api']['App']['GenerateAI'](arg1, arg2);
+}
+
 export function GenerateCode(arg1) {
   return window['go']['api']['App']['GenerateCode'](arg1);
+}
+
+export function GetAIStatus() {
+  return window['go']['api']['App']['GetAIStatus']();
 }
 
 export function GetAppInfo() {
   return window['go']['api']['App']['GetAppInfo']();
 }
 
+export function GetCompareResult(arg1) {
+  return window['go']['api']['App']['GetCompareResult'](arg1);
+}
+
+export function GetDatabaseCompareResult(arg1) {
+  return window['go']['api']['App']['GetDatabaseCompareResult'](arg1);
+}
+
 export function GetDocument(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['GetDocument'](arg1, arg2, arg3, arg4);
+}
+
+export function GetMCPInfo() {
+  return window['go']['api']['App']['GetMCPInfo']();
 }
 
 export function GetSettings() {
   return window['go']['api']['App']['GetSettings']();
 }
 
+export function GetSyncOutcome(arg1) {
+  return window['go']['api']['App']['GetSyncOutcome'](arg1);
+}
+
+export function GetTransformReport(arg1) {
+  return window['go']['api']['App']['GetTransformReport'](arg1);
+}
+
 export function InsertDocuments(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['InsertDocuments'](arg1, arg2, arg3, arg4);
+}
+
+export function IntrospectSQL(arg1) {
+  return window['go']['api']['App']['IntrospectSQL'](arg1);
+}
+
+export function ListBackups() {
+  return window['go']['api']['App']['ListBackups']();
 }
 
 export function ListCollections(arg1, arg2) {
@@ -122,12 +178,40 @@ export function ListJobs() {
   return window['go']['api']['App']['ListJobs']();
 }
 
+export function ListMaskRuleSets() {
+  return window['go']['api']['App']['ListMaskRuleSets']();
+}
+
+export function ListMigrations() {
+  return window['go']['api']['App']['ListMigrations']();
+}
+
 export function ListProfiles() {
   return window['go']['api']['App']['ListProfiles']();
 }
 
 export function ListSaved(arg1) {
   return window['go']['api']['App']['ListSaved'](arg1);
+}
+
+export function ListTaskRuns(arg1, arg2) {
+  return window['go']['api']['App']['ListTaskRuns'](arg1, arg2);
+}
+
+export function ListTaskTypes() {
+  return window['go']['api']['App']['ListTaskTypes']();
+}
+
+export function ListTasks() {
+  return window['go']['api']['App']['ListTasks']();
+}
+
+export function MaskMethods() {
+  return window['go']['api']['App']['MaskMethods']();
+}
+
+export function MigrationTypes() {
+  return window['go']['api']['App']['MigrationTypes']();
 }
 
 export function PipelineFromText(arg1) {
@@ -138,8 +222,28 @@ export function PipelineToText(arg1) {
   return window['go']['api']['App']['PipelineToText'](arg1);
 }
 
+export function PreviewAIContext(arg1) {
+  return window['go']['api']['App']['PreviewAIContext'](arg1);
+}
+
+export function PreviewAIWrite(arg1) {
+  return window['go']['api']['App']['PreviewAIWrite'](arg1);
+}
+
 export function PreviewImport(arg1) {
   return window['go']['api']['App']['PreviewImport'](arg1);
+}
+
+export function PreviewMask(arg1) {
+  return window['go']['api']['App']['PreviewMask'](arg1);
+}
+
+export function PreviewReschema(arg1) {
+  return window['go']['api']['App']['PreviewReschema'](arg1);
+}
+
+export function PreviewSync(arg1, arg2) {
+  return window['go']['api']['App']['PreviewSync'](arg1, arg2);
 }
 
 export function QueryToShell(arg1) {
@@ -148,6 +252,18 @@ export function QueryToShell(arg1) {
 
 export function ReplaceDocument(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['api']['App']['ReplaceDocument'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function ReschemaTypes() {
+  return window['go']['api']['App']['ReschemaTypes']();
+}
+
+export function RevokeTask(arg1) {
+  return window['go']['api']['App']['RevokeTask'](arg1);
+}
+
+export function RollbackMigration(arg1, arg2) {
+  return window['go']['api']['App']['RollbackMigration'](arg1, arg2);
 }
 
 export function RunAggregation(arg1, arg2) {
@@ -166,12 +282,24 @@ export function RunShell(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['RunShell'](arg1, arg2, arg3, arg4);
 }
 
+export function RunTaskNow(arg1) {
+  return window['go']['api']['App']['RunTaskNow'](arg1);
+}
+
 export function SampleFields(arg1, arg2, arg3) {
   return window['go']['api']['App']['SampleFields'](arg1, arg2, arg3);
 }
 
 export function SaveItem(arg1) {
   return window['go']['api']['App']['SaveItem'](arg1);
+}
+
+export function SaveMCPPolicy(arg1) {
+  return window['go']['api']['App']['SaveMCPPolicy'](arg1);
+}
+
+export function SaveMaskRuleSet(arg1) {
+  return window['go']['api']['App']['SaveMaskRuleSet'](arg1);
 }
 
 export function SaveProfile(arg1) {
@@ -182,12 +310,48 @@ export function SaveSettings(arg1) {
   return window['go']['api']['App']['SaveSettings'](arg1);
 }
 
+export function SaveTask(arg1) {
+  return window['go']['api']['App']['SaveTask'](arg1);
+}
+
+export function SetAIKey(arg1) {
+  return window['go']['api']['App']['SetAIKey'](arg1);
+}
+
+export function SetTaskEnabled(arg1, arg2) {
+  return window['go']['api']['App']['SetTaskEnabled'](arg1, arg2);
+}
+
+export function StartCompare(arg1) {
+  return window['go']['api']['App']['StartCompare'](arg1);
+}
+
+export function StartCompareDatabases(arg1) {
+  return window['go']['api']['App']['StartCompareDatabases'](arg1);
+}
+
 export function StartExport(arg1) {
   return window['go']['api']['App']['StartExport'](arg1);
 }
 
 export function StartImport(arg1) {
   return window['go']['api']['App']['StartImport'](arg1);
+}
+
+export function StartMigration(arg1) {
+  return window['go']['api']['App']['StartMigration'](arg1);
+}
+
+export function StartRestore(arg1, arg2, arg3) {
+  return window['go']['api']['App']['StartRestore'](arg1, arg2, arg3);
+}
+
+export function StartSync(arg1, arg2) {
+  return window['go']['api']['App']['StartSync'](arg1, arg2);
+}
+
+export function StartTransform(arg1, arg2) {
+  return window['go']['api']['App']['StartTransform'](arg1, arg2);
 }
 
 export function TestConnection(arg1) {

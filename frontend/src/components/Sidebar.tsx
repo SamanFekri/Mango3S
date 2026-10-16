@@ -185,6 +185,15 @@ export function Sidebar() {
               action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }),
             },
             { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
+            {
+              label: 'Migrate from SQL…',
+              action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: '' } }),
+              disabled: s.readOnly,
+            },
+            {
+              label: 'Compare / sync…',
+              action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name } }),
+            },
             { label: 'Disconnect', action: () => disconnect(s.id) },
           ]
           return (
@@ -232,6 +241,15 @@ export function Sidebar() {
                       action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: db.name } }),
                     },
                     { label: 'Import into new collection…', action: () => setTransfer({ kind: 'import', conn: s, db: db.name }), disabled: s.readOnly },
+                    {
+                      label: 'Compare database…',
+                      action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name, db: db.name } }),
+                    },
+                    {
+                      label: 'Migrate from SQL into…',
+                      action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: db.name } }),
+                      disabled: s.readOnly,
+                    },
                     { label: 'Drop database…', action: () => dropDb(s, db.name), danger: true, disabled: s.readOnly },
                   ]
                   return (
@@ -282,6 +300,20 @@ export function Sidebar() {
                                 }),
                             },
                             { label: 'Export…', action: () => setTransfer({ kind: 'export', conn: s, db: db.name, coll: coll.name }) },
+                            {
+                              label: 'Compare / sync…',
+                              action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name, db: db.name, coll: coll.name } }),
+                            },
+                            {
+                              label: 'Reschema…',
+                              action: () => dispatchTabs({ type: 'open', tab: { kind: 'reschema', connId: s.id, connName: s.name, db: db.name, coll: coll.name } }),
+                              disabled: coll.type === 'view',
+                            },
+                            {
+                              label: 'Mask data…',
+                              action: () => dispatchTabs({ type: 'open', tab: { kind: 'mask', connId: s.id, connName: s.name, db: db.name, coll: coll.name } }),
+                              disabled: coll.type === 'view',
+                            },
                             {
                               label: 'Import…',
                               action: () => setTransfer({ kind: 'import', conn: s, db: db.name, coll: coll.name }),

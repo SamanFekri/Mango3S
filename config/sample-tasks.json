@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "nightly-orders-export",
+      "name": "Nightly orders export",
+      "type": "export",
+      "params": {
+        "connId": "local-dev",
+        "db": "sample_store",
+        "coll": "orders",
+        "filter": "{ status: \"shipped\" }",
+        "path": "/Users/you/exports/orders-{date}.json",
+        "format": "json",
+        "jsonMode": "lines",
+        "canonical": true
+      },
+      "schedule": { "kind": "cron", "everyMinutes": 0, "cron": "0 2 * * *" },
+      "enabled": true,
+      "retry": { "maxAttempts": 3, "backoffSeconds": 60 },
+      "misfire": "skip",
+      "approvedHash": ""
+    },
+    {
+      "id": "staging-masked-copy",
+      "name": "Masked customers copy for staging",
+      "type": "maskCopy",
+      "params": {
+        "spec": { "connId": "local-dev", "db": "sample_store", "coll": "customers", "filter": "", "mode": "copy", "targetColl": "customers_masked", "onError": "fail" },
+        "ruleSetId": "customers-pii",
+        "replaceTarget": true
+      },
+      "schedule": { "kind": "interval", "everyMinutes": 360, "cron": "" },
+      "enabled": true,
+      "retry": { "maxAttempts": 2, "backoffSeconds": 120 },
+      "misfire": "runOnce",
+      "approvedHash": ""
+    },
+    {
+      "id": "prod-vs-replica-check",
+      "name": "Products: primary vs reporting copy",
+      "type": "compare",
+      "params": {
+        "source": { "connId": "local-dev", "db": "sample_store", "coll": "products" },
+        "target": { "connId": "reporting", "db": "sample_store", "coll": "products" },
+        "filter": "",
+        "ignoreFields": ["updatedAt"],
+        "ignoreFieldOrder": true,
+        "sampleSize": 10
+      },
+      "schedule": { "kind": "interval", "everyMinutes": 60, "cron": "" },
+      "enabled": false,
+      "retry": { "maxAttempts": 1, "backoffSeconds": 0 },
+      "misfire": "skip",
+      "approvedHash": ""
+    }
+  ]
+}

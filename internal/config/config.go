@@ -48,6 +48,12 @@ type Settings struct {
 	DefaultView         string `json:"defaultView"` // json | table
 	EditorFontSize      int    `json:"editorFontSize"`
 	LogLevel            string `json:"logLevel"` // debug | info | warn | error
+
+	// AI-assisted query generation (off until the user enables it).
+	AIEnabled        bool   `json:"aiEnabled"`
+	AIModel          string `json:"aiModel"`
+	AIAllowSamples   bool   `json:"aiAllowSamples"`   // allow sending masked sample documents
+	SchedulerEnabled bool   `json:"schedulerEnabled"` // run approved scheduled tasks while the app is open
 }
 
 // DefaultSettings returns the factory defaults.
@@ -60,6 +66,8 @@ func DefaultSettings() Settings {
 		DefaultView:         "json",
 		EditorFontSize:      13,
 		LogLevel:            "info",
+		AIModel:             "claude-opus-5-5",
+		SchedulerEnabled:    true,
 	}
 }
 
@@ -86,6 +94,10 @@ func (s Settings) Normalize() Settings {
 	}
 	if s.EditorFontSize < 9 || s.EditorFontSize > 28 {
 		s.EditorFontSize = d.EditorFontSize
+	}
+	s.AIModel = strings.TrimSpace(s.AIModel)
+	if s.AIModel == "" {
+		s.AIModel = d.AIModel
 	}
 	switch s.LogLevel {
 	case "debug", "info", "warn", "error":

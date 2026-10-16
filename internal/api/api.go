@@ -16,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"mango3s/internal/aggregate"
+	"mango3s/internal/ai"
 	"mango3s/internal/apperr"
 	"mango3s/internal/config"
 	"mango3s/internal/documents"
@@ -32,6 +33,7 @@ import (
 	"mango3s/internal/secrets"
 	"mango3s/internal/shell"
 	"mango3s/internal/transfer"
+	"mango3s/internal/transform"
 )
 
 // Version is set at build time with -ldflags "-X mango3s/internal/api.Version=...".
@@ -74,6 +76,12 @@ type App struct {
 	settingsMu sync.RWMutex
 	settings   config.Settings
 
+	// P2
+	p2         *p2
+	p2Mu       sync.Mutex
+	reports    map[string]*transform.Report
+	aiOverride ai.Provider
+
 	ops *opRegistry
 }
 
@@ -100,6 +108,8 @@ func New(d Deps) *App {
 		history:  library.NewHistory(d.Store.Dir(), 500),
 	}
 	a.transfer = transfer.New(d.Conns, a.jobs)
+	a.p2 = newP2(a)
+	a.registerTaskTypes()
 	st, err := d.Store.LoadSettings()
 	if err != nil {
 		a.log.Warn("settings could not be loaded; using defaults", "err", err)
@@ -123,12 +133,18 @@ func (l Lifecycle) Startup(ctx context.Context) {
 	l.app.ctx = ctx
 	// Push job progress to the UI; the frontend listens for "jobs:update".
 	l.app.jobs.SetEmitter(func(j jobs.Job) { runtime.EventsEmit(ctx, "jobs:update", j) })
+	if l.app.currentSettings().SchedulerEnabled {
+		if err := l.app.p2.scheduler.Start(ctx, 30*time.Second); err != nil {
+			l.app.log.Warn("scheduler did not start", "err", err)
+		}
+	}
 	l.app.log.Info("Mango3S started", "version", Version)
 }
 
 // Shutdown cancels running operations and closes all connections.
 func (l Lifecycle) Shutdown(ctx context.Context) {
 	l.app.ops.cancelAll()
+	l.app.p2.scheduler.Stop()
 	l.app.jobs.Shutdown(5 * time.Second)
 	c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -269,8 +285,17 @@ func (a *App) SaveSettings(s config.Settings) (config.Settings, error) {
 		return config.Settings{}, a.encode("SaveSettings", err)
 	}
 	a.settingsMu.Lock()
+	prev := a.settings
 	a.settings = saved
 	a.settingsMu.Unlock()
+	switch {
+	case saved.SchedulerEnabled && !prev.SchedulerEnabled:
+		if err := a.p2.scheduler.Start(a.ctx, 30*time.Second); err != nil {
+			a.log.Warn("scheduler did not start", "err", err)
+		}
+	case !saved.SchedulerEnabled && prev.SchedulerEnabled:
+		a.p2.scheduler.Stop()
+	}
 	if a.logLevel != nil {
 		a.logLevel.Set(logging.ParseLevel(saved.LogLevel))
 	}
@@ -421,17 +446,35 @@ func (a *App) Connect(profileID string) (mongox.SessionInfo, error) {
 		if err != nil {
 			return mongox.SessionInfo{}, err
 		}
-		pw, err := a.passwordFor(p)
-		if err != nil {
-			return mongox.SessionInfo{}, err
-		}
-		s, err := a.conns.Connect(ctx, p, pw)
+		s, err := a.connectProfile(ctx, p)
 		if err != nil {
 			return mongox.SessionInfo{}, err
 		}
 		return mongox.SessionInfo{ID: s.ProfileID, Name: s.Name, ReadOnly: s.ReadOnly,
 			ServerVersion: s.ServerVersion, Topology: s.Topology, ConnectedAt: s.ConnectedAt}, nil
 	})
+}
+
+// connectProfile opens (or reuses) a session with the stored credentials.
+// Used by Connect and by background work (scheduled tasks, MCP).
+func (a *App) connectProfile(ctx context.Context, p config.Profile) (*mongox.Session, error) {
+	pw, err := a.passwordFor(p)
+	if err != nil {
+		return nil, err
+	}
+	return a.conns.Connect(ctx, p, pw)
+}
+
+// ensureConnected returns a session for a profile ID, connecting if needed.
+func (a *App) ensureConnected(ctx context.Context, profileID string) (*mongox.Session, error) {
+	if s, err := a.conns.Session(profileID); err == nil {
+		return s, nil
+	}
+	p, err := a.store.GetProfile(profileID)
+	if err != nil {
+		return nil, err
+	}
+	return a.connectProfile(ctx, p)
 }
 
 // Disconnect closes a connection.

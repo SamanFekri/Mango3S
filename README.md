@@ -7,7 +7,11 @@ shares no code, branding or assets with that product.
 
 This release covers **P0** (browsing data, querying, editing documents, running pipelines and
 shell commands) and **P1**: import/export, schema analysis, SQL, code generation, explain plans,
-saved queries, query history and background jobs.
+saved queries, query history and background jobs. **P2** adds compare and sync, migration from
+relational databases, reschema, data masking, scheduled tasks, AI-assisted query generation and
+an optional MCP server. All of them preview before they write, back up what they change, and
+validate the result. The full P2 reference is in [docs/P2.md](docs/P2.md), including the
+security model, scheduler policies, MCP setup and unsupported capabilities.
 
 ---
 
@@ -33,6 +37,14 @@ saved queries, query history and background jobs.
 | **Explain plans** *(P1)* | Runs `explain` with `executionStats` (pipelines with `$out`/`$merge` are only planned). Shows summary metrics, a stage tree with per-stage stats, aggregation stages, and diagnostics such as collection scans, in-memory sorts, low selectivity, unanchored regexes and covered queries, with ESR index suggestions |
 | **Library & history** *(P1)* | Save queries, pipelines, shell scripts and SQL by name; rename, delete and reopen them in the right tab. Every run is recorded in a searchable history (500 entries) with duration and errors. Both persist across restarts |
 | **IntelliShell assist** *(P1)* | Context-aware completion: collections after `db.`, collection methods with signatures, cursor methods after `).`, `show` targets, operators, BSON helpers, and the referenced collection's field names. Alt+↑/↓ recalls history; a side panel lists past scripts; scripts can be saved |
+| **Compare & sync** *(P2)* | Compare collections or whole databases across connections. Optional filter and ignored fields; field-level diffs; repeatable fingerprint. Sync previews inserts, replacements and deletes. Applying needs explicit confirmation, skips documents that changed since the preview, backs up before-images, and verifies the result |
+| **SQL migration** *(P2)* | PostgreSQL, MySQL/MariaDB and SQLite with a `SELECT`-only user. Table → collection mapping with type suggestions, primary key or ObjectId `_id`, and child rows embedded as arrays. Runs in a consistent read-only snapshot, then checks counts and sampled rows. Every run can be rolled back |
+| **Reschema** *(P2)* | Rename, remove, set, copy, convert type, flatten and nest fields. Dry-run with before/after samples, then copy to a new collection or apply in place (backed up, confirmed), then validate |
+| **Data masking** *(P2)* | Redact, partial, keyed hash, email, randomize, date shift, numeric noise, null/remove/constant. Reusable rule sets; masked copies for test environments; the masked output is checked to contain none of the original values |
+| **Scheduled tasks** *(P2)* | Exports, comparisons, syncs and masked copies on cron or interval schedules. They run only after you approve them, and editing a task revokes approval. Includes retries with backoff, overlap protection, a misfire policy and run history |
+| **AI assistant** *(P2)* | "Ask AI" in the query and aggregation editors (Anthropic Claude, off by default). Only field names and types are sent, never credentials. Proposals are validated by the server before you see them; writes need typed confirmation and are backed up |
+| **MCP server** *(P2)* | `mango3s mcp` exposes approved, read-mostly database tools to MCP clients. Access is deny-by-default: connection, database, tool and size allowlists; results can be masked; every call can be audited |
+| **Backups & restore** *(P2)* | Every P2 write first saves the affected documents to `backups/`. Library → Backups restores them |
 
 ### Value syntax
 
@@ -170,6 +182,7 @@ make test               # go vet + Go unit tests + frontend tests (vitest) + Typ
 make mongo-up
 make test-integration   # end-to-end against MongoDB (MONGO_URI, default mongodb://localhost:27017)
 make docker-test        # the same integration suite, entirely inside Docker
+make sql-up && make test-integration-sql   # adds the PostgreSQL and MySQL migration tests
 ```
 
 | Suite | Covers |
@@ -186,6 +199,8 @@ make docker-test        # the same integration suite, entirely inside Docker
 | `internal/explain` | Classic, slot-based (SBE), aggregation `$cursor`, sharded and unknown explain shapes; diagnostics; ESR index suggestions; regex detection |
 | `internal/library` | Saved items and history persist across restarts; validation; de-duplicated re-runs; search, limit, clear |
 | `internal/integration` (tag `integration`) | Real-server CRUD with type fidelity, duplicate key → CONFLICT, paging with skip/limit, aggregation incl. stage preview and `$out`, shell scripts, read-only enforcement, cancel/timeout, the full API facade, authentication (set `MONGO_AUTH_URI`). **P1:** 2,500-document export→import round trips (canonical array, canonical NDJSON, relaxed), filtered CSV export of nested fields → re-import, insert/upsert/stop-on-error/drop-first, canceled export leaves no file, schema accuracy on known data, explain before/after creating an index, `$out` not executed by explain, SQL find + GROUP BY/HAVING, code from SQL, history and library after restart |
+| **P2** `internal/{plans,backup,compare,syncer,docpath,reschema,masking,transform,migrate,scheduler,ai,mcpserver}` | Single-use plans; backup/restore round trips; order-independent fingerprints; drift-safe sync; every reschema op and type conversion; every masking method, determinism and leak checks; SQL type mapping per dialect; cron parsing, approval, retries, interrupted and missed runs; AI proposal validation and prompt contents; MCP deny-by-default, operator refusal, caps and audit logging |
+| **P2** `internal/integration/p2_test.go` | Repeatable compare; sync preview == apply, then restore; reschema/masking integrity; migrations from SQLite, PostgreSQL and MySQL with read-only users; scheduled export through the API; AI proposals gated (fake provider); MCP tools against a real server. Acceptance criteria are mapped to tests in [docs/P2.md](docs/P2.md#tests) |
 | `frontend/src/**/*.test.ts(x)` | Query builder, pipeline and tab reducers, Extended JSON cell rendering, error parsing, results view (paging, selection, read-only), builder UI, full-app connect → browse → query flow. **P1:** shell completion rules, history recall, library → tab mapping, job progress and cancel in the status bar, library tab |
 
 To run the authentication test:
@@ -199,8 +214,10 @@ To run the authentication test:
 ```
 ┌──────────────────────── React + TypeScript (frontend/src) ───────────────────────┐
 │ views/   Collection · Aggregation · Shell · Schema · SQL · Library · Settings      │
+│          Compare · Transform (reschema/mask) · Migrate · Tasks              (P2)  │
 │ components/  Sidebar · ConnectionManager · ResultsView · QueryBuilder · CodeEditor│
 │              ImportWizard · ExportWizard · JobsPanel · ExplainDialog · CodeDialog  │
+│              AIDialog · P2Settings (AI, scheduler, MCP) · p2common         (P2)   │
 │ state/AppContext (settings, profiles, sessions, tabs, jobs, toasts, dialogs)      │
 │ lib/  backend.ts (typed bindings, job events) · queryBuilder · pipeline ·         │
 │       shellComplete · library                                                     │
@@ -220,6 +237,9 @@ To run the authentication test:
 │ adapters,    │ analyzer     │ pipeline     │ diagnostics   │ native BSON types   │
 │ import/export│              │              │               │                     │
 ├──────────────┴──────────────┴──────────────┴───────────────┴─────────────────────┤
+│ compare · syncer · reschema · masking · transform · migrate · scheduler · ai      │
+│ mcpserver (`mango3s mcp`) — on plans (single-use previews) + backup (restore) (P2)│
+├───────────────────────────────────────────────────────────────────────────────────┤
 │ jobs     background runner: cancel, throttled progress   library  saved + history │
 ├───────────────────────────────────────────────────────────────────────────────────┤
 │ mongox   connection manager (one client per open profile) · Source interface      │
@@ -298,6 +318,11 @@ on macOS, `%AppData%\Mango3S` on Windows, `~/.config/Mango3S` on Linux. Override
 | `secrets.enc`, `secret.key` | Only when the file secret backend is used |
 | `library.json` | Saved queries, pipelines, scripts and SQL |
 | `history.json` | The last 500 executions (queries, pipelines, scripts, SQL) |
+| `mcp.json` | MCP server policy ([sample](config/sample-mcp.json)) |
+| `masking.json` | Masking rule sets ([sample](config/sample-masking.json)) |
+| `tasks.json`, `task_runs.json` | Scheduled tasks ([sample](config/sample-tasks.json)) and their last 500 runs |
+| `migrations.json` | SQL migration runs and reports, without DSNs ([request sample](config/sample-migration.json)) |
+| `backups/*.ndjson` | Before-images of documents changed by sync, in-place transforms, AI and MCP writes (0600) |
 
 To start from the samples, copy `config/sample-*.json` into the config directory as
 `settings.json` and `connections.json`. Then enter passwords in the connection dialog; the
@@ -307,7 +332,8 @@ samples contain none.
 |---|---|
 | `MANGO3S_CONFIG_DIR` | Config directory override |
 | `MANGO3S_SECRET_BACKEND` | `keyring` (OS store), `file` (encrypted file), `memory` (tests). Default: keyring if available, else file |
-| `MONGO_URI`, `MONGO_AUTH_URI` | Integration tests only |
+| `ANTHROPIC_API_KEY` | AI assistant key when none is stored in Settings → AI |
+| `MONGO_URI`, `MONGO_AUTH_URI`, `PG_DSN`, `MYSQL_DSN` | Integration tests only |
 
 ### Credential handling
 
@@ -330,6 +356,7 @@ samples contain none.
 | Command | What it does |
 |---|---|
 | `docker compose up -d mongo` | MongoDB 8 on `:27017`, seeded with `sample_store` (customers, products, 250 orders) |
+| `docker compose --profile sql up -d --wait postgres mysql` | PostgreSQL 17 on `:5433` and MySQL 8.4 on `:3307` with a seeded `shop` schema and read-only `mango_reader` / `reader` users (`make sql-up`) |
 | `docker compose --profile auth up -d mongo-auth` | MongoDB with auth on `:27018` (`admin` / `change-me`, see `.env.example`) |
 | `docker compose --profile test up --build --exit-code-from integration-tests integration-tests` | Builds the image and runs the integration suite against the compose MongoDB |
 | `docker build --target artifact --output type=local,dest=dist .` | Frontend tests + build, Go vet + unit tests, Linux binary to `./dist` |
@@ -370,14 +397,15 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
 - **Shell:** this is a MongoDB command interpreter, not a JavaScript engine. No variables, loops,
   functions, `it` paging, `load()`, or `print`. `help` lists what's supported.
 - **Import/export:** BSON/mongodump archives, SQL dumps, Excel, exporting aggregation results
-  (export runs a find query), and multi-collection or scheduled exports.
+  (export runs a find query), and multi-collection exports. Scheduled exports are a P2 task type.
 - **SQL:** joins, subqueries, expressions and functions beyond `COUNT/SUM/AVG/MIN/MAX`, and
   `INSERT/UPDATE/DELETE` (see [SQL subset](#sql-subset)).
 - **Code generation:** languages beyond the six listed; generated snippets contain the query
   only, not connection options such as TLS settings.
-- **P2 candidates:** index management UI (use the shell), user/role management, data compare and
-  sync, task scheduler, SSH tunnels, connection import from other tools, in-place table-cell
-  editing, and multiple windows.
+- **P2 features:** see [Unsupported capabilities](docs/P2.md#unsupported-capabilities) for the
+  limits of compare/sync, migration, reschema, masking, the scheduler, AI and MCP.
+- Index management UI (use the shell), user/role management, SSH tunnels, connection import from
+  other tools, in-place table-cell editing, and multiple windows.
 - SSH tunnelling and X.509 / Kerberos / LDAP authentication through dedicated form fields. Options
   the Go driver accepts in the connection string (for example `tls=true&tlsCAFile=…`,
   `authMechanism=MONGODB-X509`) still work.

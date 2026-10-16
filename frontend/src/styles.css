@@ -1869,3 +1869,175 @@ table.grid.compact {
 .history-item.failed code {
   color: var(--danger);
 }
+
+/* ---------- P2: compare, sync, transform, migrate, tasks, AI ---------- */
+.compare-view,
+.transform-view,
+.migrate-view,
+.tasks-view {
+  overflow: auto;
+}
+.endpoints {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.endpoint {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px 12px;
+  margin: 0;
+  min-width: 0;
+}
+.endpoint legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.panel > h3:first-child {
+  margin-top: 0;
+}
+.sync-box,
+.preview-box {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.metric-good .metric-value {
+  color: var(--success);
+}
+.metric-warn .metric-value {
+  color: var(--accent);
+}
+.metric-bad .metric-value {
+  color: var(--danger);
+}
+.diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+.diff {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  background: var(--surface);
+}
+.diff summary {
+  cursor: pointer;
+}
+.diff pre {
+  margin: 6px 0 2px;
+}
+.kind-changed {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.kind-onlySource {
+  color: var(--success);
+  background: var(--success-soft);
+}
+.kind-onlyTarget {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.kind-run {
+  color: var(--tok-fn);
+}
+.op-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.op-row select,
+.op-row input {
+  min-width: 0;
+}
+.narrow-input {
+  width: 110px;
+}
+.before-after {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ba-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ba-pair > * {
+  min-width: 0;
+  overflow: auto;
+}
+@media (max-width: 760px) {
+  .ba-pair {
+    grid-template-columns: 1fr;
+  }
+}
+.checks {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.checks li {
+  padding: 2px 0;
+}
+.check-ok > span[aria-hidden] {
+  color: var(--success);
+  font-weight: 700;
+}
+.check-fail > span[aria-hidden] {
+  font-weight: 700;
+}
+.check-fail {
+  color: var(--danger);
+}
+.inline-job {
+  margin: 8px 0;
+  padding: 0;
+}
+.confirm-field input {
+  font-family: var(--font-mono);
+}
+.confirm-field input:focus {
+  border-color: var(--danger);
+}
+.sent-context {
+  margin: 8px 0;
+  font-size: 12px;
+}
+.sent-context summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.danger-badge {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: transparent;
+}
+.row-buttons {
+  white-space: nowrap;
+  text-align: right;
+}
+.row-buttons button + button {
+  margin-left: 4px;
+}
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2px 12px;
+}

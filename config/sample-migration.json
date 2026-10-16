@@ -1,0 +1,109 @@
+{
+  "source": {
+    "driver": "postgres",
+    "dsn": "postgres://mango_reader@localhost:5433/shop?sslmode=disable"
+  },
+  "connId": "local-dev",
+  "db": "shop_from_pg",
+  "tables": [
+    {
+      "table": "customers",
+      "collection": "customers",
+      "idStrategy": "pk",
+      "columns": [
+        {
+          "column": "id",
+          "field": "_id",
+          "type": "long"
+        },
+        {
+          "column": "name",
+          "field": "name",
+          "type": "string"
+        },
+        {
+          "column": "email",
+          "field": "email",
+          "type": "string"
+        },
+        {
+          "column": "balance",
+          "field": "balance",
+          "type": "decimal"
+        },
+        {
+          "column": "joined",
+          "field": "joinedAt",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "table": "orders",
+      "collection": "orders",
+      "idStrategy": "pk",
+      "columns": [
+        {
+          "column": "id",
+          "field": "_id",
+          "type": "long"
+        },
+        {
+          "column": "customer_id",
+          "field": "customerId",
+          "type": "long"
+        },
+        {
+          "column": "total",
+          "field": "total",
+          "type": "decimal"
+        },
+        {
+          "column": "placed_at",
+          "field": "placedAt",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "table": "order_lines",
+      "collection": "order_lines",
+      "idStrategy": "objectId",
+      "embedOnly": true,
+      "columns": [
+        {
+          "column": "order_id",
+          "field": "orderId",
+          "type": "long"
+        },
+        {
+          "column": "line",
+          "field": "line",
+          "type": "int"
+        },
+        {
+          "column": "sku",
+          "field": "sku",
+          "type": "string"
+        },
+        {
+          "column": "qty",
+          "field": "qty",
+          "type": "int"
+        }
+      ]
+    }
+  ],
+  "embeds": [
+    {
+      "child": "order_lines",
+      "parent": "orders",
+      "childColumns": [
+        "order_id"
+      ],
+      "as": "lines"
+    }
+  ],
+  "onRowError": "fail",
+  "batchSize": 1000
+}

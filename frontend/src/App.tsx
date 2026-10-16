@@ -8,6 +8,10 @@ import type { Tab } from './lib/tabs'
 import { AppProvider, useApp } from './state/AppContext'
 import { AggregationView } from './views/AggregationView'
 import { CollectionView } from './views/CollectionView'
+import { CompareView } from './views/CompareView'
+import { MigrateView } from './views/MigrateView'
+import { TasksView } from './views/TasksView'
+import { TransformView } from './views/TransformView'
 import { LibraryView } from './views/LibraryView'
 import { SchemaView } from './views/SchemaView'
 import { SettingsView } from './views/SettingsView'
@@ -59,6 +63,15 @@ function TabContent({ tab }: { tab: Tab }) {
       return <SqlView tab={tab} />
     case 'library':
       return <LibraryView />
+    case 'compare':
+      return <CompareView tab={tab} />
+    case 'reschema':
+    case 'mask':
+      return <TransformView tab={tab} />
+    case 'migrate':
+      return <MigrateView tab={tab} />
+    case 'tasks':
+      return <TasksView />
   }
 }
 
@@ -98,6 +111,9 @@ function TabBar() {
         </div>
       ))}
       <span className="spacer" />
+      <button className="small ghost tabbar-btn" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'tasks' } })} title="Scheduled tasks">
+        Tasks
+      </button>
       <button className="small ghost tabbar-btn" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'library' } })} title="Saved queries and history">
         Library
       </button>

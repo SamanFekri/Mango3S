@@ -164,7 +164,9 @@ func TestGoCompiles(t *testing.T) {
 	if err != nil {
 		t.Skip("go.mod not found")
 	}
-	ver := regexp.MustCompile(`go.mongodb.org/mongo-driver/v2 (v[\w.\-]+)`).FindSubmatch(gomod)
+	// Reuse the project's requirements so the generated module resolves the
+	// same (already downloaded) versions; GOPROXY=off below forbids fetching.
+	mod := regexp.MustCompile(`(?m)^module .*$`).ReplaceAllString(string(gomod), "module gen")
 	gosum, _ := os.ReadFile(filepath.Join(root, "go.sum"))
 	for name, s := range map[string]Spec{"find": richSpec(), "agg": aggSpec(), "empty": {Kind: "find", DB: "d", Coll: "c"}} {
 		code := gen(t, "go", s)
@@ -172,7 +174,6 @@ func TestGoCompiles(t *testing.T) {
 			t.Fatalf("%s: generated Go does not parse: %v\n%s", name, err, code)
 		}
 		dir := t.TempDir()
-		mod := "module gen\n\ngo 1.25\n\nrequire go.mongodb.org/mongo-driver/v2 " + string(ver[1]) + "\n"
 		_ = os.WriteFile(filepath.Join(dir, "go.mod"), []byte(mod), 0o600)
 		_ = os.WriteFile(filepath.Join(dir, "go.sum"), gosum, 0o600)
 		_ = os.WriteFile(filepath.Join(dir, "main.go"), []byte(code), 0o600)

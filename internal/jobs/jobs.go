@@ -59,6 +59,9 @@ type Progress struct {
 	id string
 }
 
+// ID returns the job's ID, e.g. to store a structured result under it.
+func (p *Progress) ID() string { return p.id }
+
 // SetTotal sets the expected amount of work (0 = unknown) and its unit.
 func (p *Progress) SetTotal(total int64, unit string) {
 	p.m.update(p.id, false, func(j *Job) { j.Total, j.Unit = total, unit })

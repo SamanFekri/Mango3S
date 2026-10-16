@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from '../components/common'
+import { AISettings, MCPSettings } from '../components/P2Settings'
 import type { Settings } from '../lib/types'
 import { useApp } from '../state/AppContext'
 
@@ -96,6 +97,7 @@ export function SettingsView() {
           </dl>
         )}
       </section>
+      <AISettings form={form} set={set} />
       <div className="form-actions">
         <button onClick={() => setForm(settings)} disabled={!dirty || busy}>
           Revert
@@ -104,6 +106,7 @@ export function SettingsView() {
           {busy && <Spinner small />} Save settings
         </button>
       </div>
+      <MCPSettings />
     </div>
   )
 }

@@ -16,6 +16,9 @@ func TestRedact(t *testing.T) {
 		"auth password=hunter2&x=1":                  "auth password=****&x=1",
 		`{"password": "hunter2", "user": "bob"}`:     `{"password": "****", "user": "bob"}`,
 		"error dialing mongodb://u:p@10.0.0.1:27017": "error dialing mongodb://u:****@10.0.0.1:27017",
+		"postgres://app:s3cret@db:5432/shop":         "postgres://app:****@db:5432/shop",
+		"dsn app:s3cret@tcp(db:3306)/shop":           "dsn app:****@tcp(db:3306)/shop",
+		"host=db user=app password=s3cret dbname=x":  "host=db user=app password=**** dbname=x",
 	}
 	for in, want := range cases {
 		if got := Redact(in); got != want {

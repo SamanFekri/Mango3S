@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CodeEditor } from '../components/CodeEditor'
 import { Modal, Spinner } from '../components/common'
+import { AIDialog } from '../components/AIDialog'
 import { CodeDialog } from '../components/CodeDialog'
 import { DocumentEditor, INSERT_TEMPLATE } from '../components/DocumentEditor'
 import { ExplainDialog } from '../components/ExplainDialog'
@@ -43,6 +44,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
     | { kind: 'code'; req: Omit<CodeRequest, 'language'> }
     | { kind: 'export'; req: QueryRequest }
     | { kind: 'import' }
+    | { kind: 'ai' }
     | null
   >(null)
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
@@ -209,6 +211,9 @@ export function CollectionView({ tab }: { tab: Tab }) {
           {readOnly && <span className="badge">read-only</span>}
         </div>
         <span className="spacer" />
+        <button className="small ghost" onClick={() => setDialog({ kind: 'ai' })} title="Generate a query from a description">
+          Ask AI
+        </button>
         <button className="small ghost" onClick={openStats}>
           Stats &amp; indexes
         </button>
@@ -353,6 +358,25 @@ export function CollectionView({ tab }: { tab: Tab }) {
       {dialog?.kind === 'code' && <CodeDialog request={dialog.req} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'export' && <ExportWizard query={dialog.req} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'import' && <ImportWizard connId={connId} db={db} coll={coll} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'ai' && (
+        <AIDialog
+          connId={connId}
+          db={db}
+          coll={coll}
+          onClose={() => setDialog(null)}
+          onUse={(p) => {
+            if (p.kind === 'aggregate') {
+              dispatchTabs({ type: 'open', tab: { kind: 'aggregation', connId, connName: tab.connName, db, coll, init: { stages: p.pipeline } } })
+              return
+            }
+            setFilter(p.filter || '{}')
+            setProjection(p.projection)
+            setSort(p.sort)
+            setLimit(p.limit)
+            setSkip(0)
+          }}
+        />
+      )}
 
       {stats && (
         <Modal title={`${db}.${coll}`} onClose={() => setStats(null)}>

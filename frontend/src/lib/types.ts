@@ -9,6 +9,10 @@ export interface Settings {
   defaultView: 'json' | 'table'
   editorFontSize: number
   logLevel: 'debug' | 'info' | 'warn' | 'error'
+  aiEnabled: boolean
+  aiModel: string
+  aiAllowSamples: boolean
+  schedulerEnabled: boolean
 }
 
 export interface Profile {
@@ -366,4 +370,429 @@ export interface HistoryEntry {
   durationMs: number
   ok: boolean
   error?: string
+}
+
+// ---- P2 ----------------------------------------------------------------------
+
+export interface Endpoint {
+  connId: string
+  db: string
+  coll: string
+}
+
+export interface CompareOptions {
+  source: Endpoint
+  target: Endpoint
+  filter: string
+  ignoreFields: string[]
+  ignoreFieldOrder: boolean
+  sampleSize: number
+}
+
+export interface FieldChange {
+  path: string
+  change: 'added' | 'removed' | 'changed'
+  source?: string
+  target?: string
+}
+
+export interface DocDiff {
+  id: string
+  kind: 'changed' | 'onlySource' | 'onlyTarget'
+  fields: FieldChange[]
+}
+
+export interface CompareResult {
+  options: CompareOptions
+  sourceCount: number
+  targetCount: number
+  identical: number
+  changed: number
+  onlySource: number
+  onlyTarget: number
+  samples: DocDiff[]
+  fingerprint: string
+  durationMs: number
+}
+
+export interface DBCompareOptions {
+  sourceConnId: string
+  sourceDb: string
+  targetConnId: string
+  targetDb: string
+  deep: boolean
+}
+
+export interface CollectionRow {
+  name: string
+  inSource: boolean
+  inTarget: boolean
+  sourceCount: number
+  targetCount: number
+  indexDiffs: string[]
+  compared: boolean
+  identical: number
+  changed: number
+  onlySource: number
+  onlyTarget: number
+  fingerprint?: string
+}
+
+export interface DBCompareResult {
+  options: DBCompareOptions
+  collections: CollectionRow[]
+  durationMs: number
+}
+
+export interface SyncOptions {
+  insert: boolean
+  replace: boolean
+  delete: boolean
+}
+
+export interface SyncPreview {
+  planId: string
+  target: string
+  source: string
+  inserts: number
+  replaces: number
+  deletes: number
+  samples: DocDiff[]
+  confirmText: string
+  expiresInSec: number
+}
+
+export interface SyncCounts {
+  inserts: number
+  replaces: number
+  deletes: number
+}
+
+export interface SyncOutcome {
+  planned: SyncCounts
+  applied: SyncCounts
+  skipped: SyncCounts
+  skippedIds: string[]
+  matchesPreview: boolean
+  backupPath: string
+  verifiedEqual: boolean
+  remaining: SyncCounts
+  postFingerprint: string
+  durationMs: number
+}
+
+export interface BackupInfo {
+  mango3sBackup: number
+  id: string
+  created: string
+  operation: string
+  description: string
+  db: string
+  coll: string
+  path: string
+  replaced: number
+  deleted: number
+  inserted: number
+  bytes: number
+}
+
+export interface TransformSpec {
+  connId: string
+  db: string
+  coll: string
+  filter: string
+  mode: 'copy' | 'inPlace'
+  targetColl: string
+  onError: 'skip' | 'fail'
+}
+
+export interface ReschemaOp {
+  type: 'rename' | 'remove' | 'set' | 'copy' | 'convert' | 'flatten' | 'nest'
+  field: string
+  to: string
+  value: string
+  onlyIfMissing: boolean
+  targetType: string
+  separator: string
+  fields: string[]
+}
+
+export interface MaskRule {
+  field: string
+  method: string
+  keepLast: number
+  maskChar: string
+  value: string
+  maxDays: number
+  percent: number
+  onUnsupported: '' | 'error' | 'null' | 'skip'
+}
+
+export interface MaskMethod {
+  id: string
+  label: string
+  types: string[]
+  deterministic: boolean
+  description: string
+}
+
+export interface MaskRuleSet {
+  id: string
+  name: string
+  rules: MaskRule[]
+  updatedAt: string
+}
+
+export interface TransformSample {
+  id: string
+  before: Doc
+  after: Doc
+  changed: boolean
+  error?: string
+}
+
+export interface TransformPreviewData {
+  total: number
+  scanned: number
+  changed: number
+  errors: number
+  errorSamples: string[]
+  samples: TransformSample[]
+  estimated: boolean
+}
+
+export interface TransformPreview {
+  planId: string
+  preview: TransformPreviewData
+  target: string
+  confirmText: string
+}
+
+export interface ValidationCheck {
+  name: string
+  ok: boolean
+  detail: string
+}
+
+export interface TransformReport {
+  mode: string
+  scanned: number
+  changed: number
+  written: number
+  skipped: number
+  drift: number
+  errorSamples: string[]
+  backupPath?: string
+  validation: ValidationCheck[]
+  valid: boolean
+  durationMs: number
+  target: string
+  createdTarget: boolean
+}
+
+export interface SQLSource {
+  driver: 'postgres' | 'mysql' | 'sqlite'
+  dsn: string
+}
+
+export interface SQLColumn {
+  name: string
+  dbType: string
+  nullable: boolean
+  suggest: string
+}
+
+export interface SQLTable {
+  name: string
+  columns: SQLColumn[]
+  primaryKey: string[]
+  foreignKeys: { columns: string[]; refTable: string; refColumns: string[] }[]
+  rows: number
+}
+
+export interface ColumnMapping {
+  column: string
+  field: string
+  type: string
+}
+
+export interface TableMapping {
+  table: string
+  collection: string
+  idStrategy: 'pk' | 'objectId'
+  columns: ColumnMapping[]
+  embedOnly: boolean
+}
+
+export interface EmbedSpec {
+  child: string
+  parent: string
+  childColumns: string[]
+  as: string
+}
+
+export interface MigrationRequest {
+  source: SQLSource
+  connId: string
+  db: string
+  tables: TableMapping[]
+  embeds: EmbedSpec[]
+  onRowError: 'fail' | 'skip'
+  batchSize: number
+}
+
+export interface MigrationTableReport {
+  table: string
+  collection: string
+  rows: number
+  inserted: number
+  skipped: number
+  errors: string[]
+  countOk: boolean
+  sampleChecked: number
+  sampleMismatches: string[]
+}
+
+export interface MigrationRun {
+  id: string
+  created: string
+  source: string
+  connId: string
+  db: string
+  createdCollections: string[]
+  state: 'running' | 'succeeded' | 'failed' | 'rolledBack'
+  summary: string
+  report?: {
+    runId: string
+    tables: MigrationTableReport[]
+    embeds: { child: string; parent: string; as: string; childRows: number; embedded: number; orphans: number; countOk: boolean }[]
+    valid: boolean
+    durationMs: number
+  }
+}
+
+export interface TaskType {
+  id: string
+  label: string
+  description: string
+}
+
+export interface TaskSchedule {
+  kind: 'interval' | 'cron'
+  everyMinutes: number
+  cron: string
+}
+
+export interface Task {
+  id: string
+  name: string
+  type: string
+  params: unknown
+  schedule: TaskSchedule
+  enabled: boolean
+  retry: { maxAttempts: number; backoffSeconds: number }
+  misfire: 'skip' | 'runOnce'
+  approvedHash: string
+  approvedAt?: string
+  nextRun: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TaskRun {
+  id: string
+  taskId: string
+  taskName: string
+  trigger: 'schedule' | 'manual' | 'misfire'
+  state: 'running' | 'succeeded' | 'failed' | 'skipped' | 'missed' | 'interrupted' | 'canceled'
+  attempts: number
+  errors: string[]
+  result?: string
+  jobId?: string
+  startedAt: string
+  finishedAt: string
+}
+
+export interface AIStatus {
+  enabled: boolean
+  model: string
+  hasKey: boolean
+  keySource: 'stored' | 'environment' | 'none'
+  allowSamples: boolean
+}
+
+export interface AIRequest {
+  connId: string
+  db: string
+  coll: string
+  prompt: string
+  mode: 'auto' | 'find' | 'aggregate'
+  includeSamples: boolean
+  allowWrites: boolean
+}
+
+export interface AIContext {
+  collection: string
+  fields: { path: string; types: string[]; presence: number }[]
+  samples: string[]
+}
+
+export interface AIProposal {
+  id: string
+  kind: 'find' | 'aggregate' | 'updateMany' | 'deleteMany'
+  db: string
+  coll: string
+  filter: string
+  projection: string
+  sort: string
+  limit: number
+  pipeline: Stage[]
+  update: string
+  explanation: string
+  warnings: string[]
+  isWrite: boolean
+  requiresConfirmation: boolean
+  valid: boolean
+  validation: ValidationCheck[]
+  shell: string
+  sent: AIContext
+  model: string
+  inputTokens: number
+  outputTokens: number
+  durationMs: number
+}
+
+export interface AIWritePreview {
+  proposalId: string
+  shell: string
+  affected: number
+  sampleIds: string[]
+  confirmText: string
+}
+
+export interface AIWriteResult {
+  matched: number
+  modified: number
+  deleted: number
+  backupPath: string
+}
+
+export interface MCPPolicy {
+  enabled: boolean
+  profiles: string[]
+  databases: string[]
+  tools: string[]
+  allowWrites: boolean
+  maxDocs: number
+  maxWriteDocs: number
+  maskRuleSetId: string
+  auditLog: boolean
+}
+
+export interface MCPInfo {
+  policy: MCPPolicy
+  catalog: { name: string; write: boolean; description: string }[]
+  command: string
+  args: string[]
+  snippet: string
 }

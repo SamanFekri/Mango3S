@@ -15,7 +15,7 @@
 #
 # Desktop apps for macOS and Windows must be built natively with `wails build`.
 
-ARG GO_VERSION=1.25
+ARG GO_VERSION=1.26
 ARG NODE_VERSION=22
 
 # ---- Frontend: install, test, build ----------------------------------------

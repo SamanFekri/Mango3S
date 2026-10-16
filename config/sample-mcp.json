@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "profiles": ["local-dev"],
+  "databases": ["sample_store", "analytics_*"],
+  "tools": ["list_connections", "list_databases", "list_collections", "collection_schema", "find", "count", "aggregate", "explain"],
+  "allowWrites": false,
+  "maxDocs": 50,
+  "maxWriteDocs": 100,
+  "maskRuleSetId": "customers-pii",
+  "auditLog": true
+}

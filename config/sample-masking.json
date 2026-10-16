@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "ruleSets": [
+    {
+      "id": "customers-pii",
+      "name": "Customer PII",
+      "rules": [
+        { "field": "email", "method": "email" },
+        { "field": "name", "method": "randomize" },
+        { "field": "phone", "method": "partial", "keepLast": 2, "maskChar": "*" },
+        { "field": "address.street", "method": "redact" },
+        { "field": "birthDate", "method": "dateShift", "maxDays": 30 },
+        { "field": "creditLimit", "method": "noise", "percent": 10 },
+        { "field": "ssn", "method": "remove" },
+        { "field": "notes", "method": "constant", "value": "\"n/a\"", "onUnsupported": "null" }
+      ],
+      "updatedAt": "2026-10-01T00:00:00Z"
+    }
+  ]
+}

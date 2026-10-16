@@ -36,6 +36,10 @@ const backend = vi.hoisted(() => ({
   clearFinishedJobs: vi.fn(),
   listSaved: vi.fn(),
   listHistory: vi.fn(),
+  getAIStatus: vi.fn(),
+  getMCPInfo: vi.fn(),
+  listMaskRuleSets: vi.fn(),
+  listBackups: vi.fn(),
 }))
 
 const jobListeners = vi.hoisted(() => [] as ((j: unknown) => void)[])
@@ -74,6 +78,14 @@ beforeEach(() => {
     { id: 's1', kind: 'sql', name: 'Big orders', description: '', db: 'shop', coll: '', text: 'SELECT * FROM orders', createdAt: '', updatedAt: new Date().toISOString() },
   ])
   backend.listHistory.mockResolvedValue([])
+  backend.getAIStatus.mockResolvedValue({ enabled: false, model: 'claude-opus-5-5', hasKey: false, keySource: 'none', allowSamples: false })
+  backend.getMCPInfo.mockResolvedValue({
+    policy: { enabled: false, profiles: [], databases: [], tools: [], allowWrites: false, maxDocs: 50, maxWriteDocs: 100, maskRuleSetId: '', auditLog: true },
+    catalog: [{ name: 'find', description: 'Find documents', write: false }],
+    snippet: '{}',
+  })
+  backend.listMaskRuleSets.mockResolvedValue([])
+  backend.listBackups.mockResolvedValue([])
   jobListeners.length = 0
 })
 
