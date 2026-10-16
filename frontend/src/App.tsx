@@ -106,7 +106,7 @@ function TabBar() {
             }}
             title={(t.connName && t.db ? `${t.connName} / ${t.db}${t.coll ? ' / ' + t.coll : ''}` : t.title) + (dirty ? ` — unsaved: ${dirty}` : '')}
           >
-            <span className={`tab-icon ${t.kind}`} aria-hidden />
+            <span className={`tab-icon tab-icon-${t.kind}`} aria-hidden />
             <span className="tab-title">{t.title}</span>
             {dirty && <span className="tab-dirty" aria-label="unsaved changes" />}
             <button

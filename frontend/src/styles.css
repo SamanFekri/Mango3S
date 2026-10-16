@@ -678,13 +678,13 @@ label.inline {
   flex: none;
   background: var(--text-faint);
 }
-.tab-icon.collection {
+.tab-icon-collection {
   background: var(--accent);
 }
-.tab-icon.aggregation {
+.tab-icon-aggregation {
   background: var(--tok-key);
 }
-.tab-icon.shell {
+.tab-icon-shell {
   background: var(--tok-str);
 }
 .tabbar-btn {
@@ -2089,10 +2089,10 @@ table.grid.compact {
 .tab.dirty .tab-title {
   font-style: italic;
 }
-.tab-icon.connection {
+.tab-icon-connection {
   background: var(--success);
 }
-.tab-icon.welcome {
+.tab-icon-welcome {
   background: var(--accent);
   border-radius: 50%;
 }
