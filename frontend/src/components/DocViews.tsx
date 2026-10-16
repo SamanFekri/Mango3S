@@ -16,6 +16,7 @@ import { parseDoc, renderCell, type JsonObject } from '../lib/ejson'
 import { toAppError } from '../lib/errors'
 import type { Doc, FieldResult, FieldValue } from '../lib/types'
 import { Spinner } from './common'
+import { TypeIcon } from './icons'
 
 /** Server operations for one collection; omitted when results aren't editable. */
 export interface FieldApi {
@@ -498,7 +499,7 @@ export function TableView({
           {ce.parsed.map((row, i) => {
             const d = ce.docs[i]
             return (
-              <tr key={d.id || i} className={d.id && selected.has(d.id) ? 'selected' : ''}>
+              <tr key={d.id || i} className={`${d.id && selected.has(d.id) ? 'selected' : ''}${i % 2 === 0 ? ' row-odd' : ' row-even'}`}>
                 {onSelectDoc && (
                   <td className="sel">
                     {d.id && <input type="checkbox" checked={selected.has(d.id)} onChange={() => onSelectDoc(d.id)} aria-label={`Select row ${i + 1}`} />}
@@ -530,7 +531,14 @@ export function TableView({
                       onDoubleClick={() => ce.startEdit(ref)}
                       onContextMenu={(e) => onContextMenu?.(ref, e)}
                     >
-                      {isEdit ? <CellEditor ce={ce} onMove={move} /> : cell.text}
+                      {isEdit ? (
+                        <CellEditor ce={ce} onMove={move} />
+                      ) : (
+                        <>
+                          {v !== undefined && <TypeIcon type={bsonType(v)} />}
+                          {cell.text}
+                        </>
+                      )}
                     </td>
                   )
                 })}
@@ -650,7 +658,7 @@ export function TreeView({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {rows.map((r, rowIndex) => {
             const d = ce.docs[r.ref.doc]
             const isRoot = r.ref.path.length === 0
             const isSel = sameRef(ce.sel, r.ref)
@@ -665,7 +673,7 @@ export function TreeView({
                 aria-level={r.depth + 1}
                 aria-expanded={r.container ? open : undefined}
                 aria-selected={isSel}
-                className={`${isRoot ? 'tree-root' : ''}${isSel ? ' cell-selected' : ''}${isRoot && d.id && selected.has(d.id) ? ' selected' : ''}`}
+                className={`${isRoot ? 'tree-root' : ''}${isSel ? ' cell-selected' : ''}${isRoot && d.id && selected.has(d.id) ? ' selected' : ''}${rowIndex % 2 === 0 ? ' row-odd' : ' row-even'}${isRoot ? (r.ref.doc % 2 === 0 ? ' doc-odd' : ' doc-even') : ''}`}
                 onClick={() => ce.select(r.ref)}
                 onDoubleClick={() => (isRoot ? toggle(r.ref) : ce.startEdit(r.ref))}
                 onContextMenu={(e) => onContextMenu?.(r.ref, e)}
@@ -698,9 +706,14 @@ export function TreeView({
                       <span className="doc-index">({pageOffset + r.ref.doc + 1})</span> <span className="mono">{d.id || '(no _id)'}</span>
                     </>
                   ) : (
-                    <span className={/^\d+$/.test(r.label) && r.ref.path.length > 0 && Array.isArray(getAt(ce.parsed[r.ref.doc], r.ref.path.slice(0, -1))) ? 'tree-index' : 'tree-field'}>
-                      {r.label}
-                    </span>
+                    <>
+                      <span className="key-type">
+                        <TypeIcon type={type} />
+                      </span>
+                      <span className={/^\d+$/.test(r.label) && r.ref.path.length > 0 && Array.isArray(getAt(ce.parsed[r.ref.doc], r.ref.path.slice(0, -1))) ? 'tree-index' : 'tree-field'}>
+                        {r.label}
+                      </span>
+                    </>
                   )}
                 </td>
                 <td className={`tree-value cell-${renderCell(r.value).kind}${isEdit ? ' cell-editing' : ''}`} role="gridcell">
@@ -727,7 +740,10 @@ export function TreeView({
                     displayValue(r.value, 300)
                   )}
                 </td>
-                <td className="tree-type muted small">{type}</td>
+                <td className="tree-type muted small">
+                  {isRoot && <TypeIcon type="document" />}
+                  {type}
+                </td>
               </tr>
             )
           })}

@@ -88,3 +88,45 @@ export function FolderIcon({ open, ...p }: SVGProps<SVGSVGElement> & { open?: bo
     </svg>
   )
 }
+
+const TYPE_GLYPHS: Record<string, { glyph: string; kind: string; label: string }> = {
+  string: { glyph: 'ab', kind: 'str', label: 'String' },
+  int32: { glyph: '32', kind: 'num', label: 'Int32' },
+  int64: { glyph: '64', kind: 'num', label: 'Int64 (long)' },
+  double: { glyph: '1.5', kind: 'num', label: 'Double' },
+  decimal: { glyph: 'd', kind: 'num', label: 'Decimal128' },
+  boolean: { glyph: 't/f', kind: 'bool', label: 'Boolean' },
+  date: { glyph: 'dt', kind: 'date', label: 'Date' },
+  timestamp: { glyph: 'ts', kind: 'date', label: 'Timestamp' },
+  objectId: { glyph: 'id', kind: 'oid', label: 'ObjectId' },
+  document: { glyph: '{}', kind: 'obj', label: 'Document' },
+  array: { glyph: '[]', kind: 'obj', label: 'Array' },
+  null: { glyph: '∅', kind: 'null', label: 'Null' },
+  undefined: { glyph: '∅', kind: 'null', label: 'Undefined' },
+  binary: { glyph: '01', kind: 'bin', label: 'Binary' },
+  regex: { glyph: '.*', kind: 'bin', label: 'Regular expression' },
+  javascript: { glyph: 'js', kind: 'bin', label: 'JavaScript' },
+  minKey: { glyph: 'min', kind: 'null', label: 'MinKey' },
+  maxKey: { glyph: 'max', kind: 'null', label: 'MaxKey' },
+}
+
+/** A small badge for a BSON type (Table and Tree views). */
+export function TypeIcon({ type }: { type: string }) {
+  const t = TYPE_GLYPHS[type]
+  if (!t) return null
+  return (
+    <span className={`type-icon type-${t.kind}`} title={t.label} aria-label={t.label} role="img">
+      {t.glyph}
+    </span>
+  )
+}
+
+/** The settings gear in the tab bar. */
+export function GearIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base({ width: 18, height: 18, viewBox: '0 0 24 24', strokeWidth: 1.8, ...p })} className="icon icon-gear">
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V9c.26.6.86 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.65 0-1.25.4-1.51 1Z" />
+    </svg>
+  )
+}

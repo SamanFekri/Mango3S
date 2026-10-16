@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Doc, FieldResult, FieldValue, Page } from '../lib/types'
 import { setShortcutPlatform, useShortcutDispatcher } from '../state/shortcuts'
 import type { FieldApi } from './DocViews'
+
+/** The field name (or array index) shown in a tree row's key cell. */
+const keyOf = (r: HTMLElement) => r.querySelector('.tree-field, .tree-index')?.textContent ?? ''
 import { ResultsView, type ViewMode } from './ResultsView'
 
 // Documents arrive as canonical Extended JSON (exact BSON types).
@@ -256,9 +259,9 @@ describe('tree view', () => {
     render(<Harness api={api} view="tree" />)
     const tree = screen.getByRole('treegrid')
     // First document is expanded; expand the embedded address document.
-    const addressRow = within(tree).getAllByRole('row').find((r) => r.textContent?.startsWith('address'))!
+    const addressRow = within(tree).getAllByRole('row').find((r) => keyOf(r) === 'address')!
     fireEvent.click(within(addressRow).getByRole('button', { name: 'Expand' }))
-    const cityRow = within(tree).getAllByRole('row').find((r) => r.textContent?.startsWith('city'))!
+    const cityRow = within(tree).getAllByRole('row').find((r) => keyOf(r) === 'city')!
     expect(cityRow).toHaveTextContent('London')
     expect(cityRow).toHaveTextContent('string')
     fireEvent.click(cityRow)
@@ -269,17 +272,46 @@ describe('tree view', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     await waitFor(() => expect(api.update).toHaveBeenCalled())
     expect(api.update.mock.calls[0][1]).toMatchObject({ path: ['address', 'city'], type: 'string', text: 'Paris', expected: '"London"' })
-    await waitFor(() => expect(within(screen.getByRole('treegrid')).getAllByRole('row').find((r) => r.textContent?.startsWith('city'))).toHaveTextContent('Paris'))
+    await waitFor(() => expect(within(screen.getByRole('treegrid')).getAllByRole('row').find((r) => keyOf(r) === 'city')).toHaveTextContent('Paris'))
   })
 
   it('shows exact types from canonical JSON and array indexes', () => {
     render(<Harness api={makeApi()} view="tree" />)
     const rows = within(screen.getByRole('treegrid')).getAllByRole('row')
-    expect(rows.find((r) => r.textContent?.startsWith('age'))).toHaveTextContent('int32')
-    const tags = rows.find((r) => r.textContent?.startsWith('tags'))!
+    expect(rows.find((r) => keyOf(r) === 'age')).toHaveTextContent('int32')
+    const tags = rows.find((r) => keyOf(r) === 'tags')!
     expect(tags).toHaveTextContent('array')
     fireEvent.click(within(tags).getByRole('button', { name: 'Expand' }))
     const after = within(screen.getByRole('treegrid')).getAllByRole('row')
-    expect(after.some((r) => r.textContent?.startsWith('0') && r.textContent.includes('a'))).toBe(true)
+    expect(after.some((r) => keyOf(r) === '0' && !!r.textContent?.includes('a'))).toBe(true)
+  })
+})
+
+describe('readability', () => {
+  it('shows a type icon per value and stripes rows (odd darker, even lighter)', () => {
+    const { unmount } = render(<Harness api={makeApi()} />)
+    expect(within(cell(1, 'age')).getByRole('img', { name: 'Int32' })).toHaveTextContent('32')
+    expect(within(cell(1, 'name')).getByRole('img', { name: 'String' })).toBeInTheDocument()
+    expect(within(cell(1, '_id')).getByRole('img', { name: 'ObjectId' })).toBeInTheDocument()
+    expect(within(cell(1, 'tags')).getByRole('img', { name: 'Array' })).toBeInTheDocument()
+    const rows = within(screen.getByRole('grid')).getAllByRole('row')
+    expect(rows[1]).toHaveClass('row-odd')
+    expect(rows[2]).toHaveClass('row-even')
+    unmount()
+    render(<Harness api={makeApi()} view="tree" />)
+    const tree = screen.getByRole('treegrid')
+    const address = within(tree).getAllByRole('row').find((r) => r.textContent?.includes('address'))!
+    // The type icon is in the key cell, before the field name.
+    const keyCell = address.querySelector('td.tree-key')!
+    const icon = within(keyCell as HTMLElement).getByRole('img', { name: 'Document' })
+    expect(icon.compareDocumentPosition(within(keyCell as HTMLElement).getByText('address')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(address.querySelector('td.tree-value [role="img"]')).toBeNull()
+    // Document rows alternate by document as well.
+    const roots = within(tree).getAllByRole('row').filter((r) => r.classList.contains('tree-root'))
+    expect(roots[0]).toHaveClass('doc-odd')
+    expect(roots[1]).toHaveClass('doc-even')
+    // Every tree row alternates, not just every document.
+    const body = within(tree).getAllByRole('row').slice(1)
+    body.forEach((r, i) => expect(r).toHaveClass(i % 2 === 0 ? 'row-odd' : 'row-even'))
   })
 })

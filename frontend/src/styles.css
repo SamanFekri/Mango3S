@@ -520,24 +520,30 @@ label.inline {
 .tree-row:hover .row-action {
   visibility: visible;
 }
+/* Disclosure triangle: centered in a 12px box, rotating about its middle. */
 .caret {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   flex: none;
-  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
 }
 .caret::before {
   content: '';
-  position: absolute;
-  left: 2px;
-  top: 1px;
-  border: 4px solid transparent;
-  border-left: 5px solid var(--text-muted);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--text-muted);
   transition: transform 0.12s;
-  transform-origin: 2px 4px;
+  transform-origin: 50% 50%;
+  margin-left: 1px;
 }
 .caret.open::before {
   transform: rotate(90deg);
+  margin-left: 0;
 }
 .dot {
   width: 8px;
@@ -2221,15 +2227,16 @@ button.link {
   background: transparent;
   padding: 0;
   margin-right: 4px;
-  display: inline-block;
+  display: inline-flex;
   cursor: pointer;
+  min-height: 0;
 }
 .caret-spacer {
   display: inline-block;
   width: 14px;
 }
 .tree-root td {
-  background: var(--surface-2);
+  background: var(--doc-row, var(--surface-2));
   font-weight: 500;
 }
 .tree-root .doc-index {
@@ -2676,4 +2683,116 @@ tr.clickable {
 }
 .settings-group.keymap {
   max-width: none;
+}
+
+/* ---------- Readability: pointer, alternating documents, type icons ---------- */
+/* Row striping in the Table and Tree views: odd rows darker, even rows lighter. */
+:root {
+  --row-odd: rgba(15, 23, 42, 0.07);
+  --row-even: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --row-odd: rgba(0, 0, 0, 0.22);
+    --row-even: rgba(255, 255, 255, 0.03);
+  }
+}
+:root[data-theme='dark'] {
+  --row-odd: rgba(0, 0, 0, 0.22);
+  --row-even: rgba(255, 255, 255, 0.03);
+}
+.grid td[role='gridcell'],
+.tree-grid tbody tr,
+.doc-card {
+  cursor: pointer;
+}
+.grid td.cell-editing,
+.tree-grid td.cell-editing {
+  cursor: auto;
+}
+/* Zero specificity so hover, selection and editing always show on top. */
+:where(.table-wrap, .tree-wrap) :where(tr.row-odd) > td {
+  background: var(--row-odd);
+}
+:where(.table-wrap, .tree-wrap) :where(tr.row-even) > td {
+  background: var(--row-even);
+}
+.doc-list .doc-card:nth-child(even) {
+  background: color-mix(in srgb, var(--surface) 94%, var(--text) 3%);
+}
+.type-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 14px;
+  padding: 0 3px;
+  margin-right: 6px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 1px;
+  flex: none;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.type-str {
+  color: var(--tok-str);
+}
+.type-num {
+  color: var(--tok-num);
+}
+.type-bool {
+  color: var(--tok-kw);
+}
+.type-date {
+  color: var(--tok-fn);
+}
+.type-oid {
+  color: var(--accent);
+}
+.type-obj {
+  color: var(--tok-key);
+}
+.type-null {
+  color: var(--text-faint);
+}
+.type-bin {
+  color: var(--text-muted);
+}
+.tabbar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.icon-gear {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+.tabbar-icon:hover .icon-gear {
+  color: var(--text);
+}
+
+/* Tree view: the type icon sits left of the field name with extra room. */
+.key-type .type-icon {
+  margin-right: 10px;
+}
+
+/* Tree view: document rows alternate too, odd documents darker. */
+:root {
+  --doc-row-odd: color-mix(in srgb, var(--surface-2), var(--text) 10%);
+  --doc-row-even: color-mix(in srgb, var(--surface-2), var(--text) 3%);
+}
+.tree-grid tr.tree-root.doc-odd {
+  --doc-row: var(--doc-row-odd);
+}
+.tree-grid tr.tree-root.doc-even {
+  --doc-row: var(--doc-row-even);
 }

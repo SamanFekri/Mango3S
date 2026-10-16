@@ -68,6 +68,9 @@ vi.mock('./lib/backend', () => ({
 }))
 
 import App from './App'
+
+/** The field name (or array index) shown in a tree row's key cell. */
+const keyOf = (r: HTMLElement) => r.querySelector('.tree-field, .tree-index')?.textContent ?? ''
 import { setShortcutPlatform } from './state/shortcuts'
 
 beforeEach(() => {
@@ -156,7 +159,7 @@ describe('App', () => {
     expect(req).toMatchObject({ connId: 'p1', db: 'shop', coll: 'orders', filter: '{}', page: 0, pageSize: 50 })
     // Tree view is the default: field, value and BSON type per row.
     const tree = await screen.findByRole('treegrid')
-    const status = (await within(tree).findAllByRole('row')).find((r) => r.textContent?.startsWith('status'))
+    const status = (await within(tree).findAllByRole('row')).find((r) => keyOf(r) === 'status')
     expect(status).toHaveTextContent('A')
     expect(backend.recordCollectionOpened).toHaveBeenCalledWith('p1', 'shop', 'orders')
   })
@@ -298,7 +301,7 @@ describe('unsaved work', () => {
     backend.getField.mockResolvedValue({ exists: true, type: 'string', text: 'A', expected: '"A"', editable: true })
     await connectAndOpenOrders()
     const tree = screen.getByRole('treegrid')
-    const row = (await within(tree).findAllByRole('row')).find((r) => r.textContent?.startsWith('status'))!
+    const row = (await within(tree).findAllByRole('row')).find((r) => keyOf(r) === 'status')!
     fireEvent.doubleClick(row)
     const input = await screen.findByRole('textbox', { name: 'Edit status' })
     fireEvent.change(input, { target: { value: 'B' } })

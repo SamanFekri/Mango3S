@@ -1,4 +1,5 @@
 import { Component, useEffect } from 'react'
+import { GearIcon } from './components/icons'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { onMenu } from './lib/backend'
 import { recentProfiles } from './lib/tabs'
@@ -130,11 +131,11 @@ function TabBar() {
       <button className="small ghost tabbar-btn" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'library' } })} title={`Saved queries and history (${shortcutHint('app.library')})`}>
         Library
       </button>
-      <button className="small ghost tabbar-btn" onClick={() => setShortcutsOpen(true)} title={`Keyboard shortcuts (${shortcutHint('help.shortcuts')})`} aria-label="Keyboard shortcuts">
+      <button className="small ghost tabbar-btn tabbar-icon" onClick={() => setShortcutsOpen(true)} title={`Keyboard shortcuts (${shortcutHint('help.shortcuts')})`} aria-label="Keyboard shortcuts">
         ?
       </button>
-      <button className="small ghost tabbar-btn" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'settings' } })} title={`Settings (${shortcutHint('app.settings')})`} aria-label="Settings">
-        ⚙
+      <button className="small ghost tabbar-btn tabbar-icon" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'settings' } })} title={`Settings (${shortcutHint('app.settings')})`} aria-label="Settings">
+        <GearIcon />
       </button>
     </div>
   )
