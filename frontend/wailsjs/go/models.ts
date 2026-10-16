@@ -397,6 +397,68 @@ export namespace api {
 	        this.secretBackend = source["secretBackend"];
 	    }
 	}
+	export class BulkPreview {
+	    affected: number;
+	    sampleIds: string[];
+	    confirmText: string;
+	    shell: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BulkPreview(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.affected = source["affected"];
+	        this.sampleIds = source["sampleIds"];
+	        this.confirmText = source["confirmText"];
+	        this.shell = source["shell"];
+	    }
+	}
+	export class BulkResult {
+	    matched: number;
+	    modified: number;
+	    deleted: number;
+	    backupPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BulkResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.matched = source["matched"];
+	        this.modified = source["modified"];
+	        this.deleted = source["deleted"];
+	        this.backupPath = source["backupPath"];
+	    }
+	}
+	export class BulkWriteRequest {
+	    connId: string;
+	    db: string;
+	    coll: string;
+	    kind: string;
+	    scope: string;
+	    ids: string[];
+	    filter: string;
+	    update: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BulkWriteRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connId = source["connId"];
+	        this.db = source["db"];
+	        this.coll = source["coll"];
+	        this.kind = source["kind"];
+	        this.scope = source["scope"];
+	        this.ids = source["ids"];
+	        this.filter = source["filter"];
+	        this.update = source["update"];
+	    }
+	}
 	export class CodeRequest {
 	    language: string;
 	    source: string;
@@ -1387,6 +1449,7 @@ export namespace config {
 	    localApi: string;
 	    localModel: string;
 	    schedulerEnabled: boolean;
+	    keymap?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -1415,6 +1478,7 @@ export namespace config {
 	        this.localApi = source["localApi"];
 	        this.localModel = source["localModel"];
 	        this.schedulerEnabled = source["schedulerEnabled"];
+	        this.keymap = source["keymap"];
 	    }
 	}
 	
@@ -1472,6 +1536,8 @@ export namespace documents {
 	    expected: string;
 	    expectedMissing: boolean;
 	    unset: boolean;
+	    renameTo?: string;
+	    append?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FieldUpdate(source);
@@ -1490,6 +1556,8 @@ export namespace documents {
 	        this.expected = source["expected"];
 	        this.expectedMissing = source["expectedMissing"];
 	        this.unset = source["unset"];
+	        this.renameTo = source["renameTo"];
+	        this.append = source["append"];
 	    }
 	}
 	export class FieldValue {

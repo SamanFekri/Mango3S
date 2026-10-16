@@ -17,6 +17,11 @@ interface Registration {
 }
 
 const registry = new Map<string, Registration[]>()
+
+// A key can mean different things in different places (F8: Remove dialog in
+// results, Explain elsewhere). Shortcuts of the focused panel are tried first.
+const RANK: Record<string, number> = { results: 0, explorer: 0, editor: 0, tab: 1, global: 2 }
+const BY_PRIORITY = [...SHORTCUTS].sort((a, b) => RANK[a.scope] - RANK[b.scope])
 let seq = 0
 let platform: Platform = detectPlatform()
 
@@ -66,7 +71,7 @@ export function handleKeyDown(e: KeyboardEvent): boolean {
   const target = (e.target as Element | null) ?? document.activeElement
   const typing = isTextTarget(target)
   const inDialog = dialogOpen(target)
-  for (const def of SHORTCUTS) {
+  for (const def of BY_PRIORITY) {
     if (def.handler !== 'app') continue
     const index = matchIndex(def, e, platform)
     if (index < 0) continue

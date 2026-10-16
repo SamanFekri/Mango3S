@@ -181,7 +181,9 @@ func TestCodexUsesReadOnlySandboxAndSchemaFile(t *testing.T) {
 	if !strings.HasPrefix(c.stdin, "SYSTEM") || !strings.Contains(c.stdin, "USER") {
 		t.Fatalf("stdin: %q", c.stdin)
 	}
-	fakeRunner(t, func(call) ([]byte, []byte, error) { return nil, []byte("Not logged in. Run codex login"), errors.New("exit 1") })
+	fakeRunner(t, func(call) ([]byte, []byte, error) {
+		return nil, []byte("Not logged in. Run codex login"), errors.New("exit 1")
+	})
 	if _, _, err := (&Codex{Path: "c"}).Generate(context.Background(), "s", "u", AnswerSchema()); !apperr.Is(err, apperr.CodeAuthFailed) {
 		t.Fatalf("codex signed out: %v", err)
 	}

@@ -115,6 +115,64 @@ Editing works the same way in the Tree and the Table:
 - **Undo / redo:** ⌘Z / ⇧⌘Z (Ctrl+Z / Ctrl+Y) undo and redo field edits in the results panel,
   using the same conflict check.
 
+## Document and field actions (right-click menu)
+
+Right-click a value in the Tree or Table view, or a document in the JSON view. The menu lists
+Studio 3T's document and field actions, each with its shortcut. The menu item and the shortcut run
+the same command, so they always behave the same.
+
+- **Documents:**
+  - View document (JSON) F3: a read-only viewer.
+  - Edit document (JSON) ⌘J / Ctrl+J.
+  - Copy document ⇧⌘C / Ctrl+Shift+C.
+  - Refresh document ⇧⌘R / Ctrl+Shift+R: re-reads it from the server and reports if it was deleted.
+  - Follow reference Shift+F7:
+    - a DBRef opens its target document;
+    - an ObjectId asks which collection to look it up in by `_id`.
+  - Insert ⌘D / Ctrl+D, Paste documents ⌘V / Ctrl+V (Insert with the clipboard's JSON), and
+    Remove document Shift+Del (macOS Shift+Fn+Delete), which always asks first.
+- **Fields:**
+  - Copy value as text ⌘C / Ctrl+C, Copy value (exact shell syntax) ⌥⇧C / Alt+Shift+C.
+  - Edit field ⌘E / Ctrl+E is the keyboard way in. With the mouse, editing stays double-click
+    only; a single click selects.
+  - Add field / value ⌘K / Ctrl+K: a typed field in the selected document or embedded document,
+    or a value appended to an array.
+  - Rename field Shift+F2: `$rename`; refused inside arrays and onto an existing name.
+  - Remove field Del (macOS Fn+Delete): asks first.
+- **Update dialog** ⌘U / Ctrl+U and **Remove dialog** F8 (`updateMany` / `deleteMany`):
+  - act on the selected documents or on everything matching a query (prefilled with the tab's
+    query);
+  - preview the count first, then require the target typed to confirm;
+  - refuse to run if the count changed since the preview;
+  - back up every document they touch (Library → Backups).
+
+  In results F8 is the Remove dialog; elsewhere in the collection tab it is still Explain.
+- **Rules for all actions:**
+  - Write actions are disabled on read-only connections.
+  - Field actions need a selected field.
+  - Every change goes through the field-level update path, which keeps BSON types, detects
+    concurrent changes and never rewrites the rest of the document.
+
+## Preferences → Keymap
+
+Settings → Keymap lists every shortcut by category with search, and marks whether it is a Studio
+3T default or a Mango3S one.
+
+- **Add:** "+ Add", then press the keys. Each action can have up to three shortcuts, as in Studio 3T.
+- **Remove and reset:** remove a shortcut with ×, reset an action with Reset, or "Reset all to
+  defaults".
+- **Conflicts:** a key already used in the same place shows which action has it, and you can
+  reassign it. Existing conflicts are listed at the top.
+- **Refused keys:**
+  - plain typing keys for shortcuts that work while typing;
+  - the standard text-editing keys (copy, paste, cut, undo, redo, select all) outside results and
+    editors.
+- **Fixed keys:** keys handled inside a view (grid navigation, Enter/Esc in the cell editor) or by
+  the text editor are shown but can't be changed.
+- **Export / Import:** a JSON file (`mango3s-keymap`); unknown actions are ignored on import.
+- **Storage and scope:** changes apply immediately, are saved in `settings.json`, and apply per
+  platform (macOS and Windows/Linux keep separate keymaps).
+
 ## Keyboard shortcuts
 
 All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
@@ -141,6 +199,7 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
 - Standard text editing (copy, paste, undo, find, comment) is left to the editor and the native
   Edit menu.
 - The native menu (File, Edit, View, Help) runs the same actions.
+
 
 **Connections**
 
@@ -198,15 +257,11 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
 | Table view | `⌥⌘2` | `Ctrl+Alt+2` | active tab | Studio 3T |
 | JSON view | `⌥⌘3` | `Ctrl+Alt+3` | active tab | Studio 3T |
 | Select the next / previous cell | `↑` / `↓` / `←` / `→` | `↑` / `↓` / `←` / `→` | results | Mango3S default |
-| Edit the field (double-click) — Double-click only — a single click selects. In the table and tree views. | Double-click | Double-click | results | Studio 3T |
+| Edit the field with the mouse — Double-click — a single click only selects. In the table and tree views. | Double-click | Double-click | results | Studio 3T |
 | Save the field being edited | `↩` | `Enter` | results | Mango3S default |
 | Cancel editing the field | `Esc` | `Esc` | results | Mango3S default |
 | Next / previous editable cell (saves an edit first) | `Tab` / `⇧Tab` | `Tab` / `Shift+Tab` | results | Mango3S default |
-| Copy value as text | `⌘C` | `Ctrl+C` | results | Studio 3T |
-| Copy value (exact shell syntax) | `⌥⇧C` | `Alt+Shift+C` | results | Studio 3T |
-| Copy document | `⇧⌘C` | `Ctrl+Shift+C` | results | Studio 3T |
 | Select all documents on the page | `⌘A` | `Ctrl+A` | results | Mango3S default |
-| Paste documents (opens Insert with the clipboard) | `⌘V` | `Ctrl+V` | results | Mango3S default |
 | Undo the last field edit | `⌘Z` | `Ctrl+Z` | results | Mango3S default |
 | Redo the field edit | `⇧⌘Z` | `Ctrl+Y` / `Ctrl+Shift+Z` | results | Mango3S default |
 
@@ -214,10 +269,27 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
 
 | Action | macOS | Windows / Linux | Where | Mapping |
 |---|---|---|---|---|
+| Copy document | `⇧⌘C` | `Ctrl+Shift+C` | results | Studio 3T |
+| View document (JSON) | `F3` | `F3` | results | Studio 3T |
 | Insert document — Not while typing in an editor (Mod+D selects the next match there). | `⌘D` | `Ctrl+D` | active tab | Studio 3T |
-| Edit the whole document as JSON | `⌘J` | `Ctrl+J` | results | Studio 3T |
-| Delete the selected documents (asks first) | `⇧Del` / `⇧⌫` | `Shift+Del` | results | Studio 3T |
-| Remove the selected field (asks first) | `Del` / `⌫` | `Del` | results | Studio 3T |
+| Edit document (JSON) | `⌘J` | `Ctrl+J` | results | Studio 3T |
+| Remove document (asks first) — macOS: Shift+Fn+Delete. | `⇧Del` | `Shift+Del` | results | Studio 3T |
+| Refresh document | `⇧⌘R` | `Ctrl+Shift+R` | results | Studio 3T |
+| Follow reference — Opens the document a DBRef points to; for other values, asks which collection to look in. | `⇧F7` | `Shift+F7` | results | Studio 3T |
+| Paste documents — Opens Insert document with the clipboard’s JSON. | `⌘V` | `Ctrl+V` | results | Mango3S default |
+
+**Fields**
+
+| Action | macOS | Windows / Linux | Where | Mapping |
+|---|---|---|---|---|
+| Copy value as text | `⌘C` | `Ctrl+C` | results | Studio 3T |
+| Copy value (exact shell syntax) | `⌥⇧C` | `Alt+Shift+C` | results | Studio 3T |
+| Add field / value — Adds a field to the selected document, or a value to the selected array. | `⌘K` | `Ctrl+K` | results | Studio 3T |
+| Edit field — Keyboard alternative to double-clicking the value. | `⌘E` | `Ctrl+E` | results | Studio 3T |
+| Rename field | `⇧F2` | `Shift+F2` | results | Studio 3T |
+| Remove field (asks first) — macOS: Fn+Delete. | `Del` | `Del` | results | Studio 3T |
+| Update dialog (updateMany) | `⌘U` | `Ctrl+U` | results | Studio 3T |
+| Remove dialog (deleteMany) | `F8` | `F8` | results | Studio 3T |
 
 **Explorer**
 
@@ -226,8 +298,8 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
 | Move between items | `↑` / `↓` / `Home` / `End` | `↑` / `↓` / `Home` / `End` | explorer | Mango3S default |
 | Expand / collapse | `→` / `←` | `→` / `←` | explorer | Studio 3T |
 | Open the collection / connect | `↩` | `Enter` | explorer | Studio 3T |
-| Drop the selected collection or database (asks first) | `Del` / `⌫` | `Del` | explorer | Studio 3T |
-| Refresh all connections | `⇧⌘R` | `Ctrl+Shift+R` | anywhere | Studio 3T |
+| Drop the selected collection or database (asks first) — macOS: Fn+Delete. | `Del` | `Del` | explorer | Studio 3T |
+| Refresh all connections | `⇧⌘R` | `Ctrl+Shift+R` | explorer | Studio 3T |
 | Filter collections | `⇧⌘F` | `Ctrl+Shift+F` | anywhere | Mango3S default |
 
 **Focus**
@@ -273,9 +345,8 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
     (deliberately strict).
   - Undo history is per results panel and lasts for the session.
 - **Shortcuts:**
-  - The keymap can't be customized.
-  - Studio 3T's ⌘E / Ctrl+E ("edit field") is deliberately not bound, because editing is
-    double-click only.
+  - Studio 3T's "Open dialog directly" (also ⌘E / Ctrl+E) is the same as Edit field here.
+  - Studio 3T's keymap file is XML; Mango3S imports and exports its own JSON format.
   - Its ⌘↩ "show embedded fields" is replaced by the Embedded fields checkbox, because ⌘↩ runs
     the query.
   - Native menu items don't show key hints, so they never double-fire with the web view's handlers.

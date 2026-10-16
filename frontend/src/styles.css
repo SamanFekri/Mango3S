@@ -2595,3 +2595,85 @@ tr.clickable {
 .success-text {
   color: var(--success);
 }
+
+/* ---------- Context menus with shortcuts ---------- */
+.context-menu {
+  min-width: 240px;
+}
+.context-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  text-align: left;
+}
+.context-menu button:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+.menu-kbd {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.context-menu button:disabled .menu-kbd {
+  opacity: 0.5;
+}
+.menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+.doc-card.focused {
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1px;
+}
+.doc-text.viewer {
+  max-height: 64vh;
+  overflow: auto;
+}
+
+/* ---------- Keymap ---------- */
+.keymap-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.keymap-group h3 {
+  font-size: 13px;
+  margin: 12px 0 4px;
+}
+.key-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin: 1px 3px;
+}
+.key-chip .icon-btn {
+  font-size: 11px;
+  padding: 0 3px;
+  opacity: 0.6;
+}
+.key-chip .icon-btn:hover {
+  opacity: 1;
+}
+.keymap-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.recorder {
+  width: 110px;
+  font-size: 11px;
+  border: 1.5px solid var(--accent);
+  text-align: center;
+}
+.keymap-conflict {
+  margin-top: 4px;
+  color: var(--danger);
+}
+.settings-group.keymap {
+  max-width: none;
+}

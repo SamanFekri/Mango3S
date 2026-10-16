@@ -126,8 +126,16 @@ export function ExecuteAIWrite(arg1, arg2) {
   return window['go']['api']['App']['ExecuteAIWrite'](arg1, arg2);
 }
 
+export function ExecuteBulkWrite(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ExecuteBulkWrite'](arg1, arg2, arg3);
+}
+
 export function Explain(arg1, arg2) {
   return window['go']['api']['App']['Explain'](arg1, arg2);
+}
+
+export function ExportTextFile(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ExportTextFile'](arg1, arg2, arg3);
 }
 
 export function FormatDocument(arg1) {
@@ -180,6 +188,10 @@ export function GetSyncOutcome(arg1) {
 
 export function GetTransformReport(arg1) {
   return window['go']['api']['App']['GetTransformReport'](arg1);
+}
+
+export function ImportTextFile(arg1) {
+  return window['go']['api']['App']['ImportTextFile'](arg1);
 }
 
 export function InsertDocuments(arg1, arg2, arg3, arg4) {
@@ -280,6 +292,10 @@ export function PreviewAIContext(arg1) {
 
 export function PreviewAIWrite(arg1) {
   return window['go']['api']['App']['PreviewAIWrite'](arg1);
+}
+
+export function PreviewBulkWrite(arg1) {
+  return window['go']['api']['App']['PreviewBulkWrite'](arg1);
 }
 
 export function PreviewImport(arg1) {

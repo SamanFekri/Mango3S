@@ -89,7 +89,11 @@ export function DuplicateProfile(arg1:string):Promise<config.Profile>;
 
 export function ExecuteAIWrite(arg1:string,arg2:string):Promise<ai.WriteResult>;
 
+export function ExecuteBulkWrite(arg1:api.BulkWriteRequest,arg2:string,arg3:number):Promise<api.BulkResult>;
+
 export function Explain(arg1:string,arg2:explain.Request):Promise<explain.Plan>;
+
+export function ExportTextFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function FormatDocument(arg1:string):Promise<string>;
 
@@ -116,6 +120,8 @@ export function GetSettings():Promise<config.Settings>;
 export function GetSyncOutcome(arg1:string):Promise<syncer.Outcome>;
 
 export function GetTransformReport(arg1:string):Promise<transform.Report>;
+
+export function ImportTextFile(arg1:string):Promise<string>;
 
 export function InsertDocuments(arg1:string,arg2:string,arg3:string,arg4:string):Promise<Array<string>>;
 
@@ -166,6 +172,8 @@ export function PipelineToText(arg1:Array<aggregate.Stage>):Promise<string>;
 export function PreviewAIContext(arg1:ai.Request):Promise<ai.Context>;
 
 export function PreviewAIWrite(arg1:string):Promise<ai.WritePreview>;
+
+export function PreviewBulkWrite(arg1:api.BulkWriteRequest):Promise<api.BulkPreview>;
 
 export function PreviewImport(arg1:transfer.ImportOptions):Promise<transfer.Preview>;
 

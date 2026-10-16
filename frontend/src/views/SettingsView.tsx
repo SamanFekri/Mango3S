@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from '../components/common'
+import { KeymapSettings } from '../components/KeymapSettings'
 import { AISettings, MCPSettings } from '../components/P2Settings'
 import type { Settings } from '../lib/types'
 import { useApp } from '../state/AppContext'
@@ -112,6 +113,7 @@ export function SettingsView() {
         </button>
       </div>
       <MCPSettings />
+      <KeymapSettings />
     </div>
   )
 }

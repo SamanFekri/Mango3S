@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"os"
 	"runtime"
 
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -502,4 +503,38 @@ func (a *App) ChooseFile(kind, title string) (string, error) {
 	// Hidden files are shown so ~/.ssh and dotfiles can be browsed.
 	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
 	return p, a.encode("ChooseFile", err)
+}
+
+// ExportTextFile asks where to save content (e.g. an exported keymap) and
+// writes it. An empty path means the user canceled.
+func (a *App) ExportTextFile(title, defaultName, content string) (string, error) {
+	path, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: title, DefaultFilename: defaultName})
+	if err != nil || path == "" {
+		return "", a.encode("ExportTextFile", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return "", a.encode("ExportTextFile", apperr.Wrap(apperr.CodeInternal, err, "Could not write the file."))
+	}
+	return path, nil
+}
+
+// ImportTextFile asks for a file and returns its content (at most 1 MB).
+// An empty result means the user canceled.
+func (a *App) ImportTextFile(title string) (string, error) {
+	path, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: title})
+	if err != nil || path == "" {
+		return "", a.encode("ImportTextFile", err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return "", a.encode("ImportTextFile", apperr.Wrap(apperr.CodeNotFound, err, "Could not read the file."))
+	}
+	if st.Size() > 1<<20 {
+		return "", a.encode("ImportTextFile", apperr.Invalid("The file is larger than 1 MB; it is not a keymap."))
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", a.encode("ImportTextFile", apperr.Wrap(apperr.CodeInternal, err, "Could not read the file."))
+	}
+	return string(b), nil
 }

@@ -54,9 +54,9 @@ type Settings struct {
 	LogLevel          string `json:"logLevel"` // debug | info | warn | error
 
 	// AI-assisted query generation (off until the user enables it).
-	AIEnabled        bool   `json:"aiEnabled"`
-	AIModel          string `json:"aiModel"`
-	AIAllowSamples   bool   `json:"aiAllowSamples"`   // allow sending masked sample documents
+	AIEnabled      bool   `json:"aiEnabled"`
+	AIModel        string `json:"aiModel"`
+	AIAllowSamples bool   `json:"aiAllowSamples"` // allow sending masked sample documents
 	// AIProvider picks who generates queries: anthropic (API key),
 	// claudeCode / codex (the user's installed CLI and its sign-in) or local
 	// (an Ollama or OpenAI-compatible server, e.g. LM Studio, llama.cpp).
@@ -70,6 +70,11 @@ type Settings struct {
 	LocalAPI         string `json:"localApi"` // ollama | openai
 	LocalModel       string `json:"localModel"`
 	SchedulerEnabled bool   `json:"schedulerEnabled"` // run approved scheduled tasks while the app is open
+
+	// Keymap holds customized shortcuts (Preferences → Keymap) per platform
+	// ("mac" | "other") and action id. An entry replaces that action's
+	// default bindings; an empty list removes all of them.
+	Keymap map[string]map[string][]string `json:"keymap,omitempty"`
 }
 
 // AI providers.
@@ -127,6 +132,7 @@ func (s Settings) Normalize() Settings {
 	if s.AIModel == "" {
 		s.AIModel = d.AIModel
 	}
+	s.Keymap = normalizeKeymap(s.Keymap)
 	switch s.AIProvider {
 	case AIProviderAnthropic, AIProviderClaudeCode, AIProviderCodex, AIProviderLocal:
 	default:
@@ -151,6 +157,42 @@ func (s Settings) Normalize() Settings {
 		s.LogLevel = d.LogLevel
 	}
 	return s
+}
+
+// MaxBindings is how many shortcuts one action can have (as in Studio 3T).
+const MaxBindings = 3
+
+func normalizeKeymap(k map[string]map[string][]string) map[string]map[string][]string {
+	out := map[string]map[string][]string{}
+	for plat, actions := range k {
+		if plat != "mac" && plat != "other" {
+			continue
+		}
+		m := map[string][]string{}
+		for id, binds := range actions {
+			if id == "" || len(id) > 64 {
+				continue
+			}
+			clean := []string{}
+			seen := map[string]bool{}
+			for _, b := range binds {
+				b = strings.TrimSpace(b)
+				if b == "" || len(b) > 40 || seen[b] || len(clean) == MaxBindings {
+					continue
+				}
+				seen[b] = true
+				clean = append(clean, b)
+			}
+			m[id] = clean
+		}
+		if len(m) > 0 {
+			out[plat] = m
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // Profile is a saved connection. URI never contains a password.

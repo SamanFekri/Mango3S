@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import type { ReactNode } from 'react'
 import { backend, onJobUpdate } from '../lib/backend'
 import { errorTitle, toAppError, type AppError } from '../lib/errors'
+import { setKeymapOverrides } from '../lib/shortcuts'
 import { tabsReducer, type TabsAction, type TabsState } from '../lib/tabs'
 import type { AppInfo, Job, Profile, SessionInfo, Settings } from '../lib/types'
 
@@ -206,6 +207,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [promptRequest],
   )
+
+  // The keymap is applied while rendering, before any child renders its
+  // shortcut hints (an effect would run after them).
+  setKeymapOverrides(settings?.keymap)
 
   // Apply theme and editor font size.
   useEffect(() => {

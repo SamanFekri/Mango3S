@@ -10,7 +10,7 @@
 //  - The grid shows the new value only after the server confirms the update,
 //    using the document the server returns.
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react'
 import { bsonType, childrenOf, displayValue, getAt, isContainer, pathKey, tableColumns, type FieldPath } from '../lib/docTree'
 import { parseDoc, renderCell, type JsonObject } from '../lib/ejson'
 import { toAppError } from '../lib/errors'
@@ -22,7 +22,17 @@ export interface FieldApi {
   get(doc: Doc, path: FieldPath): Promise<FieldValue>
   update(
     doc: Doc,
-    u: { path: FieldPath; type: string; text: string; value?: string; expected: string; expectedMissing: boolean; unset?: boolean },
+    u: {
+      path: FieldPath
+      type: string
+      text: string
+      value?: string
+      expected: string
+      expectedMissing: boolean
+      unset?: boolean
+      renameTo?: string
+      append?: boolean
+    },
   ): Promise<FieldResult>
 }
 
@@ -65,6 +75,9 @@ export interface CellEditing {
   cancel: () => void
   canEditCell: (ref: CellRef) => boolean
   removeField: (ref: CellRef) => Promise<void>
+  /** Adds a field to the document/embedded document at container, or a value to the array at container. */
+  addField: (container: CellRef, name: string, type: string, text: string) => Promise<void>
+  renameField: (ref: CellRef, newName: string) => Promise<void>
   undo: () => Promise<boolean>
   redo: () => Promise<boolean>
   notice: string | null
@@ -270,6 +283,41 @@ export function useCellEditing(opts: {
     [canEditCell, api, docs, onDocumentChanged, opts.confirm],
   )
 
+  const addField = useCallback(
+    async (container: CellRef, name: string, type: string, text: string) => {
+      if (!api || readOnly) throw new Error(JSON.stringify({ code: 'READ_ONLY', message: 'This connection is read-only.' }))
+      const doc = docs[container.doc]
+      const target = getAt(parsed[container.doc], container.path)
+      if (Array.isArray(target)) {
+        const arr = await api.get(doc, container.path)
+        const res = await api.update(doc, { path: container.path, type, text, expected: arr.expected, expectedMissing: false, append: true })
+        onDocumentChanged?.(res.document)
+        setUndo((u) => [...u.slice(-49), { docId: doc.id, path: container.path, before: res.previous, after: res.current }])
+        setRedo([])
+        return
+      }
+      const path = [...container.path, name]
+      const res = await api.update(doc, { path, type, text, expected: '', expectedMissing: true })
+      onDocumentChanged?.(res.document)
+      setUndo((u) => [...u.slice(-49), { docId: doc.id, path, before: null, after: res.current }])
+      setRedo([])
+      setSel({ doc: container.doc, path })
+    },
+    [api, readOnly, docs, parsed, onDocumentChanged],
+  )
+
+  const renameField = useCallback(
+    async (ref: CellRef, newName: string) => {
+      if (!api || readOnly) throw new Error(JSON.stringify({ code: 'READ_ONLY', message: 'This connection is read-only.' }))
+      const doc = docs[ref.doc]
+      const field = await api.get(doc, ref.path)
+      const res = await api.update(doc, { path: ref.path, type: field.type, text: '', expected: field.expected, expectedMissing: !field.exists, renameTo: newName })
+      onDocumentChanged?.(res.document)
+      setSel({ doc: ref.doc, path: [...ref.path.slice(0, -1), newName] })
+    },
+    [api, readOnly, docs, onDocumentChanged],
+  )
+
   // A new page invalidates selection; an unsaved edit is guarded by the caller.
   const pageKey = docs.map((d) => d.id).join('|')
   const lastKey = useRef(pageKey)
@@ -280,7 +328,7 @@ export function useCellEditing(opts: {
   }
 
   return {
-    docs, parsed, editable, sel, edit, dirty, select, startEdit, setText, commit, cancel, canEditCell, removeField, undo, redo,
+    docs, parsed, editable, sel, edit, dirty, select, startEdit, setText, commit, cancel, canEditCell, removeField, addField, renameField, undo, redo,
     notice, setNotice, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,
   }
 }
@@ -402,6 +450,7 @@ export function TableView({
   onEditDocument,
   expand,
   gridRef,
+  onContextMenu,
 }: {
   ce: CellEditing
   selected: Set<string>
@@ -409,6 +458,7 @@ export function TableView({
   onEditDocument?: (d: Doc) => void
   expand: boolean
   gridRef: RefObject<HTMLDivElement | null>
+  onContextMenu?: (ref: CellRef, e: ReactMouseEvent) => void
 }) {
   const cols = useMemo(() => tableColumns(ce.parsed, expand), [ce.parsed, expand])
   const cells = useMemo(() => ce.docs.flatMap((_, i) => cols.map((path) => ({ doc: i, path }))), [ce.docs, cols])
@@ -478,6 +528,7 @@ export function TableView({
                       title={isEdit ? undefined : cell.kind === 'object' || cell.kind === 'array' ? JSON.stringify(v, null, 2).slice(0, 2000) : `${cell.text} (${bsonType(v)})`}
                       onClick={() => ce.select(ref)}
                       onDoubleClick={() => ce.startEdit(ref)}
+                      onContextMenu={(e) => onContextMenu?.(ref, e)}
                     >
                       {isEdit ? <CellEditor ce={ce} onMove={move} /> : cell.text}
                     </td>
@@ -510,6 +561,7 @@ export function TreeView({
   onEditDocument,
   gridRef,
   pageOffset,
+  onContextMenu,
 }: {
   ce: CellEditing
   selected: Set<string>
@@ -517,6 +569,7 @@ export function TreeView({
   onEditDocument?: (d: Doc) => void
   gridRef: RefObject<HTMLDivElement | null>
   pageOffset: number
+  onContextMenu?: (ref: CellRef, e: ReactMouseEvent) => void
 }) {
   // Expanded nodes by "doc:path"; the first document starts expanded.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['0:[]']))
@@ -615,6 +668,7 @@ export function TreeView({
                 className={`${isRoot ? 'tree-root' : ''}${isSel ? ' cell-selected' : ''}${isRoot && d.id && selected.has(d.id) ? ' selected' : ''}`}
                 onClick={() => ce.select(r.ref)}
                 onDoubleClick={() => (isRoot ? toggle(r.ref) : ce.startEdit(r.ref))}
+                onContextMenu={(e) => onContextMenu?.(r.ref, e)}
               >
                 <td className="tree-key" style={{ paddingLeft: 8 + r.depth * 16 }}>
                   {r.container ? (

@@ -125,35 +125,53 @@ export const SHORTCUTS: ShortcutDef[] = [
   S('results.table', 'Table view', 'Results', ['Mod+Alt+2'], 'tab', 'studio3t', { allowInInputs: true }),
   S('results.json', 'JSON view', 'Results', ['Mod+Alt+3'], 'tab', 'studio3t', { allowInInputs: true }),
   S('cell.move', 'Select the next / previous cell', 'Results', ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'], 'results', 'default', { handler: 'component' }),
-  S('cell.edit', 'Edit the field (double-click)', 'Results', [], 'results', 'studio3t', {
+  S('cell.edit', 'Edit the field with the mouse', 'Results', [], 'results', 'studio3t', {
     handler: 'component',
-    note: 'Double-click only — a single click selects. In the table and tree views.',
+    note: 'Double-click — a single click only selects. In the table and tree views.',
   }),
   S('cell.save', 'Save the field being edited', 'Results', ['Enter'], 'results', 'default', { handler: 'component' }),
   S('cell.cancel', 'Cancel editing the field', 'Results', ['Escape'], 'results', 'default', { handler: 'component' }),
   S('cell.tab', 'Next / previous editable cell (saves an edit first)', 'Results', ['Tab', 'Shift+Tab'], 'results', 'default', { handler: 'component' }),
-  S('cell.copy', 'Copy value as text', 'Results', ['Mod+C'], 'results', 'studio3t'),
-  S('cell.copyValue', 'Copy value (exact shell syntax)', 'Results', ['Alt+Shift+C'], 'results', 'studio3t'),
-  S('doc.copy', 'Copy document', 'Results', ['Mod+Shift+C'], 'results', 'studio3t'),
   S('docs.selectAll', 'Select all documents on the page', 'Results', ['Mod+A'], 'results', 'default'),
-  S('docs.paste', 'Paste documents (opens Insert with the clipboard)', 'Results', ['Mod+V'], 'results', 'default', { handler: 'component' }),
+
   S('edit.undo', 'Undo the last field edit', 'Results', ['Mod+Z'], 'results', 'default'),
   S('edit.redo', 'Redo the field edit', 'Results', { mac: ['Mod+Shift+Z'], other: ['Ctrl+Y', 'Ctrl+Shift+Z'] }, 'results', 'default'),
 
-  // Documents
+  // Documents (Studio 3T: Collection Tab › Documents). On macOS Studio 3T's
+  // "Fn+Del" is the forward-delete key, which browsers report as Delete.
+  S('doc.copy', 'Copy document', 'Documents', ['Mod+Shift+C'], 'results', 'studio3t'),
+  S('doc.view', 'View document (JSON)', 'Documents', ['F3'], 'results', 'studio3t'),
   S('doc.insert', 'Insert document', 'Documents', ['Mod+D'], 'tab', 'studio3t', { note: 'Not while typing in an editor (Mod+D selects the next match there).' }),
-  S('doc.editJson', 'Edit the whole document as JSON', 'Documents', ['Mod+J'], 'results', 'studio3t'),
-  S('doc.delete', 'Delete the selected documents (asks first)', 'Documents', { mac: ['Shift+Delete', 'Shift+Backspace'], other: ['Shift+Delete'] }, 'results', 'studio3t'),
-  S('field.remove', 'Remove the selected field (asks first)', 'Documents', { mac: ['Delete', 'Backspace'], other: ['Delete'] }, 'results', 'studio3t'),
+  S('doc.editJson', 'Edit document (JSON)', 'Documents', ['Mod+J'], 'results', 'studio3t'),
+  S('doc.delete', 'Remove document (asks first)', 'Documents', ['Shift+Delete'], 'results', 'studio3t', { note: 'macOS: Shift+Fn+Delete.' }),
+  S('doc.refresh', 'Refresh document', 'Documents', ['Mod+Shift+R'], 'results', 'studio3t'),
+  S('doc.followRef', 'Follow reference', 'Documents', ['Shift+F7'], 'results', 'studio3t', {
+    note: 'Opens the document a DBRef points to; for other values, asks which collection to look in.',
+  }),
+  S('docs.paste', 'Paste documents', 'Documents', ['Mod+V'], 'results', 'default', {
+    handler: 'component',
+    note: 'Opens Insert document with the clipboard’s JSON.',
+  }),
+
+  // Fields (Studio 3T: Collection Tab › Fields)
+  S('cell.copy', 'Copy value as text', 'Fields', ['Mod+C'], 'results', 'studio3t'),
+  S('cell.copyValue', 'Copy value (exact shell syntax)', 'Fields', ['Alt+Shift+C'], 'results', 'studio3t'),
+  S('field.add', 'Add field / value', 'Fields', ['Mod+K'], 'results', 'studio3t', { note: 'Adds a field to the selected document, or a value to the selected array.' }),
+  S('field.edit', 'Edit field', 'Fields', ['Mod+E'], 'results', 'studio3t', { note: 'Keyboard alternative to double-clicking the value.' }),
+  S('field.rename', 'Rename field', 'Fields', ['Shift+F2'], 'results', 'studio3t'),
+  S('field.remove', 'Remove field (asks first)', 'Fields', ['Delete'], 'results', 'studio3t', { note: 'macOS: Fn+Delete.' }),
+  S('dialog.update', 'Update dialog (updateMany)', 'Fields', ['Mod+U'], 'results', 'studio3t'),
+  S('dialog.remove', 'Remove dialog (deleteMany)', 'Fields', ['F8'], 'results', 'studio3t'),
 
   // Explorer
   S('explorer.move', 'Move between items', 'Explorer', ['ArrowUp', 'ArrowDown', 'Home', 'End'], 'explorer', 'default', { handler: 'component' }),
   S('explorer.expand', 'Expand / collapse', 'Explorer', ['ArrowRight', 'ArrowLeft'], 'explorer', 'studio3t', { handler: 'component' }),
   S('explorer.open', 'Open the collection / connect', 'Explorer', ['Enter'], 'explorer', 'studio3t', { handler: 'component' }),
-  S('explorer.drop', 'Drop the selected collection or database (asks first)', 'Explorer', { mac: ['Delete', 'Backspace'], other: ['Delete'] }, 'explorer', 'studio3t', {
+  S('explorer.drop', 'Drop the selected collection or database (asks first)', 'Explorer', ['Delete'], 'explorer', 'studio3t', {
     handler: 'component',
+    note: 'macOS: Fn+Delete.',
   }),
-  S('explorer.refreshAll', 'Refresh all connections', 'Explorer', ['Mod+Shift+R'], 'global', 'studio3t', { allowInInputs: true }),
+  S('explorer.refreshAll', 'Refresh all connections', 'Explorer', ['Mod+Shift+R'], 'explorer', 'studio3t'),
   S('explorer.filter', 'Filter collections', 'Explorer', ['Mod+Shift+F'], 'global', 'default', { allowInInputs: true }),
 
   // Focus
@@ -179,8 +197,88 @@ export function detectPlatform(): Platform {
   return /mac|iphone|ipad/i.test(p) ? 'mac' : 'other'
 }
 
-export function keysFor(def: ShortcutDef, platform: Platform): string[] {
+/** Customized bindings (Preferences → Keymap): platform → action id → bindings. */
+export type KeymapOverrides = Partial<Record<Platform, Record<string, string[]>>>
+let overrides: KeymapOverrides = {}
+
+/** Applies the user's keymap; called when settings load or change. */
+export function setKeymapOverrides(k: KeymapOverrides | undefined | null) {
+  overrides = k ?? {}
+}
+
+export function getKeymapOverrides(): KeymapOverrides {
+  return overrides
+}
+
+/** The documented default bindings of an action. */
+export function defaultKeysFor(def: ShortcutDef, platform: Platform): string[] {
   return platform === 'mac' ? def.mac : def.other
+}
+
+/** The bindings in effect: customized ones if any, else the defaults. */
+export function keysFor(def: ShortcutDef, platform: Platform): string[] {
+  return overrides[platform]?.[def.id] ?? defaultKeysFor(def, platform)
+}
+
+export function isCustomized(def: ShortcutDef, platform: Platform): boolean {
+  return overrides[platform]?.[def.id] !== undefined
+}
+
+/** Scopes whose shortcuts can fire for the same key press compete for a binding. */
+export function scopeBucket(scope: ShortcutScope): string {
+  return scope === 'global' || scope === 'tab' ? 'app' : scope
+}
+
+export interface Conflict {
+  binding: string
+  ids: string[]
+}
+
+/** Bindings used by more than one action that can fire in the same place. */
+export function findConflicts(platform: Platform): Conflict[] {
+  const by = new Map<string, string[]>()
+  for (const s of SHORTCUTS) {
+    for (const k of keysFor(s, platform)) {
+      const key = `${scopeBucket(s.scope)}|${normalizeBinding(k, platform)}`
+      by.set(key, [...(by.get(key) ?? []), s.id])
+    }
+  }
+  return [...by.entries()].filter(([, ids]) => ids.length > 1).map(([k, ids]) => ({ binding: k.split('|')[1], ids }))
+}
+
+/** Actions other than id whose bindings would clash with binding in id's scope. */
+export function conflictsWith(id: string, binding: string, platform: Platform): string[] {
+  const def = SHORTCUT_BY_ID[id]
+  const n = normalizeBinding(binding, platform)
+  return SHORTCUTS.filter(
+    (s) => s.id !== id && scopeBucket(s.scope) === scopeBucket(def.scope) && keysFor(s, platform).some((k) => normalizeBinding(k, platform) === n),
+  ).map((s) => s.id)
+}
+
+/**
+ * Turns a key press into a binding for the keymap editor, using Mod for the
+ * platform's command key (⌘ on macOS, Ctrl elsewhere). Returns null for a
+ * lone modifier.
+ */
+export function bindingFromEvent(e: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>, platform: Platform): string | null {
+  if (['Meta', 'Control', 'Alt', 'Shift', 'OS', 'AltGraph'].includes(e.key)) return null
+  const parts: string[] = []
+  const mod = platform === 'mac' ? e.metaKey : e.ctrlKey
+  if (mod) parts.push('Mod')
+  if (platform === 'mac' && e.ctrlKey) parts.push('Ctrl')
+  if (platform !== 'mac' && e.metaKey) parts.push('Meta')
+  if (e.altKey) parts.push('Alt')
+  if (e.shiftKey) parts.push('Shift')
+  parts.push(eventKey(e))
+  return parts.join('+')
+}
+
+/** Plain typing keys can't be shortcuts that fire while editing text. */
+export function isTypingKey(binding: string): boolean {
+  const parts = binding.split('+')
+  const key = parts[parts.length - 1]
+  const mods = parts.slice(0, -1).filter((m) => m !== 'Shift')
+  return mods.length === 0 && (key.length === 1 || ['Space', 'Enter', 'Tab', 'Backspace', 'Delete', 'Escape'].includes(key))
 }
 
 const CODE_KEYS: Record<string, string> = {

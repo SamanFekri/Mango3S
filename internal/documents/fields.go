@@ -50,6 +50,12 @@ type FieldUpdate struct {
 	Expected        string `json:"expected"`
 	ExpectedMissing bool   `json:"expectedMissing"`
 	Unset           bool   `json:"unset"`
+	// RenameTo renames the field (Studio 3T "Rename field") with $rename;
+	// fields inside arrays can't be renamed this way.
+	RenameTo string `json:"renameTo,omitempty"`
+	// Append adds the value to the end of the array at Path ($push);
+	// Expected is the array as the user saw it.
+	Append bool `json:"append,omitempty"`
 }
 
 // FieldResult is the confirmed outcome of a field update.
@@ -231,6 +237,8 @@ func ParseTyped(typ, text string) (any, error) {
 			return nil, apperr.Invalid("%q is not a date. Use ISO 8601, e.g. 2024-05-01T12:00:00Z.", trimmed)
 		}
 		return bson.NewDateTimeFromTime(t), nil
+	case "null":
+		return nil, nil
 	case "objectId":
 		id, err := bson.ObjectIDFromHex(trimmed)
 		if err != nil {
@@ -326,8 +334,11 @@ func (s *service) UpdateField(ctx context.Context, u FieldUpdate) (FieldResult, 
 	if err != nil {
 		return FieldResult{}, err
 	}
+	if u.RenameTo != "" && (u.Unset || u.Append) {
+		return FieldResult{}, apperr.Invalid("Rename can't be combined with other changes.")
+	}
 	var newVal any
-	if !u.Unset {
+	if !u.Unset && u.RenameTo == "" {
 		if u.Value != "" {
 			if newVal, err = mql.ParseValue(u.Value); err != nil {
 				return FieldResult{}, apperr.Wrap(apperr.CodeInvalidInput, err, "Invalid value.")
@@ -363,12 +374,24 @@ func (s *service) UpdateField(ctx context.Context, u FieldUpdate) (FieldResult, 
 
 	key := strings.Join(u.Path, ".")
 	var update bson.D
-	if u.Unset {
+	switch {
+	case u.RenameTo != "":
+		to, err := renameTarget(current, u.Path, u.RenameTo, existed)
+		if err != nil {
+			return FieldResult{}, err
+		}
+		update = bson.D{{Key: "$rename", Value: bson.D{{Key: key, Value: to}}}}
+	case u.Append:
+		if _, ok := old.(bson.A); !ok || !existed {
+			return FieldResult{}, apperr.Invalid("%s is not an array; use Add field to add a field to a document.", key)
+		}
+		update = bson.D{{Key: "$push", Value: bson.D{{Key: key, Value: newVal}}}}
+	case u.Unset:
 		if !existed {
 			return FieldResult{}, apperr.Invalid("This field doesn't exist.")
 		}
 		update = bson.D{{Key: "$unset", Value: bson.D{{Key: key, Value: ""}}}}
-	} else {
+	default:
 		update = bson.D{{Key: "$set", Value: bson.D{{Key: key, Value: newVal}}}}
 	}
 	// Match the exact document just read: a write that raced in between
@@ -396,6 +419,37 @@ func (s *service) UpdateField(ctx context.Context, u FieldUpdate) (FieldResult, 
 		out.Current = mql.Compact(v)
 	}
 	return out, nil
+}
+
+// renameTarget validates a rename and returns the full new path. $rename
+// works only on document fields, never on (or inside) array elements, and
+// must not overwrite an existing field.
+func renameTarget(doc bson.D, path []string, newName string, existed bool) (string, error) {
+	if !existed {
+		return "", apperr.Invalid("This field doesn't exist.")
+	}
+	if err := ValidatePath([]string{newName}); err != nil {
+		return "", err
+	}
+	var cur any = doc
+	for _, seg := range path[:len(path)-1] {
+		if _, isArr := cur.(bson.A); isArr {
+			return "", apperr.Invalid("Fields inside arrays can't be renamed with $rename. Use Edit document (JSON).")
+		}
+		next, _ := Lookup(cur.(bson.D), []string{seg})
+		cur = next
+	}
+	if _, isArr := cur.(bson.A); isArr {
+		return "", apperr.Invalid("Array elements have no name to rename.")
+	}
+	target := append(append([]string{}, path[:len(path)-1]...), newName)
+	if newName == path[len(path)-1] {
+		return "", apperr.Invalid("The new name is the same as the old one.")
+	}
+	if _, taken := Lookup(doc, target); taken {
+		return "", apperr.New(apperr.CodeConflict, "A field named %q already exists here.", newName)
+	}
+	return strings.Join(target, "."), nil
 }
 
 func truncate(s string, n int) string {

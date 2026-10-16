@@ -1,13 +1,14 @@
 import { memo, useMemo, useRef, useState } from 'react'
-import type { RefObject } from 'react'
-import { copyText, getAt } from '../lib/docTree'
+import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
+import { bsonType, copyText, getAt, isContainer, isPlainObject } from '../lib/docTree'
 import type { AppError } from '../lib/errors'
-import { isTextTarget, shortcutHint } from '../lib/shortcuts'
+import { SHORTCUT_BY_ID, isTextTarget, shortcutHint } from '../lib/shortcuts'
 import { useShortcut } from '../state/shortcuts'
 import { formatCount, formatDuration, pageRange } from '../lib/format'
 import type { Doc, Page } from '../lib/types'
 import { ErrorBanner, Segmented, Spinner } from './common'
-import { ResultsNotice, TableView, TreeView, useCellEditing, type FieldApi } from './DocViews'
+import { AddFieldDialog, ContextMenu, DocumentViewer, RenameFieldDialog, type MenuEntry } from './DocDialogs'
+import { ResultsNotice, TableView, TreeView, useCellEditing, type CellRef, type FieldApi } from './DocViews'
 import { highlight } from './highlight'
 
 export type ViewMode = 'tree' | 'json' | 'table'
@@ -44,6 +45,12 @@ export interface ResultsViewProps {
   onInsert?: (text?: string) => void
   /** Element the results panel exposes for focus shortcuts. */
   panelRef?: RefObject<HTMLElement | null>
+  /** Refresh document: re-read it from the server. */
+  onRefreshDocument?: (doc: Doc) => Promise<void>
+  /** Follow reference: a DBRef's target, or a value to look up by _id in a collection the user picks. */
+  onFollowReference?: (ref: { coll?: string; db?: string; idJSON: string }) => void
+  /** Update dialog / Remove dialog for the selected documents (or the query). */
+  onBulkDialog?: (kind: 'update' | 'remove', selectedIds: string[]) => void
 }
 
 const PAGE_SIZES = [10, 20, 50, 100, 200, 500, 1000]
@@ -103,44 +110,131 @@ export function ResultsView(props: ResultsViewProps) {
     action()
   }
 
-  // ---- results shortcuts (focus inside the results panel) -----------------
+  // ---- document and field commands -----------------------------------------
+  // Each command runs from its shortcut (focus in the results panel), from
+  // the right-click menu (which shows that shortcut) and from buttons, so
+  // all three do exactly the same thing.
   const selDoc = ce.sel ? docs[ce.sel.doc] : undefined
   const selValue = ce.sel ? getAt(ce.parsed[ce.sel.doc], ce.sel.path) : undefined
-  useShortcut('cell.copy', () => (ce.sel && ce.sel.path.length ? (copy(copyText(selValue)), true) : false), { within: sectionRef })
-  useShortcut(
-    'cell.copyValue',
-    () => {
-      if (!ce.sel || !props.fieldApi || !selDoc?.id || !ce.sel.path.length) return false
-      props.fieldApi.get(selDoc, ce.sel.path).then((f) => copy(f.expected), () => copy(copyText(selValue)))
+  const fieldSel = !!ce.sel && ce.sel.path.length > 0
+  const targetDoc = selDoc ?? (selectedDocs.length === 1 ? selectedDocs[0] : undefined)
+  const writable = !!props.fieldApi && !readOnly
+  const [dialog, setDialog] = useState<
+    | { kind: 'view'; doc: Doc }
+    | { kind: 'add'; container: CellRef; isArray: boolean; label: string }
+    | { kind: 'rename'; ref: CellRef }
+    | null
+  >(null)
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+
+  const parentIsArray = (ref: CellRef) => Array.isArray(getAt(ce.parsed[ref.doc], ref.path.slice(0, -1)))
+  const reference = (): { coll?: string; db?: string; idJSON: string } | null => {
+    if (!fieldSel) return null
+    const v = selValue
+    if (isPlainObject(v) && typeof v.$ref === 'string' && v.$id !== undefined) {
+      return { coll: v.$ref, db: typeof v.$db === 'string' ? v.$db : undefined, idJSON: JSON.stringify(v.$id) }
+    }
+    // A manual reference: an ObjectId pointing at another collection's _id.
+    if (bsonType(v) === 'objectId') return { idJSON: JSON.stringify(v) }
+    return null
+  }
+  const addTarget = (): { container: CellRef; isArray: boolean; label: string } | null => {
+    if (!targetDoc?.id) return null
+    const docIndex = docs.indexOf(targetDoc)
+    let path = ce.sel && ce.sel.doc === docIndex ? ce.sel.path : []
+    if (path.length && !isContainer(getAt(ce.parsed[docIndex], path))) path = path.slice(0, -1)
+    const isArray = Array.isArray(getAt(ce.parsed[docIndex], path))
+    return { container: { doc: docIndex, path }, isArray, label: path.join('.') }
+  }
+  const docsToDelete = selectedDocs.length ? selectedDocs : selDoc?.id ? [selDoc] : []
+
+  const commands: Record<string, { run: () => void; enabled: boolean }> = {
+    'doc.view': { enabled: !!targetDoc, run: () => targetDoc && setDialog({ kind: 'view', doc: targetDoc }) },
+    'doc.editJson': { enabled: editable && !!targetDoc?.id, run: () => targetDoc && void leaveEdit(() => onEdit!(targetDoc)) },
+    'doc.copy': { enabled: !!targetDoc, run: () => targetDoc && copy(targetDoc.text) },
+    'doc.refresh': { enabled: !!props.onRefreshDocument && !!targetDoc?.id, run: () => targetDoc && void leaveEdit(() => void props.onRefreshDocument!(targetDoc)) },
+    'doc.followRef': {
+      enabled: !!props.onFollowReference && !!reference(),
+      run: () => {
+        const ref = reference()
+        if (ref) props.onFollowReference!(ref)
+      },
     },
-    { within: sectionRef },
-  )
-  useShortcut('doc.copy', () => {
-    const d = selDoc ?? selectedDocs[0]
-    if (!d) return false
-    copy(d.text)
-  }, { within: sectionRef })
+    'cell.copy': { enabled: fieldSel, run: () => copy(copyText(selValue)) },
+    'cell.copyValue': {
+      enabled: fieldSel,
+      run: () => {
+        if (props.fieldApi && selDoc?.id && ce.sel) props.fieldApi.get(selDoc, ce.sel.path).then((f) => copy(f.expected), () => copy(copyText(selValue)))
+        else copy(copyText(selValue))
+      },
+    },
+    'field.edit': { enabled: fieldSel && writable && ce.canEditCell(ce.sel!), run: () => ce.sel && ce.startEdit(ce.sel) },
+    'field.add': {
+      enabled: writable && !!addTarget(),
+      run: () => {
+        const t = addTarget()
+        if (t) setDialog({ kind: 'add', ...t })
+      },
+    },
+    'field.rename': {
+      enabled: fieldSel && writable && ce.canEditCell(ce.sel!) && !parentIsArray(ce.sel!),
+      run: () => ce.sel && setDialog({ kind: 'rename', ref: ce.sel }),
+    },
+    'field.remove': { enabled: fieldSel && writable && ce.canEditCell(ce.sel!), run: () => ce.sel && void ce.removeField(ce.sel) },
+    'doc.insert': { enabled: !!props.onInsert && !readOnly, run: () => props.onInsert?.() },
+    'docs.paste': {
+      enabled: !!props.onInsert && !readOnly,
+      run: () => {
+        const ask = navigator.clipboard?.readText?.()
+        if (!ask) return ce.setNotice(`Press ${shortcutHint('docs.paste')} in the results to paste documents.`)
+        ask.then(
+          (t) => (t.trim() ? props.onInsert?.(t) : ce.setNotice('The clipboard is empty.')),
+          () => ce.setNotice(`Clipboard access was denied; press ${shortcutHint('docs.paste')} in the results instead.`),
+        )
+      },
+    },
+    'dialog.update': { enabled: !!props.onBulkDialog && !readOnly, run: () => props.onBulkDialog?.('update', docsToDelete.map((d) => d.id)) },
+    'dialog.remove': { enabled: !!props.onBulkDialog && !readOnly, run: () => props.onBulkDialog?.('remove', docsToDelete.map((d) => d.id)) },
+    'doc.delete': { enabled: !!onDelete && !readOnly && docsToDelete.length > 0, run: () => onDelete?.(docsToDelete, { keyboard: true }) },
+  }
+  const cmd = (id: string) => () => (commands[id].enabled ? commands[id].run() : false)
+  useShortcut('doc.view', cmd('doc.view'), { within: sectionRef })
+  useShortcut('doc.editJson', cmd('doc.editJson'), { within: sectionRef })
+  useShortcut('doc.copy', cmd('doc.copy'), { within: sectionRef })
+  useShortcut('doc.refresh', cmd('doc.refresh'), { within: sectionRef })
+  useShortcut('doc.followRef', cmd('doc.followRef'), { within: sectionRef })
+  useShortcut('doc.delete', cmd('doc.delete'), { within: sectionRef })
+  useShortcut('cell.copy', cmd('cell.copy'), { within: sectionRef })
+  useShortcut('cell.copyValue', cmd('cell.copyValue'), { within: sectionRef })
+  useShortcut('field.edit', cmd('field.edit'), { within: sectionRef })
+  useShortcut('field.add', cmd('field.add'), { within: sectionRef })
+  useShortcut('field.rename', cmd('field.rename'), { within: sectionRef })
+  useShortcut('field.remove', cmd('field.remove'), { within: sectionRef })
+  useShortcut('dialog.update', cmd('dialog.update'), { within: sectionRef })
+  useShortcut('dialog.remove', cmd('dialog.remove'), { within: sectionRef })
   useShortcut('docs.selectAll', () => {
     if (!onDelete || readOnly) return false
     setSelected(new Set(docs.map((d) => d.id).filter(Boolean)))
   }, { within: sectionRef })
   useShortcut('edit.undo', () => (ce.canUndo ? void ce.undo() : false), { within: sectionRef })
   useShortcut('edit.redo', () => (ce.canRedo ? void ce.redo() : false), { within: sectionRef })
-  useShortcut('doc.editJson', () => {
-    const d = selDoc ?? selectedDocs[0]
-    if (!d || !editable) return false
-    void leaveEdit(() => onEdit!(d))
-  }, { within: sectionRef })
-  useShortcut('doc.delete', () => {
-    if (!onDelete || readOnly) return false
-    const targets = selectedDocs.length ? selectedDocs : selDoc?.id ? [selDoc] : []
-    if (!targets.length) return false
-    onDelete(targets, { keyboard: true }) // the parent confirms
-  }, { within: sectionRef })
-  useShortcut('field.remove', () => {
-    if (!ce.sel || !ce.canEditCell(ce.sel)) return false
-    void ce.removeField(ce.sel)
-  }, { within: sectionRef })
+
+  const menuItems = (): (MenuEntry | null)[] => {
+    const e = (id: string, danger = false): MenuEntry => ({ id, label: SHORTCUT_BY_ID[id].label, ...commands[id], danger })
+    const fieldItems = fieldSel ? [e('cell.copy'), e('cell.copyValue'), e('field.edit'), e('field.add'), e('field.rename'), e('field.remove', true), null] : [e('field.add'), null]
+    return [
+      e('doc.view'), e('doc.editJson'), e('doc.copy'), e('doc.refresh'), ...(reference() ? [e('doc.followRef')] : []), null,
+      ...fieldItems,
+      e('doc.insert'), e('docs.paste'), null,
+      e('dialog.update'), e('dialog.remove'), e('doc.delete', true),
+    ]
+  }
+  const openMenu = (ref: CellRef, ev: ReactMouseEvent) => {
+    ev.preventDefault()
+    ce.select(ref)
+    setMenu({ x: ev.clientX, y: ev.clientY })
+  }
+
   useShortcut('focus.results', () => {
     ;(gridRef.current ?? sectionRef.current)?.focus()
   })
@@ -254,6 +348,9 @@ export function ResultsView(props: ResultsViewProps) {
             {docs.map((d, i) => (
               <DocCard
                 key={d.id || `i${i}`}
+                focused={ce.sel?.doc === i}
+                onFocusDoc={() => ce.select({ doc: i, path: [] })}
+                onContextMenu={(ev) => openMenu({ doc: i, path: [] }, ev)}
                 doc={d}
                 index={page!.page * page!.pageSize + i + 1}
                 selected={!!d.id && selected.has(d.id)}
@@ -272,6 +369,7 @@ export function ResultsView(props: ResultsViewProps) {
             onEditDocument={editable ? (d) => void leaveEdit(() => onEdit!(d)) : undefined}
             expand={expand}
             gridRef={gridRef}
+            onContextMenu={openMenu}
           />
         )}
         {view === 'tree' && (
@@ -282,9 +380,30 @@ export function ResultsView(props: ResultsViewProps) {
             onEditDocument={editable ? (d) => void leaveEdit(() => onEdit!(d)) : undefined}
             gridRef={gridRef}
             pageOffset={page ? page.page * page.pageSize : 0}
+            onContextMenu={openMenu}
           />
         )}
       </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems()} onClose={() => setMenu(null)} />}
+      {dialog?.kind === 'view' && (
+        <DocumentViewer
+          title={`Document ${dialog.doc.id || ''}`}
+          text={dialog.doc.text}
+          onClose={() => setDialog(null)}
+          onEdit={editable && dialog.doc.id ? () => onEdit!(dialog.doc) : undefined}
+        />
+      )}
+      {dialog?.kind === 'add' && (
+        <AddFieldDialog
+          target={dialog.label}
+          isArray={dialog.isArray}
+          onClose={() => setDialog(null)}
+          onSave={(name, type, text) => ce.addField(dialog.container, name, type, text)}
+        />
+      )}
+      {dialog?.kind === 'rename' && (
+        <RenameFieldDialog path={dialog.ref.path} onClose={() => setDialog(null)} onSave={(name) => ce.renameField(dialog.ref, name)} />
+      )}
     </section>
   )
 }
@@ -293,6 +412,9 @@ const DocCard = memo(function DocCard({
   doc,
   index,
   selected,
+  focused,
+  onFocusDoc,
+  onContextMenu,
   onSelect,
   onEdit,
   onDelete,
@@ -300,6 +422,9 @@ const DocCard = memo(function DocCard({
   doc: Doc
   index: number
   selected: boolean
+  focused: boolean
+  onFocusDoc: () => void
+  onContextMenu: (e: ReactMouseEvent) => void
   onSelect?: () => void
   onEdit?: () => void
   onDelete?: () => void
@@ -309,7 +434,13 @@ const DocCard = memo(function DocCard({
   const body = useMemo(() => highlight(collapsed ? doc.text.split('\n').slice(0, 12).join('\n') + '\n  …' : doc.text), [doc.text, collapsed])
   const copy = () => navigator.clipboard?.writeText(doc.text)
   return (
-    <article className={selected ? 'doc-card selected' : 'doc-card'} onDoubleClick={onEdit}>
+    <article
+      className={`doc-card${selected ? ' selected' : ''}${focused ? ' focused' : ''}`}
+      onClick={onFocusDoc}
+      onDoubleClick={onEdit}
+      onContextMenu={onContextMenu}
+      aria-current={focused || undefined}
+    >
       <header>
         {onSelect && <input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select document ${index}`} />}
         <span className="doc-index">{index}</span>

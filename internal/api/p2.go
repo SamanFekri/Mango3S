@@ -18,8 +18,8 @@ import (
 	"mango3s/internal/ai"
 	"mango3s/internal/apperr"
 	"mango3s/internal/backup"
-	"mango3s/internal/config"
 	"mango3s/internal/compare"
+	"mango3s/internal/config"
 	"mango3s/internal/jobs"
 	"mango3s/internal/masking"
 	"mango3s/internal/mcpserver"
@@ -758,7 +758,10 @@ func (a *App) DetectAIProviders() AIProviders {
 	var out AIProviders
 	var wg sync.WaitGroup
 	wg.Add(3)
-	go func() { defer wg.Done(); out.ClaudeCode = detectCLI(ctx, config.AIProviderClaudeCode, st.ClaudeCodePath, true) }()
+	go func() {
+		defer wg.Done()
+		out.ClaudeCode = detectCLI(ctx, config.AIProviderClaudeCode, st.ClaudeCodePath, true)
+	}()
 	go func() { defer wg.Done(); out.Codex = detectCLI(ctx, config.AIProviderCodex, st.CodexPath, true) }()
 	go func() { defer wg.Done(); out.LocalServers = ai.DetectLocalServers(ctx) }()
 	wg.Wait()

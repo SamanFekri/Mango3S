@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -117,7 +118,7 @@ func TestStoreSettingsAndCorruption(t *testing.T) {
 	dir := t.TempDir()
 	st := NewStore(dir)
 	s, err := st.LoadSettings()
-	if err != nil || s != DefaultSettings() {
+	if err != nil || !reflect.DeepEqual(s, DefaultSettings()) {
 		t.Fatalf("defaults: %+v %v", s, err)
 	}
 	s.PageSize = 100
@@ -133,5 +134,24 @@ func TestStoreSettingsAndCorruption(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "connections.json"), []byte("{not json"), 0o600)
 	if _, err := st.ListProfiles(); err == nil || !strings.Contains(err.Error(), "corrupt") {
 		t.Fatalf("expected corruption error, got %v", err)
+	}
+}
+
+func TestKeymapNormalize(t *testing.T) {
+	s := Settings{Keymap: map[string]map[string][]string{
+		"mac":   {"doc.copy": {"Mod+Shift+C", " Mod+Shift+C ", "F1", "F2", "F3"}, "tab.close": {}},
+		"linux": {"x": {"F1"}},
+	}}.Normalize()
+	if got := s.Keymap["mac"]["doc.copy"]; len(got) != MaxBindings || got[0] != "Mod+Shift+C" || got[1] != "F1" {
+		t.Fatalf("bindings: %v", got)
+	}
+	if b, ok := s.Keymap["mac"]["tab.close"]; !ok || len(b) != 0 {
+		t.Fatal("an empty list (all shortcuts removed) must be kept")
+	}
+	if _, ok := s.Keymap["linux"]; ok {
+		t.Fatal("unknown platforms are dropped")
+	}
+	if (Settings{}).Normalize().Keymap != nil {
+		t.Fatal("no keymap by default")
 	}
 }

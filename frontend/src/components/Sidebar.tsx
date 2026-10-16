@@ -6,7 +6,7 @@ import type { CollectionInfo, DatabaseInfo, SessionInfo } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { shortcutHint } from '../lib/shortcuts'
 import { recentProfiles } from '../lib/tabs'
-import { getShortcutPlatform, useShortcut } from '../state/shortcuts'
+import { useShortcut } from '../state/shortcuts'
 import { Modal, Spinner } from './common'
 import { CollectionIcon, DatabaseIcon, FolderIcon, ServerIcon } from './icons'
 import { ExportWizard } from './ExportWizard'
@@ -17,6 +17,8 @@ interface MenuItem {
   action: () => void
   danger?: boolean
   disabled?: boolean
+  /** Shortcut id whose binding is shown next to the item (same command). */
+  shortcut?: string
 }
 interface MenuState {
   x: number
@@ -176,30 +178,30 @@ export function Sidebar() {
   // ---- menus -----------------------------------------------------------------
   const connMenu = (s: SessionInfo): MenuItem[] => [
     { label: 'Open workspace', action: () => dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: s.id, connName: s.name } }) },
-    { label: 'Refresh', action: () => loadDbs(s.id) },
-    { label: 'Open IntelliShell', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name } }) },
-    { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }) },
+    { label: 'Refresh', action: () => loadDbs(s.id), shortcut: 'view.refresh' },
+    { label: 'Open IntelliShell', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name } }), shortcut: 'tab.shell' },
+    { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }), shortcut: 'tab.sql' },
     { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
     { label: 'Migrate from SQL…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: '' } }), disabled: s.readOnly },
     { label: 'Compare / sync…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name } }) },
     { label: 'Edit connection…', action: () => openConnectionManager(true, s.id) },
-    { label: 'Disconnect', action: () => disconnect(s.id) },
+    { label: 'Disconnect', action: () => disconnect(s.id), shortcut: 'conn.disconnect' },
   ]
   const dbMenu = (s: SessionInfo, db: string): MenuItem[] => [
-    { label: 'Refresh', action: () => loadColls(s.id, db) },
+    { label: 'Refresh', action: () => loadColls(s.id, db), shortcut: 'view.refresh' },
     { label: 'Create collection…', action: () => setCreateFor({ conn: s, db }), disabled: s.readOnly },
-    { label: 'Open shell here', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db } }) },
-    { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db } }) },
+    { label: 'Open shell here', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db } }), shortcut: 'tab.shell' },
+    { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db } }), shortcut: 'tab.sql' },
     { label: 'Import into new collection…', action: () => setTransfer({ kind: 'import', conn: s, db }), disabled: s.readOnly },
     { label: 'Compare database…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name, db } }) },
     { label: 'Migrate from SQL into…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db } }), disabled: s.readOnly },
-    { label: 'Drop database…', action: () => dropDb(s, db), danger: true, disabled: s.readOnly },
+    { label: 'Drop database…', action: () => dropDb(s, db), danger: true, disabled: s.readOnly, shortcut: 'explorer.drop' },
   ]
   const collMenu = (s: SessionInfo, db: string, coll: CollectionInfo): MenuItem[] => {
     const t = { connId: s.id, connName: s.name, db, coll: coll.name }
     const view = coll.type === 'view'
     return [
-      { label: 'Open', action: () => openCollection(s, db, coll.name) },
+      { label: 'Open', action: () => openCollection(s, db, coll.name), shortcut: 'explorer.open' },
       { label: 'Open in new tab', action: () => dispatchTabs({ type: 'open', tab: { kind: 'collection', ...t } }) },
       { label: 'Aggregation editor', action: () => dispatchTabs({ type: 'open', tab: { kind: 'aggregation', ...t } }) },
       { label: 'Schema', action: () => dispatchTabs({ type: 'open', tab: { kind: 'schema', ...t }, reuse: true }) },
@@ -208,7 +210,7 @@ export function Sidebar() {
       { label: 'Reschema…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'reschema', ...t } }), disabled: view },
       { label: 'Mask data…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'mask', ...t } }), disabled: view },
       { label: 'Import…', action: () => setTransfer({ kind: 'import', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
-      { label: 'Drop collection…', action: () => dropColl(s, db, coll.name), danger: true, disabled: s.readOnly },
+      { label: 'Drop collection…', action: () => dropColl(s, db, coll.name), danger: true, disabled: s.readOnly, shortcut: 'explorer.drop' },
     ]
   }
 
@@ -352,10 +354,8 @@ export function Sidebar() {
         e.preventDefault()
         activate(cur)
         break
-      case 'Delete':
-      case 'Backspace':
+      case 'Delete': // Studio 3T: Del (macOS: Fn+Delete)
         if (!cur || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
-        if (e.key === 'Backspace' && getShortcutPlatform() !== 'mac') return
         e.preventDefault()
         if (cur.kind === 'coll' && !cur.s.readOnly) void dropColl(cur.s, cur.db, cur.coll.name)
         else if (cur.kind === 'db' && !cur.s.readOnly) void dropDb(cur.s, cur.db.name)
@@ -373,13 +373,31 @@ export function Sidebar() {
     },
     { within: navRef },
   )
-  useShortcut('explorer.refreshAll', () => {
-    for (const s of sessions) loadDbs(s.id)
-    for (const k of Object.keys(colls)) {
-      const [id, ...rest] = k.split('/')
-      loadColls(id, rest.join('/'))
-    }
-  })
+  useShortcut(
+    'explorer.refreshAll',
+    () => {
+      for (const s of sessions) loadDbs(s.id)
+      for (const k of Object.keys(colls)) {
+        const [id, ...rest] = k.split('/')
+        loadColls(id, rest.join('/'))
+      }
+    },
+    { within: navRef },
+  )
+  // With focus in the tree these act on the selected item, like its menu.
+  const focusedConn = focusedRow && focusedRow.kind !== 'note' ? focusedRow.s : undefined
+  const focusedDb = focusedRow?.kind === 'db' ? focusedRow.db.name : focusedRow?.kind === 'coll' || focusedRow?.kind === 'group' ? focusedRow.db : undefined
+  useShortcut('conn.disconnect', () => (focusedConn ? void disconnect(focusedConn.id) : false), { within: navRef })
+  useShortcut(
+    'tab.shell',
+    () => (focusedConn ? dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: focusedConn.id, connName: focusedConn.name, db: focusedDb } }) : false),
+    { within: navRef },
+  )
+  useShortcut(
+    'tab.sql',
+    () => (focusedConn ? dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: focusedConn.id, connName: focusedConn.name, db: focusedDb ?? 'test' } }) : false),
+    { within: navRef },
+  )
   useShortcut('explorer.filter', () => (sessions.length ? filterRef.current?.focus() : false))
   useShortcut('focus.explorer', () => {
     if (!focused && nav[0]) setFocused(nav[0].key)
@@ -543,7 +561,8 @@ export function Sidebar() {
                   it.action()
                 }}
               >
-                {it.label}
+                <span>{it.label}</span>
+                {it.shortcut && shortcutHint(it.shortcut) && <kbd className="menu-kbd">{shortcutHint(it.shortcut)}</kbd>}
               </button>
             </li>
           ))}

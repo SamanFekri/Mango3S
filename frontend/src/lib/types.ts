@@ -24,6 +24,8 @@ export interface Settings {
   localApi: 'ollama' | 'openai'
   localModel: string
   schedulerEnabled: boolean
+  /** Customized shortcuts: platform → action id → bindings (Preferences → Keymap). */
+  keymap?: Partial<Record<'mac' | 'other', Record<string, string[]>>>
 }
 
 export type ServerMode = 'uri' | 'manual'
@@ -212,6 +214,8 @@ export interface FieldUpdate {
   expected: string
   expectedMissing: boolean
   unset: boolean
+  renameTo?: string
+  append?: boolean
 }
 
 export interface FieldResult {
@@ -1026,4 +1030,30 @@ export interface MCPInfo {
   command: string
   args: string[]
   snippet: string
+}
+
+/** Update dialog / Remove dialog. */
+export interface BulkWriteRequest {
+  connId: string
+  db: string
+  coll: string
+  kind: 'update' | 'delete'
+  scope: 'selected' | 'query'
+  ids: string[]
+  filter: string
+  update: string
+}
+
+export interface BulkPreview {
+  affected: number
+  sampleIds: string[]
+  confirmText: string
+  shell: string
+}
+
+export interface BulkResult {
+  matched: number
+  modified: number
+  deleted: number
+  backupPath: string
 }

@@ -3,6 +3,7 @@ import type { EditorView } from '@codemirror/view'
 import { CodeEditor } from '../components/CodeEditor'
 import { Modal, Spinner } from '../components/common'
 import { AIDialog } from '../components/AIDialog'
+import { BulkWriteDialog } from '../components/BulkWriteDialog'
 import { CodeDialog } from '../components/CodeDialog'
 import { DocumentEditor, INSERT_TEMPLATE } from '../components/DocumentEditor'
 import { ExplainDialog } from '../components/ExplainDialog'
@@ -233,7 +234,10 @@ export function CollectionView({ tab }: { tab: Tab }) {
     () => ({
       get: (doc, path) => backend.getField(connId, db, coll, doc.id, path),
       update: (doc, u) =>
-        backend.updateField({ connId, db, coll, id: doc.id, path: u.path, type: u.type, text: u.text, value: u.value, expected: u.expected, expectedMissing: u.expectedMissing, unset: !!u.unset }),
+        backend.updateField({
+          connId, db, coll, id: doc.id, path: u.path, type: u.type, text: u.text, value: u.value, expected: u.expected,
+          expectedMissing: u.expectedMissing, unset: !!u.unset, renameTo: u.renameTo, append: u.append,
+        }),
     }),
     [connId, db, coll],
   )
@@ -242,6 +246,31 @@ export function CollectionView({ tab }: { tab: Tab }) {
     [],
   )
   useTabDirty(tab.id, cellDirty || (editor ? 'an open document editor' : null))
+
+  const [bulk, setBulk] = useState<{ kind: 'update' | 'remove'; ids: string[] } | null>(null)
+  const refreshDocument = async (doc: Doc) => {
+    try {
+      onDocumentChanged(await backend.getDocument(connId, db, coll, doc.id))
+    } catch (err) {
+      const e = toAppError(err)
+      if (e.code === 'NOT_FOUND') {
+        setPage((p) => (p ? { ...p, documents: p.documents.filter((d) => d.id !== doc.id) } : p))
+        toast({ kind: 'info', title: 'Document is gone', message: 'It was deleted since the page loaded.' })
+      } else toastError(err, 'Could not refresh the document')
+    }
+  }
+  const followReference = async (ref: { coll?: string; db?: string; idJSON: string }) => {
+    let target = ref.coll
+    const targetDb = ref.db ?? db
+    if (!target) {
+      // Not a DBRef: ask where to look the value up by _id.
+      const name = await prompt({ title: 'Follow reference', label: `Find _id ${ref.idJSON.length > 60 ? 'value' : ref.idJSON} in collection (${db})`, confirmLabel: 'Open' })
+      if (!name) return
+      target = name.trim()
+    }
+    const filter = `{ _id: ${ref.idJSON} }`
+    dispatchTabs({ type: 'open', tab: { kind: 'collection', connId, connName: tab.connName, db: targetDb, coll: target, init: { query: { filter, projection: '', sort: '', skip: 0, limit: 0 } } } })
+  }
 
   const onDelete = async (docs: Doc[], opts?: { keyboard?: boolean }) => {
     if (settings?.confirmDeletes !== false || opts?.keyboard) {
@@ -513,7 +542,31 @@ export function CollectionView({ tab }: { tab: Tab }) {
         onDirtyChange={setCellDirty}
         confirm={(message) => confirm({ title: 'Please confirm', message, confirmLabel: 'OK', danger: true })}
         onInsert={(text) => void insert(text)}
+        onRefreshDocument={refreshDocument}
+        onFollowReference={(ref) => void followReference(ref)}
+        onBulkDialog={readOnly ? undefined : (kind, ids) => setBulk({ kind, ids })}
       />
+
+      {bulk && (
+        <BulkWriteDialog
+          connId={connId}
+          db={db}
+          coll={coll}
+          kind={bulk.kind}
+          selectedIds={bulk.ids}
+          queryFilter={lastReq.current?.filter ?? filter}
+          onClose={() => setBulk(null)}
+          onDone={(r) => {
+            toast({
+              kind: 'success',
+              title: bulk.kind === 'remove' ? `Removed ${r.deleted} document${r.deleted === 1 ? '' : 's'}` : `Updated ${r.modified} of ${r.matched} documents`,
+              message: 'The previous versions were backed up (Library → Backups).',
+            })
+            setTotal(null)
+            refresh()
+          }}
+        />
+      )}
 
       {editor && (
         <DocumentEditor
