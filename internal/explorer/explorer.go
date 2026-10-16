@@ -27,6 +27,7 @@ type CollectionInfo struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"` // collection | view | timeseries
 	ReadOnly bool   `json:"readOnly"`
+	System   bool   `json:"system"` // name starts with "system."
 }
 
 // IndexInfo describes an index.
@@ -104,14 +105,14 @@ func (s *service) ListCollections(ctx context.Context, connID, db string) ([]Col
 	}
 	out := make([]CollectionInfo, 0, len(specs))
 	for _, c := range specs {
-		if strings.HasPrefix(c.Name, "system.") && c.Name != "system.views" && c.Name != "system.profile" {
-			continue
-		}
 		t := c.Type
 		if t == "" {
 			t = "collection"
 		}
-		out = append(out, CollectionInfo{Name: c.Name, Type: t, ReadOnly: c.Info.ReadOnly})
+		// System collections (system.views, system.profile, system.js,
+		// system.buckets.*, admin's system.users, …) are listed separately
+		// in the explorer, as in Studio 3T.
+		out = append(out, CollectionInfo{Name: c.Name, Type: t, ReadOnly: c.Info.ReadOnly, System: strings.HasPrefix(c.Name, "system.")})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil

@@ -23,6 +23,10 @@ type Service interface {
 	Insert(ctx context.Context, connID, db, coll, text string) ([]string, error)
 	Replace(ctx context.Context, connID, db, coll, id, text string) (model.Document, error)
 	Delete(ctx context.Context, connID, db, coll string, ids []string) (int64, error)
+	// GetField and UpdateField support in-place cell editing with
+	// field-level $set / $unset (see fields.go).
+	GetField(ctx context.Context, connID, db, coll, id string, path []string) (FieldValue, error)
+	UpdateField(ctx context.Context, u FieldUpdate) (FieldResult, error)
 }
 
 type service struct{ src mongox.Source }

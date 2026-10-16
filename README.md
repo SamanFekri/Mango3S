@@ -19,10 +19,11 @@ security model, scheduler policies, MCP setup and unsupported capabilities.
 
 | Area | What you get |
 |---|---|
-| **Shell** | Desktop window with explorer sidebar, draggable tabs (state kept when you switch tabs), status bar, light/dark/system theme, settings page |
-| **Connections** | Saved profiles; connection test showing server version, topology and latency; passwords in the OS keychain; read-only profiles; TLS, replica-set and SRV through the connection string |
-| **Explorer** | Lazy tree of connections → databases → collections and views, with a filter. Context menus to create or drop databases and collections (drops require typing the name) and to show collection stats and indexes |
-| **Documents** | JSON view (syntax-highlighted, round-trip-exact shell syntax) and table view. Insert one document or an array; edit (full replace by `_id`); delete one or many, with confirmation |
+| **Shell** | Desktop window with explorer sidebar, draggable tabs (state kept when you switch tabs), status bar, light/dark/system theme, settings page. A **Welcome** tab opens first; each connection gets its own **workspace tab**; closing a tab (or quitting) with unsaved work asks first |
+| **Connections** | Studio 3T-style Connection Manager with nine tabs: Server (standalone / replica set / sharded / SRV, or a connection string), Authentication (SCRAM, X.509, LDAP, AWS IAM, OIDC workload identity), SSL / TLS (CA and client certificates, validated up front), **SSH tunnel** (password, key, agent; host-key pinning), **Proxy** (SOCKS5, HTTP CONNECT), IntelliShell (default database, init commands), MongoDB Tools (detects mongosh and the Database Tools), Advanced (timeouts, read preference, write concern, pool, compression) and Collection History. Folders, duplicate, delete; every secret in the OS credential store. See [docs/UI.md](docs/UI.md) |
+| **Explorer** | Connections → databases → **Collections / Views / System** folders (system.* collections are listed, as in Studio 3T), with distinct icons, keyboard navigation (arrows, Enter, Delete), filter and context menus |
+| **Keyboard** | Central shortcut manager with a searchable reference (Help → Keyboard Shortcuts, F1). Bindings follow Studio 3T's documented defaults where they exist and are labeled; platform-specific on macOS vs Windows/Linux |
+| **Documents** | **Tree** (default), Table and JSON views with exact BSON types. **Double-click a value to edit just that field** (`$set` / `$unset` on its path, type kept, concurrent changes detected; Enter saves, Esc cancels, Tab moves); undo/redo of field edits; "Edit document (JSON)" for whole documents. Insert one document or an array; delete one or many, with confirmation |
 | **Query editor** | Filter, projection, sort, skip and limit in mongosh syntax. Autocomplete for operators and sampled field names. Server-side paging, on-demand count, cancel, "Copy as shell" |
 | **Visual query builder** | Conditions with AND/OR, 11 operators, typed values (auto, string, number, boolean, null, ObjectId, date), sort and projection. Writes into the query editor |
 | **Aggregation editor** | Stages built from 19 operator templates. Edit, enable/disable, reorder, duplicate and delete stages; preview the output of any stage; run the full pipeline with paging and `allowDiskUse`; edit the whole pipeline as text |
@@ -404,11 +405,11 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
   only, not connection options such as TLS settings.
 - **P2 features:** see [Unsupported capabilities](docs/P2.md#unsupported-capabilities) for the
   limits of compare/sync, migration, reschema, masking, the scheduler, AI and MCP.
-- Index management UI (use the shell), user/role management, SSH tunnels, connection import from
-  other tools, in-place table-cell editing, and multiple windows.
-- SSH tunnelling and X.509 / Kerberos / LDAP authentication through dedicated form fields. Options
-  the Go driver accepts in the connection string (for example `tls=true&tlsCAFile=…`,
-  `authMechanism=MONGODB-X509`) still work.
+- **Connection, editing and shortcut limits:** see [Unsupported and limitations](docs/UI.md#unsupported-and-limitations)
+  (Kerberos, interactive OIDC, SSH keyboard-interactive 2FA, SOCKS4, socket timeout and wtimeout
+  in Go driver v2, keymap customization, …).
+- Index management UI (use the shell), user/role management, connection import from other tools,
+  and multiple windows.
 - Code signing and notarization of release builds.
 
 ## Troubleshooting

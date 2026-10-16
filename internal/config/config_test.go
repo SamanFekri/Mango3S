@@ -31,11 +31,24 @@ func TestSplitCredentials(t *testing.T) {
 	}
 }
 
+func TestDefaultViewIsTreeUntilChosen(t *testing.T) {
+	// Files written before Tree existed saved "json" without the user choosing it.
+	if v := (Settings{DefaultView: "json"}).Normalize().DefaultView; v != "tree" {
+		t.Fatalf("unchosen json default should become tree, got %s", v)
+	}
+	if v := (Settings{DefaultView: "table", DefaultViewChosen: true}).Normalize().DefaultView; v != "table" {
+		t.Fatalf("an explicit choice must be kept, got %s", v)
+	}
+	if v := DefaultSettings().DefaultView; v != "tree" {
+		t.Fatalf("factory default should be tree, got %s", v)
+	}
+}
+
 func TestSettingsNormalize(t *testing.T) {
 	s := Settings{Theme: "neon", PageSize: 5000, QueryTimeoutSeconds: -1, DefaultView: "x", EditorFontSize: 2, LogLevel: "trace"}.Normalize()
 	d := DefaultSettings()
 	if s.Theme != d.Theme || s.PageSize != 1000 || s.QueryTimeoutSeconds != d.QueryTimeoutSeconds ||
-		s.DefaultView != "json" || s.EditorFontSize != d.EditorFontSize || s.LogLevel != "info" {
+		s.DefaultView != "tree" || s.EditorFontSize != d.EditorFontSize || s.LogLevel != "info" {
 		t.Fatalf("unexpected normalization: %+v", s)
 	}
 }

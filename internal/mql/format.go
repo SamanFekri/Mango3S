@@ -327,6 +327,17 @@ func RelaxedJSON(d bson.D) string {
 	return string(data)
 }
 
+// CanonicalJSON renders a document as canonical Extended JSON: every value
+// keeps its exact BSON type ({"$numberInt": "5"}, {"$numberDouble": "5.0"}),
+// so the UI can show types and 64-bit integers without precision loss.
+func CanonicalJSON(d bson.D) string {
+	data, err := bson.MarshalExtJSON(d, true, false)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
 // Equal reports whether two BSON values are identical (type and value).
 func Equal(a, b any) bool {
 	ab, err1 := bson.Marshal(bson.D{{Key: "v", Value: a}})

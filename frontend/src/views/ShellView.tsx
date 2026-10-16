@@ -11,7 +11,9 @@ import { timeAgo } from '../lib/library'
 import { currentCollection, historyStep, shellCompletions } from '../lib/shellComplete'
 import type { Tab } from '../lib/tabs'
 import type { HistoryEntry, ShellOutput } from '../lib/types'
-import { useApp } from '../state/AppContext'
+import { shortcutHint } from '../lib/shortcuts'
+import { useApp, useTabDirty } from '../state/AppContext'
+import { useShortcut } from '../state/shortcuts'
 
 interface Entry {
   id: number
@@ -20,16 +22,41 @@ interface Entry {
 }
 
 const STARTER = `// Cmd/Ctrl+Enter runs everything, or just the selected text.
+// F5 runs the whole script, F6 the statement at the cursor, F9 the selection.
 // Ctrl+Space completes collections, methods and fields; Alt+↑/↓ recalls history.
 show collections
 `
 
+/** The block of non-blank lines around the cursor (Studio 3T's "statement at cursor"). */
+export function statementAt(text: string, pos: number): string {
+  const lines = text.split('\n')
+  let offset = 0
+  let line = 0
+  for (; line < lines.length; line++) {
+    if (pos <= offset + lines[line].length) break
+    offset += lines[line].length + 1
+  }
+  line = Math.min(line, lines.length - 1)
+  const blank = (i: number) => lines[i].trim() === '' || lines[i].trim().startsWith('//')
+  if (blank(line)) return ''
+  let a = line
+  let b = line
+  while (a > 0 && !blank(a - 1)) a--
+  while (b < lines.length - 1 && !blank(b + 1)) b++
+  return lines.slice(a, b + 1).join('\n').trim()
+}
+
 export function ShellView({ tab }: { tab: Tab }) {
-  const { sessions, prompt, toast, toastError } = useApp()
+  const { sessions, profiles, prompt, toast, toastError } = useApp()
   const connId = tab.connId!
   const session = sessions.find((s) => s.id === connId)
-  const [db, setDb] = useState(tab.db || 'test')
-  const [script, setScript] = useState(tab.init?.text ?? STARTER)
+  // IntelliShell settings from the connection (Connection Manager → IntelliShell).
+  const shellCfg = profiles.find((p) => p.id === connId)?.shell
+  const [db, setDb] = useState(tab.db || shellCfg?.defaultDb || 'test')
+  const initial = tab.init?.text ?? (shellCfg?.initScript && !shellCfg.runInitScript ? `${shellCfg.initScript.trim()}\n` : STARTER)
+  const [script, setScript] = useState(initial)
+  const [savedText, setSavedText] = useState(initial)
+  useTabDirty(tab.id, script !== savedText && script.trim() !== '' ? 'a script that is not saved to the library' : null)
   const [outputs, setOutputs] = useState<Entry[]>([])
   const [running, setRunning] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -119,8 +146,22 @@ export function ShellView({ tab }: { tab: Tab }) {
     out.current?.scrollTo({ top: out.current.scrollHeight, behavior: 'smooth' })
   }, [outputs])
 
-  const run = async () => {
-    const code = selectionOrAll(editor.current).trim()
+  const run = async (mode: 'auto' | 'all' | 'selection' | 'statement' = 'auto', text?: string) => {
+    const v = editor.current
+    let code = text ?? ''
+    if (!text) {
+      if (mode === 'all') code = v?.state.doc.toString() ?? script
+      else if (mode === 'selection') {
+        const sel = v?.state.selection.main
+        code = sel && !sel.empty ? v!.state.sliceDoc(sel.from, sel.to) : ''
+        if (!code) {
+          toast({ kind: 'info', title: 'Nothing selected', message: 'Select the commands to run, or press F5 to run the whole script.' })
+          return
+        }
+      } else if (mode === 'statement') code = v ? statementAt(v.state.doc.toString(), v.state.selection.main.head) : ''
+      else code = selectionOrAll(v)
+    }
+    code = code.trim()
     if (!code || running) return
     setRunning(true)
     seq.current += 1
@@ -143,17 +184,35 @@ export function ShellView({ tab }: { tab: Tab }) {
     }
   }
 
-  const save = async () => {
-    const name = await prompt({ title: 'Save script', label: 'Name', initial: tab.init?.savedName, confirmLabel: 'Save' })
+  const save = async (asNew = false) => {
+    const name = await prompt({ title: asNew ? 'Save script as' : 'Save script', label: 'Name', initial: tab.init?.savedName, confirmLabel: 'Save' })
     if (!name) return
     try {
-      const item = await backend.saveItem({ id: savedId, kind: 'script', name, db, text: script })
+      const item = await backend.saveItem({ id: asNew ? undefined : savedId, kind: 'script', name, db, text: script })
       setSavedId(item.id)
+      setSavedText(script)
       toast({ kind: 'success', title: `Saved "${item.name}"` })
     } catch (err) {
       toastError(err, 'Save failed')
     }
   }
+
+  // Run the connection's initialization commands once when the tab opens.
+  const initRan = useRef(false)
+  useEffect(() => {
+    if (initRan.current || tab.init?.text || !shellCfg?.runInitScript || !shellCfg.initScript.trim()) return
+    initRan.current = true
+    void run('all', shellCfg.initScript)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shellCfg])
+
+  useShortcut('query.run', () => void run('all'))
+  useShortcut('query.runSelection', () => void run('selection'))
+  useShortcut('query.runStatement', () => void run('statement'))
+  useShortcut('op.cancel', () => (running ? void backend.cancel(opId) : false))
+  useShortcut('query.save', () => void save())
+  useShortcut('query.saveAs', () => void save(true))
+  useShortcut('focus.editor', () => editor.current?.focus())
 
   const insert = (text: string) => {
     const v = editor.current
@@ -177,7 +236,7 @@ export function ShellView({ tab }: { tab: Tab }) {
         <button className={showHistory ? 'small active' : 'small ghost'} onClick={() => setShowHistory((s) => !s)} aria-pressed={showHistory}>
           History
         </button>
-        <button className="small ghost" onClick={save}>
+        <button className="small ghost" onClick={() => void save()} title={`Save (${shortcutHint('query.save')})`}>
           Save
         </button>
         <button className="small ghost" onClick={() => setOutputs([])} disabled={outputs.length === 0}>
@@ -188,7 +247,7 @@ export function ShellView({ tab }: { tab: Tab }) {
             <Spinner small /> Cancel
           </button>
         ) : (
-          <button className="primary" onClick={run} title="Run (Cmd/Ctrl+Enter)">
+          <button className="primary" onClick={() => void run()} title={`Run the selection or everything (${shortcutHint('query.run')}); F5 runs all, F6 the statement at the cursor, F9 the selection`}>
             ▶ Run
           </button>
         )}
@@ -198,7 +257,7 @@ export function ShellView({ tab }: { tab: Tab }) {
           <CodeEditor
             value={script}
             onChange={setScript}
-            onRun={run}
+            onRun={() => void run()}
             editorRef={editor}
             minHeight={140}
             maxHeight={320}

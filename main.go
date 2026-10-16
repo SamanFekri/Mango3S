@@ -7,9 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	goruntime "runtime"
 	"syscall"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
@@ -76,6 +79,39 @@ func runMCP() error {
 	return srv.Run(ctx)
 }
 
+// appMenu is the native menu. Items forward to the frontend's shortcut
+// commands, so the menu and the keyboard run the same code. The Edit menu
+// provides the standard clipboard and undo actions inside the web view
+// (required on macOS for Cmd+C/V/X/Z to work).
+func appMenu(app *api.App) *menu.Menu {
+	m := menu.NewMenu()
+	if goruntime.GOOS == "darwin" {
+		m.Append(menu.AppMenu())
+	}
+	emit := func(name string) func(*menu.CallbackData) {
+		return func(*menu.CallbackData) { api.MenuEvent(app, name) }
+	}
+	file := m.AddSubmenu("File")
+	file.AddText("Connection Manager…", nil, emit("connection-manager"))
+	file.AddText("New Connection…", nil, emit("new-connection"))
+	file.AddSeparator()
+	file.AddText("Close Tab", nil, emit("close-tab"))
+	if goruntime.GOOS != "darwin" {
+		file.AddSeparator()
+		file.AddText("Quit", keys.CmdOrCtrl("q"), func(*menu.CallbackData) { api.MenuEvent(app, "quit") })
+	}
+	m.Append(menu.EditMenu())
+	view := m.AddSubmenu("View")
+	view.AddText("Welcome", nil, emit("welcome"))
+	view.AddText("Library", nil, emit("library"))
+	view.AddText("Scheduled Tasks", nil, emit("tasks"))
+	view.AddText("Settings", nil, emit("settings"))
+	help := m.AddSubmenu("Help")
+	help.AddText("Keyboard Shortcuts", nil, emit("shortcuts"))
+	help.AddText("Welcome", nil, emit("welcome"))
+	return m
+}
+
 func runDesktop() error {
 	app, err := newApp()
 	if err != nil {
@@ -95,6 +131,8 @@ func runDesktop() error {
 		BackgroundColour: &options.RGBA{R: 24, G: 26, B: 31, A: 1},
 		OnStartup:        lc.Startup,
 		OnShutdown:       lc.Shutdown,
+		OnBeforeClose:    api.BeforeClose(app),
+		Menu:             appMenu(app),
 		Bind:             []interface{}{app},
 		Mac: &mac.Options{
 			About: &mac.AboutInfo{

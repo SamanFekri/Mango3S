@@ -5,6 +5,7 @@ package apperr
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,6 +30,12 @@ const (
 	CodeUnsupported   Code = "UNSUPPORTED"
 	CodeInternal      Code = "INTERNAL"
 	CodeSecretBackend Code = "SECRET_BACKEND"
+	CodeTLS           Code = "TLS_ERROR"
+	CodeSSH           Code = "SSH_ERROR"
+	// CodeSSHHostKey: the SSH server's key is not trusted yet; Detail holds
+	// its SHA256 fingerprint so the UI can ask the user to verify and pin it.
+	CodeSSHHostKey Code = "SSH_HOST_KEY"
+	CodeProxy      Code = "PROXY_ERROR"
 )
 
 // Error is a user-presentable error.
@@ -113,6 +120,28 @@ func From(err error) *Error {
 			return Wrap(CodeConflict, err, "A document with the same unique key already exists.")
 		}
 		return Wrap(CodeMongo, err, firstLine(msg))
+	}
+
+	var unknownAuth x509.UnknownAuthorityError
+	var hostErr x509.HostnameError
+	var invalid x509.CertificateInvalidError
+	switch {
+	case errors.As(err, &unknownAuth):
+		return Wrap(CodeTLS, err, "TLS: the server certificate is signed by an unknown authority. Set the CA file on the SSL / TLS tab (or allow invalid certificates for testing only).")
+	case errors.As(err, &hostErr):
+		return Wrap(CodeTLS, err, "TLS: the server certificate is not valid for "+hostErr.Host+". Connect with the host name in the certificate, or allow invalid host names.")
+	case errors.As(err, &invalid):
+		return Wrap(CodeTLS, err, "TLS: the server certificate is invalid ("+invalid.Error()+").")
+	case strings.Contains(lower, "first record does not look like a tls handshake"):
+		return Wrap(CodeTLS, err, "TLS: the server does not speak TLS. Turn TLS off on the SSL / TLS tab.")
+	case strings.Contains(lower, "x509: certificate signed by unknown authority"):
+		return Wrap(CodeTLS, err, "TLS: the server certificate is signed by an unknown authority. Set the CA file on the SSL / TLS tab (or allow invalid certificates for testing only).")
+	case strings.Contains(lower, "x509: certificate is valid for") || strings.Contains(lower, "x509: certificate is not valid for any names"):
+		return Wrap(CodeTLS, err, "TLS: the server certificate does not match the host name. Connect with a host name listed in the certificate, or allow invalid host names.")
+	case strings.Contains(lower, "x509: certificate has expired"):
+		return Wrap(CodeTLS, err, "TLS: the server certificate has expired or is not yet valid.")
+	case strings.Contains(lower, "remote error: tls:") || strings.Contains(lower, "tls: "):
+		return Wrap(CodeTLS, err, "TLS handshake failed. If the server requires a client certificate, set it on the SSL / TLS tab.")
 	}
 
 	switch {

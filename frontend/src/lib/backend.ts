@@ -56,6 +56,15 @@ import type {
   SQLTranslation,
   Profile,
   ProfileInput,
+  Capability,
+  CollectionHistoryEntry,
+  FieldResult,
+  FieldUpdate,
+  FieldValue,
+  ParsedURI,
+  ServerConfig,
+  ToolInfo,
+  ToolsConfig,
   QueryRequest,
   SessionInfo,
   Settings,
@@ -85,6 +94,18 @@ export const backend = {
   saveProfile: (p: ProfileInput) => wrap<Profile>(a.SaveProfile(p)),
   deleteProfile: (id: string) => wrap<void>(a.DeleteProfile(id)),
   testConnection: (p: ProfileInput) => wrap<TestResult>(a.TestConnection(p)),
+  duplicateProfile: (id: string) => wrap<Profile>(a.DuplicateProfile(id)),
+  parseConnectionString: (uri: string) => wrap<ParsedURI>(a.ParseConnectionString(uri)),
+  buildConnectionString: (s: ServerConfig) => wrap<string>(a.BuildConnectionString(s)),
+  detectTools: (cfg: ToolsConfig, connId: string) => wrap<ToolInfo[]>(a.DetectTools(cfg, connId)),
+  connectionCapabilities: () => wrap<Record<string, Capability[]>>(a.ConnectionCapabilities()),
+  recordCollectionOpened: (connId: string, db: string, coll: string) => wrap<void>(a.RecordCollectionOpened(connId, db, coll)),
+  listCollectionHistory: (profileId: string) => wrap<CollectionHistoryEntry[]>(a.ListCollectionHistory(profileId)),
+  clearCollectionHistory: (profileId: string) => wrap<void>(a.ClearCollectionHistory(profileId)),
+  getField: (connId: string, db: string, coll: string, id: string, path: string[]) => wrap<FieldValue>(a.GetField(connId, db, coll, id, path)),
+  updateField: (u: FieldUpdate) => wrap<FieldResult>(a.UpdateField(u)),
+  setUnsavedWork: (dirty: boolean) => wrap<void>(a.SetUnsavedWork(dirty)),
+  chooseFile: (kind: 'cert' | 'key' | 'tool' | 'folder', title: string) => wrap<string>(a.ChooseFile(kind, title)),
   connect: (id: string) => wrap<SessionInfo>(a.Connect(id)),
   disconnect: (id: string) => wrap<void>(a.Disconnect(id)),
   listConnections: () => wrap<SessionInfo[]>(a.ListConnections()),
@@ -191,6 +212,15 @@ export const backend = {
 }
 
 /** Subscribes to backend job updates; returns an unsubscribe function. */
+/** Subscribes to native menu clicks ("menu:<name>"). */
+export function onMenu(name: string, cb: () => void): () => void {
+  try {
+    return EventsOn(`menu:${name}`, cb)
+  } catch {
+    return () => undefined // not running inside Wails (tests, browser preview)
+  }
+}
+
 export function onJobUpdate(cb: (j: Job) => void): () => void {
   try {
     return EventsOn('jobs:update', cb)

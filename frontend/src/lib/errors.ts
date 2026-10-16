@@ -12,6 +12,10 @@ export type ErrorCode =
   | 'UNSUPPORTED'
   | 'INTERNAL'
   | 'SECRET_BACKEND'
+  | 'TLS_ERROR'
+  | 'SSH_ERROR'
+  | 'SSH_HOST_KEY'
+  | 'PROXY_ERROR'
   | 'UNKNOWN'
 
 export interface AppError {
@@ -71,6 +75,13 @@ export function errorTitle(e: AppError): string {
       return 'Not supported'
     case 'SECRET_BACKEND':
       return 'Credential store'
+    case 'TLS_ERROR':
+      return 'TLS problem'
+    case 'SSH_ERROR':
+    case 'SSH_HOST_KEY':
+      return 'SSH tunnel'
+    case 'PROXY_ERROR':
+      return 'Proxy problem'
     default:
       return 'Error'
   }

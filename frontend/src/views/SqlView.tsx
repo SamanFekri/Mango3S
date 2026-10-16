@@ -9,7 +9,8 @@ import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
 import type { Tab } from '../lib/tabs'
 import type { CodeRequest, Page, SQLTranslation } from '../lib/types'
-import { useApp } from '../state/AppContext'
+import { useApp, useTabDirty } from '../state/AppContext'
+import { useShortcut } from '../state/shortcuts'
 
 const STARTER = `-- Cmd/Ctrl+Enter runs the query (or the selected text).
 -- Supported: SELECT … FROM coll WHERE … GROUP BY … HAVING … ORDER BY … LIMIT … OFFSET …
@@ -35,7 +36,9 @@ export function SqlView({ tab }: { tab: Tab }) {
   const [page, setPage] = useState<Page | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
-  const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'json')
+  const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'tree')
+  const [savedText, setSavedText] = useState(tab.init?.text ?? STARTER)
+  useTabDirty(tab.id, sql !== savedText && sql.trim() !== '' ? 'SQL that is not saved to the library' : null)
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
   const [showHelp, setShowHelp] = useState(false)
   const [code, setCode] = useState<Omit<CodeRequest, 'language'> | null>(null)
@@ -77,17 +80,28 @@ export function SqlView({ tab }: { tab: Tab }) {
     }
   }
 
-  const save = async () => {
-    const name = await prompt({ title: 'Save SQL query', label: 'Name', initial: tab.init?.savedName, confirmLabel: 'Save' })
+  const save = async (asNew = false) => {
+    const name = await prompt({ title: asNew ? 'Save SQL query as' : 'Save SQL query', label: 'Name', initial: tab.init?.savedName, confirmLabel: 'Save' })
     if (!name) return
     try {
-      const item = await backend.saveItem({ id: savedId, kind: 'sql', name, db, text: sql })
+      const item = await backend.saveItem({ id: asNew ? undefined : savedId, kind: 'sql', name, db, text: sql })
       setSavedId(item.id)
+      setSavedText(sql)
       toast({ kind: 'success', title: `Saved "${item.name}"` })
     } catch (err) {
       toastError(err, 'Save failed')
     }
   }
+
+  useShortcut('query.run', () => void run())
+  useShortcut('view.refresh', () => (lastSQL.current ? void execute(lastSQL.current, page?.page ?? 0) : false))
+  useShortcut('op.cancel', () => (loading ? void backend.cancel(opId) : false))
+  useShortcut('query.save', () => void save())
+  useShortcut('query.saveAs', () => void save(true))
+  useShortcut('focus.editor', () => editor.current?.focus())
+  useShortcut('results.tree', () => setView('tree'))
+  useShortcut('results.table', () => setView('table'))
+  useShortcut('results.json', () => setView('json'))
 
   return (
     <div className="view sql-view">
@@ -111,7 +125,7 @@ export function SqlView({ tab }: { tab: Tab }) {
         <button className="small ghost" onClick={() => setCode({ source: 'sql', db, coll: '', sql: selectionOrAll(editor.current) })}>
           Code
         </button>
-        <button className="small ghost" onClick={save}>
+        <button className="small ghost" onClick={() => void save()}>
           Save
         </button>
         {loading ? (

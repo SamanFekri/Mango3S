@@ -46,9 +46,14 @@ export function SettingsView() {
         </label>
         <label className="field">
           <span>Default result view</span>
-          <select value={form.defaultView} onChange={(e) => set('defaultView', e.target.value as Settings['defaultView'])}>
-            <option value="json">JSON</option>
+          <select
+            value={form.defaultView}
+            onChange={(e) => setForm({ ...form, defaultView: e.target.value as Settings['defaultView'], defaultViewChosen: true })}
+            aria-label="Default result view"
+          >
+            <option value="tree">Tree</option>
             <option value="table">Table</option>
+            <option value="json">JSON</option>
           </select>
         </label>
       </section>

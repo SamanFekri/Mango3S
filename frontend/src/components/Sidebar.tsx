@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { backend } from '../lib/backend'
 import { formatBytes } from '../lib/format'
 import type { CollectionInfo, DatabaseInfo, SessionInfo } from '../lib/types'
 import { useApp } from '../state/AppContext'
+import { shortcutHint } from '../lib/shortcuts'
+import { recentProfiles } from '../lib/tabs'
+import { getShortcutPlatform, useShortcut } from '../state/shortcuts'
 import { Modal, Spinner } from './common'
+import { CollectionIcon, DatabaseIcon, FolderIcon, ServerIcon } from './icons'
 import { ExportWizard } from './ExportWizard'
 import { ImportWizard } from './ImportWizard'
 
@@ -22,6 +26,14 @@ interface MenuState {
 
 type Loadable<T> = { loading: boolean; error?: string; data?: T }
 
+type GroupKind = 'collections' | 'views' | 'system'
+/** Folders under each database, as in Studio 3T. */
+const GROUPS: { kind: GroupKind; label: string; match: (c: CollectionInfo) => boolean }[] = [
+  { kind: 'collections', label: 'Collections', match: (c) => !c.system && c.type !== 'view' },
+  { kind: 'views', label: 'Views', match: (c) => !c.system && c.type === 'view' },
+  { kind: 'system', label: 'System', match: (c) => c.system },
+]
+
 export function Sidebar() {
   const { sessions, profiles, connect, connecting, disconnect, dispatchTabs, openConnectionManager, confirm, toast, toastError } =
     useApp()
@@ -32,6 +44,11 @@ export function Sidebar() {
   const [filter, setFilter] = useState('')
   const [createFor, setCreateFor] = useState<{ conn: SessionInfo; db?: string } | null>(null)
   const [transfer, setTransfer] = useState<{ kind: 'import' | 'export'; conn: SessionInfo; db: string; coll?: string } | null>(null)
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set())
+  const [focused, setFocused] = useState<string | null>(null)
+  const navRef = useRef<HTMLElement | null>(null)
+  const treeRef = useRef<HTMLDivElement | null>(null)
+  const filterRef = useRef<HTMLInputElement | null>(null)
 
   const loadDbs = useCallback(async (connId: string) => {
     setDbs((d) => ({ ...d, [connId]: { ...d[connId], loading: true, error: undefined } }))
@@ -153,200 +170,331 @@ export function Sidebar() {
     }
   }
 
-  const disconnected = profiles.filter((p) => !sessions.some((s) => s.id === p.id))
+  const disconnected = recentProfiles(profiles.filter((p) => !sessions.some((s) => s.id === p.id)))
   const f = filter.trim().toLowerCase()
 
+  // ---- menus -----------------------------------------------------------------
+  const connMenu = (s: SessionInfo): MenuItem[] => [
+    { label: 'Open workspace', action: () => dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: s.id, connName: s.name } }) },
+    { label: 'Refresh', action: () => loadDbs(s.id) },
+    { label: 'Open IntelliShell', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name } }) },
+    { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }) },
+    { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
+    { label: 'Migrate from SQL…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: '' } }), disabled: s.readOnly },
+    { label: 'Compare / sync…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name } }) },
+    { label: 'Edit connection…', action: () => openConnectionManager(true, s.id) },
+    { label: 'Disconnect', action: () => disconnect(s.id) },
+  ]
+  const dbMenu = (s: SessionInfo, db: string): MenuItem[] => [
+    { label: 'Refresh', action: () => loadColls(s.id, db) },
+    { label: 'Create collection…', action: () => setCreateFor({ conn: s, db }), disabled: s.readOnly },
+    { label: 'Open shell here', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db } }) },
+    { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db } }) },
+    { label: 'Import into new collection…', action: () => setTransfer({ kind: 'import', conn: s, db }), disabled: s.readOnly },
+    { label: 'Compare database…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name, db } }) },
+    { label: 'Migrate from SQL into…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db } }), disabled: s.readOnly },
+    { label: 'Drop database…', action: () => dropDb(s, db), danger: true, disabled: s.readOnly },
+  ]
+  const collMenu = (s: SessionInfo, db: string, coll: CollectionInfo): MenuItem[] => {
+    const t = { connId: s.id, connName: s.name, db, coll: coll.name }
+    const view = coll.type === 'view'
+    return [
+      { label: 'Open', action: () => openCollection(s, db, coll.name) },
+      { label: 'Open in new tab', action: () => dispatchTabs({ type: 'open', tab: { kind: 'collection', ...t } }) },
+      { label: 'Aggregation editor', action: () => dispatchTabs({ type: 'open', tab: { kind: 'aggregation', ...t } }) },
+      { label: 'Schema', action: () => dispatchTabs({ type: 'open', tab: { kind: 'schema', ...t }, reuse: true }) },
+      { label: 'Export…', action: () => setTransfer({ kind: 'export', conn: s, db, coll: coll.name }) },
+      { label: 'Compare / sync…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', ...t } }) },
+      { label: 'Reschema…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'reschema', ...t } }), disabled: view },
+      { label: 'Mask data…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'mask', ...t } }), disabled: view },
+      { label: 'Import…', action: () => setTransfer({ kind: 'import', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
+      { label: 'Drop collection…', action: () => dropColl(s, db, coll.name), danger: true, disabled: s.readOnly },
+    ]
+  }
+
+  // ---- the visible tree as rows (also drives keyboard navigation) -------------
+  type Row =
+    | { key: string; level: number; kind: 'conn'; s: SessionInfo }
+    | { key: string; level: number; kind: 'db'; s: SessionInfo; db: DatabaseInfo }
+    | { key: string; level: number; kind: 'group'; s: SessionInfo; db: string; group: GroupKind; count: number }
+    | { key: string; level: number; kind: 'coll'; s: SessionInfo; db: string; coll: CollectionInfo }
+    | { key: string; level: number; kind: 'note'; text: string; error?: boolean; loading?: boolean }
+  const rows: Row[] = []
+  for (const s of sessions) {
+    const ck = s.id
+    rows.push({ key: `c:${ck}`, level: 0, kind: 'conn', s })
+    if (!expanded.has(ck)) continue
+    const d = dbs[s.id]
+    if (d?.error) rows.push({ key: `e:${ck}`, level: 1, kind: 'note', text: d.error, error: true })
+    for (const db of d?.data ?? []) {
+      const dk = `${s.id}/${db.name}`
+      const c = colls[dk]
+      const visible = f ? c?.data?.filter((x) => x.name.toLowerCase().includes(f)) : c?.data
+      if (f && c?.data && !visible?.length && !db.name.toLowerCase().includes(f)) continue
+      rows.push({ key: `d:${dk}`, level: 1, kind: 'db', s, db })
+      if (!expanded.has(dk) && !(f && visible?.length)) continue
+      if (c?.error) rows.push({ key: `e:${dk}`, level: 2, kind: 'note', text: c.error, error: true })
+      if (c?.loading && !c.data) rows.push({ key: `l:${dk}`, level: 2, kind: 'note', text: 'Loading…', loading: true })
+      if (c?.data && c.data.length === 0) rows.push({ key: `n:${dk}`, level: 2, kind: 'note', text: 'No collections' })
+      for (const g of GROUPS) {
+        const list = (visible ?? []).filter(g.match)
+        if (!list.length) continue
+        const gk = `${dk}/${g.kind}`
+        rows.push({ key: `g:${gk}`, level: 2, kind: 'group', s, db: db.name, group: g.kind, count: list.length })
+        if (!isGroupOpen(gk, g.kind) && !f) continue
+        for (const coll of list) rows.push({ key: `k:${dk}/${coll.name}`, level: 3, kind: 'coll', s, db: db.name, coll })
+      }
+    }
+  }
+
+  function isGroupOpen(gk: string, kind: GroupKind) {
+    // Collections start open; Views and System start closed (as in Studio 3T).
+    return kind === 'collections' ? !closedGroups.has(gk) : expanded.has(gk)
+  }
+  const toggleGroup = (gk: string, kind: GroupKind, open?: boolean) => {
+    const isOpen = isGroupOpen(gk, kind)
+    const want = open ?? !isOpen
+    if (want === isOpen) return
+    if (kind === 'collections') {
+      setClosedGroups((c) => {
+        const n = new Set(c)
+        if (want) n.delete(gk)
+        else n.add(gk)
+        return n
+      })
+    } else {
+      setExpanded((e) => {
+        const n = new Set(e)
+        if (want) n.add(gk)
+        else n.delete(gk)
+        return n
+      })
+    }
+  }
+  const setOpenKey = (key: string, open: boolean, onOpen?: () => void) =>
+    setExpanded((e) => {
+      if (e.has(key) === open) return e
+      const n = new Set(e)
+      if (open) {
+        n.add(key)
+        onOpen?.()
+      } else n.delete(key)
+      return n
+    })
+
+  const focusedRow = rows.find((r) => r.key === focused)
+  const activate = (r: Row) => {
+    setFocused(r.key)
+    switch (r.kind) {
+      case 'conn':
+        toggle(r.s.id, () => !dbs[r.s.id]?.data && loadDbs(r.s.id))
+        break
+      case 'db':
+        toggle(`${r.s.id}/${r.db.name}`, () => !colls[`${r.s.id}/${r.db.name}`]?.data && loadColls(r.s.id, r.db.name))
+        break
+      case 'group':
+        toggleGroup(`${r.s.id}/${r.db}/${r.group}`, r.group)
+        break
+      case 'coll':
+        openCollection(r.s, r.db, r.coll.name)
+        break
+    }
+  }
+  const expandRow = (r: Row, open: boolean) => {
+    if (r.kind === 'conn') setOpenKey(r.s.id, open, () => !dbs[r.s.id]?.data && loadDbs(r.s.id))
+    if (r.kind === 'db') setOpenKey(`${r.s.id}/${r.db.name}`, open, () => !colls[`${r.s.id}/${r.db.name}`]?.data && loadColls(r.s.id, r.db.name))
+    if (r.kind === 'group') toggleGroup(`${r.s.id}/${r.db}/${r.group}`, r.group, open)
+  }
+  const isOpenRow = (r: Row) =>
+    r.kind === 'conn' ? expanded.has(r.s.id) : r.kind === 'db' ? expanded.has(`${r.s.id}/${r.db.name}`) : r.kind === 'group' ? isGroupOpen(`${r.s.id}/${r.db}/${r.group}`, r.group) : false
+  const nav = rows.filter((r) => r.kind !== 'note')
+
+  const onTreeKey = (e: ReactKeyboardEvent) => {
+    if (e.target !== treeRef.current) return // typing in the filter etc.
+    const i = nav.findIndex((r) => r.key === focused)
+    const cur = nav[i]
+    const go = (r: Row | undefined) => {
+      if (!r) return
+      setFocused(r.key)
+      treeRef.current?.querySelector(`[data-key="${CSS.escape(r.key)}"]`)?.scrollIntoView?.({ block: 'nearest' })
+    }
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        go(i < 0 ? nav[0] : nav[i + 1])
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        go(i < 0 ? nav[nav.length - 1] : nav[i - 1])
+        break
+      case 'Home':
+        e.preventDefault()
+        go(nav[0])
+        break
+      case 'End':
+        e.preventDefault()
+        go(nav[nav.length - 1])
+        break
+      case 'ArrowRight':
+        if (!cur) return
+        e.preventDefault()
+        if (cur.kind !== 'coll' && !isOpenRow(cur)) expandRow(cur, true)
+        else if (nav[i + 1]?.level > cur.level) go(nav[i + 1])
+        break
+      case 'ArrowLeft':
+        if (!cur) return
+        e.preventDefault()
+        if (cur.kind !== 'coll' && isOpenRow(cur)) expandRow(cur, false)
+        else go([...nav.slice(0, i)].reverse().find((r) => r.level < cur.level))
+        break
+      case 'Enter':
+        if (!cur) return
+        e.preventDefault()
+        activate(cur)
+        break
+      case 'Delete':
+      case 'Backspace':
+        if (!cur || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
+        if (e.key === 'Backspace' && getShortcutPlatform() !== 'mac') return
+        e.preventDefault()
+        if (cur.kind === 'coll' && !cur.s.readOnly) void dropColl(cur.s, cur.db, cur.coll.name)
+        else if (cur.kind === 'db' && !cur.s.readOnly) void dropDb(cur.s, cur.db.name)
+        break
+    }
+  }
+
+  useShortcut(
+    'view.refresh',
+    () => {
+      const r = focusedRow
+      if (!r || r.kind === 'note') return false
+      if (r.kind === 'conn') loadDbs(r.s.id)
+      else loadColls(r.s.id, r.kind === 'db' ? r.db.name : r.db)
+    },
+    { within: navRef },
+  )
+  useShortcut('explorer.refreshAll', () => {
+    for (const s of sessions) loadDbs(s.id)
+    for (const k of Object.keys(colls)) {
+      const [id, ...rest] = k.split('/')
+      loadColls(id, rest.join('/'))
+    }
+  })
+  useShortcut('explorer.filter', () => (sessions.length ? filterRef.current?.focus() : false))
+  useShortcut('focus.explorer', () => {
+    if (!focused && nav[0]) setFocused(nav[0].key)
+    treeRef.current?.focus()
+  })
+
+  const rowProps = (r: Row) => ({
+    'data-key': r.key,
+    id: `tree-${r.key}`,
+    role: 'treeitem',
+    'aria-level': r.level + 1,
+    'aria-selected': focused === r.key,
+    'aria-expanded': r.kind === 'coll' || r.kind === 'note' ? undefined : isOpenRow(r),
+  })
+
   return (
-    <nav className="sidebar" aria-label="Database explorer">
+    <nav className="sidebar" aria-label="Database explorer" ref={navRef}>
       <div className="sidebar-header">
         <span className="sidebar-title">Explorer</span>
-        <button className="small" onClick={() => openConnectionManager(true)}>
+        <button className="small" onClick={() => openConnectionManager(true)} title={`Connection Manager (${shortcutHint('conn.manager')})`}>
           Connect…
         </button>
       </div>
       {sessions.length > 0 && (
         <div className="sidebar-filter">
-          <input placeholder="Filter collections" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter collections" />
+          <input ref={filterRef} placeholder="Filter collections" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter collections" />
         </div>
       )}
 
-      <div className="tree" role="tree">
-        {sessions.map((s) => {
-          const open = expanded.has(s.id)
-          const d = dbs[s.id]
-          const connMenu: MenuItem[] = [
-            { label: 'Refresh', action: () => loadDbs(s.id) },
-            {
-              label: 'Open shell',
-              action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db: 'test' } }),
-            },
-            {
-              label: 'SQL query',
-              action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }),
-            },
-            { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
-            {
-              label: 'Migrate from SQL…',
-              action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: '' } }),
-              disabled: s.readOnly,
-            },
-            {
-              label: 'Compare / sync…',
-              action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name } }),
-            },
-            { label: 'Disconnect', action: () => disconnect(s.id) },
-          ]
-          return (
-            <div key={s.id} role="treeitem" aria-expanded={open}>
+      <div
+        className="tree"
+        role="tree"
+        tabIndex={0}
+        ref={treeRef}
+        aria-activedescendant={focused ? `tree-${focused}` : undefined}
+        aria-label="Connections, databases and collections"
+        onKeyDown={onTreeKey}
+        onFocus={() => !focused && nav[0] && setFocused(nav[0].key)}
+      >
+        {rows.map((r) => {
+          const cls = `tree-row level-${r.level}${focused === r.key ? ' focused' : ''}`
+          if (r.kind === 'note') {
+            return (
+              <div key={r.key} className={`${r.error ? 'tree-error' : 'tree-empty'} level-${r.level}`}>
+                {r.loading && <Spinner small />} {r.text}
+              </div>
+            )
+          }
+          if (r.kind === 'conn') {
+            const s = r.s
+            const open = expanded.has(s.id)
+            return (
               <div
-                className="tree-row level-0"
-                onClick={() => toggle(s.id, () => !d?.data && loadDbs(s.id))}
-                onContextMenu={(e) =>
-                  openMenu(e, connMenu)
-                }
+                key={r.key}
+                {...rowProps(r)}
+                className={cls}
+                onClick={() => activate(r)}
+                onDoubleClick={() => dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: s.id, connName: s.name } })}
+                onContextMenu={(e) => openMenu(e, connMenu(s))}
+                title={`MongoDB ${s.serverVersion} · ${s.topology} — double-click for the workspace`}
               >
                 <span className={open ? 'caret open' : 'caret'} />
-                <span className="dot on" />
-                <span className="tree-label strong" title={`MongoDB ${s.serverVersion} · ${s.topology}`}>
-                  {s.name}
-                </span>
+                <ServerIcon live />
+                <span className="tree-label strong">{s.name}</span>
                 {s.readOnly && <span className="badge">RO</span>}
-                {d?.loading && <Spinner small />}
-                <button
-                  className="row-action"
-                  title="More actions"
-                  onClick={(e) =>
-                    openMenu(e, connMenu)
-                  }
-                >
+                {dbs[s.id]?.loading && <Spinner small />}
+                <button className="row-action" title="More actions" onClick={(e) => openMenu(e, connMenu(s))}>
                   ⋯
                 </button>
               </div>
-              {open && d?.error && <div className="tree-error level-1">{d.error}</div>}
-              {open &&
-                d?.data?.map((db) => {
-                  const k = `${s.id}/${db.name}`
-                  const dbOpen = expanded.has(k)
-                  const c = colls[k]
-                  const visible = f ? c?.data?.filter((x) => x.name.toLowerCase().includes(f)) : c?.data
-                  const dbMenu: MenuItem[] = [
-                    { label: 'Refresh', action: () => loadColls(s.id, db.name) },
-                    { label: 'Create collection…', action: () => setCreateFor({ conn: s, db: db.name }), disabled: s.readOnly },
-                    {
-                      label: 'Open shell here',
-                      action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db: db.name } }),
-                    },
-                    {
-                      label: 'SQL query',
-                      action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: db.name } }),
-                    },
-                    { label: 'Import into new collection…', action: () => setTransfer({ kind: 'import', conn: s, db: db.name }), disabled: s.readOnly },
-                    {
-                      label: 'Compare database…',
-                      action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name, db: db.name } }),
-                    },
-                    {
-                      label: 'Migrate from SQL into…',
-                      action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: db.name } }),
-                      disabled: s.readOnly,
-                    },
-                    { label: 'Drop database…', action: () => dropDb(s, db.name), danger: true, disabled: s.readOnly },
-                  ]
-                  return (
-                    <div key={k} role="treeitem" aria-expanded={dbOpen}>
-                      <div
-                        className="tree-row level-1"
-                        onClick={() => toggle(k, () => !c?.data && loadColls(s.id, db.name))}
-                        onContextMenu={(e) => openMenu(e, dbMenu)}
-                      >
-                        <span className={dbOpen ? 'caret open' : 'caret'} />
-                        <span className="icon-db" aria-hidden />
-                        <span className="tree-label">{db.name}</span>
-                        <span className="tree-meta">{formatBytes(db.sizeOnDisk)}</span>
-                        {c?.loading && <Spinner small />}
-                        <button className="row-action" title="More actions" onClick={(e) => openMenu(e, dbMenu)}>
-                          ⋯
-                        </button>
-                      </div>
-                      {dbOpen && c?.error && <div className="tree-error level-2">{c.error}</div>}
-                      {dbOpen && c?.data && c.data.length === 0 && <div className="tree-empty level-2">No collections</div>}
-                      {dbOpen &&
-                        visible?.map((coll) => {
-                          const collMenu: MenuItem[] = [
-                            { label: 'Open', action: () => openCollection(s, db.name, coll.name) },
-                            {
-                              label: 'Open in new tab',
-                              action: () =>
-                                dispatchTabs({
-                                  type: 'open',
-                                  tab: { kind: 'collection', connId: s.id, connName: s.name, db: db.name, coll: coll.name },
-                                }),
-                            },
-                            {
-                              label: 'Aggregation editor',
-                              action: () =>
-                                dispatchTabs({
-                                  type: 'open',
-                                  tab: { kind: 'aggregation', connId: s.id, connName: s.name, db: db.name, coll: coll.name },
-                                }),
-                            },
-                            {
-                              label: 'Schema',
-                              action: () =>
-                                dispatchTabs({
-                                  type: 'open',
-                                  tab: { kind: 'schema', connId: s.id, connName: s.name, db: db.name, coll: coll.name },
-                                  reuse: true,
-                                }),
-                            },
-                            { label: 'Export…', action: () => setTransfer({ kind: 'export', conn: s, db: db.name, coll: coll.name }) },
-                            {
-                              label: 'Compare / sync…',
-                              action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name, db: db.name, coll: coll.name } }),
-                            },
-                            {
-                              label: 'Reschema…',
-                              action: () => dispatchTabs({ type: 'open', tab: { kind: 'reschema', connId: s.id, connName: s.name, db: db.name, coll: coll.name } }),
-                              disabled: coll.type === 'view',
-                            },
-                            {
-                              label: 'Mask data…',
-                              action: () => dispatchTabs({ type: 'open', tab: { kind: 'mask', connId: s.id, connName: s.name, db: db.name, coll: coll.name } }),
-                              disabled: coll.type === 'view',
-                            },
-                            {
-                              label: 'Import…',
-                              action: () => setTransfer({ kind: 'import', conn: s, db: db.name, coll: coll.name }),
-                              disabled: s.readOnly || coll.type === 'view',
-                            },
-                            {
-                              label: 'Drop collection…',
-                              action: () => dropColl(s, db.name, coll.name),
-                              danger: true,
-                              disabled: s.readOnly || coll.type === 'view',
-                            },
-                          ]
-                          return (
-                            <div
-                              key={coll.name}
-                              role="treeitem"
-                              className="tree-row level-2"
-                              onClick={() => openCollection(s, db.name, coll.name)}
-                              onContextMenu={(e) => openMenu(e, collMenu)}
-                              title={`${db.name}.${coll.name}`}
-                            >
-                              <span className={coll.type === 'view' ? 'icon-view' : 'icon-coll'} aria-hidden />
-                              <span className="tree-label">{coll.name}</span>
-                              {coll.type !== 'collection' && <span className="tree-meta">{coll.type}</span>}
-                              <button className="row-action" title="More actions" onClick={(e) => openMenu(e, collMenu)}>
-                                ⋯
-                              </button>
-                            </div>
-                          )
-                        })}
-                    </div>
-                  )
-                })}
+            )
+          }
+          if (r.kind === 'db') {
+            const k = `${r.s.id}/${r.db.name}`
+            return (
+              <div key={r.key} {...rowProps(r)} className={cls} onClick={() => activate(r)} onContextMenu={(e) => openMenu(e, dbMenu(r.s, r.db.name))}>
+                <span className={expanded.has(k) ? 'caret open' : 'caret'} />
+                <DatabaseIcon />
+                <span className="tree-label">{r.db.name}</span>
+                <span className="tree-meta">{formatBytes(r.db.sizeOnDisk)}</span>
+                {colls[k]?.loading && colls[k]?.data && <Spinner small />}
+                <button className="row-action" title="More actions" onClick={(e) => openMenu(e, dbMenu(r.s, r.db.name))}>
+                  ⋯
+                </button>
+              </div>
+            )
+          }
+          if (r.kind === 'group') {
+            const open = isGroupOpen(`${r.s.id}/${r.db}/${r.group}`, r.group) || !!f
+            const g = GROUPS.find((x) => x.kind === r.group)!
+            return (
+              <div key={r.key} {...rowProps(r)} className={`${cls} tree-group`} onClick={() => activate(r)}>
+                <span className={open ? 'caret open' : 'caret'} />
+                <FolderIcon open={open} />
+                <span className="tree-label">{g.label}</span>
+                <span className="tree-meta">{r.count}</span>
+              </div>
+            )
+          }
+          const c = r.coll
+          return (
+            <div
+              key={r.key}
+              {...rowProps(r)}
+              className={cls}
+              onClick={() => activate(r)}
+              onContextMenu={(e) => openMenu(e, collMenu(r.s, r.db, c))}
+              title={`${r.db}.${c.name}${c.type !== 'collection' ? ` (${c.type})` : ''}`}
+            >
+              <CollectionIcon kind={c.system ? 'system' : c.type === 'view' ? 'view' : c.type === 'timeseries' ? 'timeseries' : 'collection'} />
+              <span className="tree-label">{c.name}</span>
+              {c.type === 'timeseries' && <span className="tree-meta">time series</span>}
+              <button className="row-action" title="More actions" onClick={(e) => openMenu(e, collMenu(r.s, r.db, c))}>
+                ⋯
+              </button>
             </div>
           )
         })}
@@ -355,9 +503,12 @@ export function Sidebar() {
           <div className="saved-list">
             <div className="section-label">Saved connections</div>
             {disconnected.map((p) => (
-              <div key={p.id} className="tree-row level-0 saved" onDoubleClick={() => connect(p.id)}>
-                <span className="dot" />
-                <span className="tree-label">{p.name}</span>
+              <div key={p.id} className="tree-row level-0 saved" onDoubleClick={() => connect(p.id)} title={p.folder ? `${p.folder} / ${p.name}` : p.name}>
+                <ServerIcon />
+                <span className="tree-label">
+                  {p.folder && <span className="muted">{p.folder} / </span>}
+                  {p.name}
+                </span>
                 {connecting.has(p.id) ? (
                   <Spinner small />
                 ) : (
@@ -372,7 +523,7 @@ export function Sidebar() {
         {profiles.length === 0 && (
           <div className="sidebar-empty">
             <p>No connections yet.</p>
-            <button className="primary" onClick={() => openConnectionManager(true)}>
+            <button className="primary" onClick={() => openConnectionManager(true, 'new')}>
               New connection
             </button>
           </div>

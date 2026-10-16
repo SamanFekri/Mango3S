@@ -6,14 +6,13 @@ import (
 	"context"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
-	"go.mongodb.org/mongo-driver/v2/x/mongo/driver/connstring"
 
 	"mango3s/internal/apperr"
 	"mango3s/internal/config"
@@ -29,6 +28,13 @@ type Session struct {
 	ServerVersion string
 	Topology      string
 	ConnectedAt   time.Time
+	close         func() // tears down SSH tunnels; never nil once connected
+}
+
+func (s *Session) closeTunnel() {
+	if s.close != nil {
+		s.close()
+	}
 }
 
 // RequireWritable returns a READ_ONLY error for read-only sessions.
@@ -60,6 +66,7 @@ type TestResult struct {
 	ServerVersion string `json:"serverVersion"`
 	Topology      string `json:"topology"`
 	LatencyMs     int64  `json:"latencyMs"`
+	Via           string `json:"via,omitempty"` // e.g. "SSH tunnel via bastion"
 }
 
 // Manager owns all open clients, keyed by profile ID.
@@ -74,61 +81,46 @@ func NewManager(log *slog.Logger) *Manager {
 	return &Manager{log: log, sessions: map[string]*Session{}}
 }
 
-// BuildClientOptions turns a profile and its password into driver options.
-func BuildClientOptions(p config.Profile, password string) (*options.ClientOptions, error) {
-	timeout := time.Duration(p.ConnectTimeoutSeconds) * time.Second
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-	o := options.Client().ApplyURI(p.URI)
-	if err := o.Validate(); err != nil {
-		return nil, apperr.Wrap(apperr.CodeInvalidInput, err, "Invalid connection string.")
-	}
-	if o.AppName == nil {
-		o.SetAppName("Mango3S")
-	}
-	o.SetConnectTimeout(timeout).SetServerSelectionTimeout(timeout)
-	if p.Username != "" {
-		cred := options.Credential{}
-		if o.Auth != nil {
-			cred = *o.Auth
-		}
-		cred.Username = p.Username
-		cred.Password = password
-		cred.PasswordSet = password != ""
-		if p.AuthSource != "" {
-			cred.AuthSource = p.AuthSource
-		} else if cred.AuthSource == "" {
-			// The driver ignores authSource when the URI itself has no user.
-			if cs, err := connstring.Parse(p.URI); err == nil {
-				cred.AuthSource = cs.AuthSource
-			}
-		}
-		if p.AuthMechanism != "" {
-			cred.AuthMechanism = p.AuthMechanism
-		}
-		o.SetAuth(cred)
-	}
-	return o, nil
-}
-
-func open(ctx context.Context, p config.Profile, password string) (*mongo.Client, TestResult, error) {
-	opts, err := BuildClientOptions(p, password)
+func open(ctx context.Context, p config.Profile, c Credentials) (*mongo.Client, func(), TestResult, error) {
+	opts, err := BuildClientOptions(p, c)
 	if err != nil {
-		return nil, TestResult{}, err
+		return nil, nil, TestResult{}, err
+	}
+	dialer, closeTunnel, err := buildDialer(ctx, p, c)
+	if err != nil {
+		return nil, nil, TestResult{}, err
+	}
+	if dialer != nil {
+		opts.SetDialer(dialer)
 	}
 	client, err := mongo.Connect(opts)
 	if err != nil {
-		return nil, TestResult{}, apperr.From(err)
+		closeTunnel()
+		return nil, nil, TestResult{}, apperr.From(err)
 	}
 	start := time.Now()
 	if err := client.Ping(ctx, readpref.Nearest()); err != nil {
 		_ = client.Disconnect(context.Background())
-		return nil, TestResult{}, apperr.From(err)
+		closeTunnel()
+		return nil, nil, TestResult{}, apperr.From(err)
 	}
 	res := TestResult{LatencyMs: time.Since(start).Milliseconds()}
 	res.ServerVersion, res.Topology = describe(ctx, client)
-	return client, res, nil
+	res.Via = via(p)
+	return client, closeTunnel, res, nil
+}
+
+// via describes the network path for the connection test result.
+func via(p config.Profile) string {
+	p = p.Normalize()
+	var parts []string
+	if p.Proxy.Type != config.ProxyNone {
+		parts = append(parts, p.Proxy.Type+" proxy "+p.Proxy.Host)
+	}
+	if p.SSH.Enabled {
+		parts = append(parts, "SSH tunnel via "+p.SSH.Host)
+	}
+	return strings.Join(parts, " → ")
 }
 
 func describe(ctx context.Context, c *mongo.Client) (version, topology string) {
@@ -156,23 +148,24 @@ func describe(ctx context.Context, c *mongo.Client) (version, topology string) {
 }
 
 // Test opens a temporary client, pings the server and closes it.
-func (m *Manager) Test(ctx context.Context, p config.Profile, password string) (TestResult, error) {
-	client, res, err := open(ctx, p, password)
+func (m *Manager) Test(ctx context.Context, p config.Profile, c Credentials) (TestResult, error) {
+	client, closeTunnel, res, err := open(ctx, p, c)
 	if err != nil {
 		m.log.Info("connection test failed", "profile", p.Name, "err", err)
 		return TestResult{}, err
 	}
 	_ = client.Disconnect(context.Background())
+	closeTunnel()
 	m.log.Info("connection test succeeded", "profile", p.Name, "version", res.ServerVersion)
 	return res, nil
 }
 
 // Connect opens (or returns the existing) session for a profile.
-func (m *Manager) Connect(ctx context.Context, p config.Profile, password string) (*Session, error) {
+func (m *Manager) Connect(ctx context.Context, p config.Profile, c Credentials) (*Session, error) {
 	if s, err := m.Session(p.ID); err == nil {
 		return s, nil
 	}
-	client, res, err := open(ctx, p, password)
+	client, closeTunnel, res, err := open(ctx, p, c)
 	if err != nil {
 		m.log.Warn("connect failed", "profile", p.Name, "uri", logging.Redact(p.URI), "err", err)
 		return nil, err
@@ -185,11 +178,13 @@ func (m *Manager) Connect(ctx context.Context, p config.Profile, password string
 		ServerVersion: res.ServerVersion,
 		Topology:      res.Topology,
 		ConnectedAt:   time.Now(),
+		close:         closeTunnel,
 	}
 	m.mu.Lock()
 	if existing, ok := m.sessions[p.ID]; ok {
 		m.mu.Unlock()
 		_ = client.Disconnect(context.Background())
+		closeTunnel()
 		return existing, nil
 	}
 	m.sessions[p.ID] = s
@@ -208,7 +203,9 @@ func (m *Manager) Disconnect(ctx context.Context, id string) error {
 		return nil
 	}
 	m.log.Info("disconnected", "profile", s.Name)
-	return s.Client.Disconnect(ctx)
+	err := s.Client.Disconnect(ctx)
+	s.closeTunnel()
+	return err
 }
 
 // Session implements Source.
@@ -247,6 +244,7 @@ func (m *Manager) CloseAll(ctx context.Context) {
 		if err := s.Client.Disconnect(ctx); err != nil {
 			m.log.Warn("disconnect on shutdown failed", "profile", s.Name, "err", err)
 		}
+		s.closeTunnel()
 	}
 }
 

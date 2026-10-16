@@ -10,6 +10,10 @@ export function ApproveTask(arg1) {
   return window['go']['api']['App']['ApproveTask'](arg1);
 }
 
+export function BuildConnectionString(arg1) {
+  return window['go']['api']['App']['BuildConnectionString'](arg1);
+}
+
 export function CancelJob(arg1) {
   return window['go']['api']['App']['CancelJob'](arg1);
 }
@@ -22,12 +26,20 @@ export function ChooseExportFile(arg1) {
   return window['go']['api']['App']['ChooseExportFile'](arg1);
 }
 
+export function ChooseFile(arg1, arg2) {
+  return window['go']['api']['App']['ChooseFile'](arg1, arg2);
+}
+
 export function ChooseImportFile() {
   return window['go']['api']['App']['ChooseImportFile']();
 }
 
 export function ClearAIKey() {
   return window['go']['api']['App']['ClearAIKey']();
+}
+
+export function ClearCollectionHistory(arg1) {
+  return window['go']['api']['App']['ClearCollectionHistory'](arg1);
 }
 
 export function ClearFinishedJobs() {
@@ -48,6 +60,10 @@ export function CollectionStats(arg1, arg2, arg3) {
 
 export function Connect(arg1) {
   return window['go']['api']['App']['Connect'](arg1);
+}
+
+export function ConnectionCapabilities() {
+  return window['go']['api']['App']['ConnectionCapabilities']();
 }
 
 export function CountQuery(arg1, arg2) {
@@ -78,6 +94,10 @@ export function DeleteTask(arg1) {
   return window['go']['api']['App']['DeleteTask'](arg1);
 }
 
+export function DetectTools(arg1, arg2) {
+  return window['go']['api']['App']['DetectTools'](arg1, arg2);
+}
+
 export function Disconnect(arg1) {
   return window['go']['api']['App']['Disconnect'](arg1);
 }
@@ -88,6 +108,10 @@ export function DropCollection(arg1, arg2, arg3) {
 
 export function DropDatabase(arg1, arg2) {
   return window['go']['api']['App']['DropDatabase'](arg1, arg2);
+}
+
+export function DuplicateProfile(arg1) {
+  return window['go']['api']['App']['DuplicateProfile'](arg1);
 }
 
 export function ExecuteAIWrite(arg1, arg2) {
@@ -130,6 +154,10 @@ export function GetDocument(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['GetDocument'](arg1, arg2, arg3, arg4);
 }
 
+export function GetField(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['App']['GetField'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function GetMCPInfo() {
   return window['go']['api']['App']['GetMCPInfo']();
 }
@@ -156,6 +184,10 @@ export function IntrospectSQL(arg1) {
 
 export function ListBackups() {
   return window['go']['api']['App']['ListBackups']();
+}
+
+export function ListCollectionHistory(arg1) {
+  return window['go']['api']['App']['ListCollectionHistory'](arg1);
 }
 
 export function ListCollections(arg1, arg2) {
@@ -214,6 +246,10 @@ export function MigrationTypes() {
   return window['go']['api']['App']['MigrationTypes']();
 }
 
+export function ParseConnectionString(arg1) {
+  return window['go']['api']['App']['ParseConnectionString'](arg1);
+}
+
 export function PipelineFromText(arg1) {
   return window['go']['api']['App']['PipelineFromText'](arg1);
 }
@@ -248,6 +284,10 @@ export function PreviewSync(arg1, arg2) {
 
 export function QueryToShell(arg1) {
   return window['go']['api']['App']['QueryToShell'](arg1);
+}
+
+export function RecordCollectionOpened(arg1, arg2, arg3) {
+  return window['go']['api']['App']['RecordCollectionOpened'](arg1, arg2, arg3);
 }
 
 export function ReplaceDocument(arg1, arg2, arg3, arg4, arg5) {
@@ -322,6 +362,10 @@ export function SetTaskEnabled(arg1, arg2) {
   return window['go']['api']['App']['SetTaskEnabled'](arg1, arg2);
 }
 
+export function SetUnsavedWork(arg1) {
+  return window['go']['api']['App']['SetUnsavedWork'](arg1);
+}
+
 export function StartCompare(arg1) {
   return window['go']['api']['App']['StartCompare'](arg1);
 }
@@ -360,4 +404,8 @@ export function TestConnection(arg1) {
 
 export function TranslateSQL(arg1) {
   return window['go']['api']['App']['TranslateSQL'](arg1);
+}
+
+export function UpdateField(arg1) {
+  return window['go']['api']['App']['UpdateField'](arg1);
 }

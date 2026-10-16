@@ -15,13 +15,14 @@ type Document struct {
 	ID string `json:"id"`
 	// Text is the pretty, round-trippable shell-syntax rendering.
 	Text string `json:"text"`
-	// JSON is relaxed Extended JSON, used by the grid view.
+	// JSON is canonical Extended JSON (exact types), used by the tree and
+	// table views.
 	JSON string `json:"json"`
 }
 
 // NewDocument converts a decoded BSON document.
 func NewDocument(d bson.D) Document {
-	doc := Document{Text: mql.Pretty(d), JSON: mql.RelaxedJSON(d)}
+	doc := Document{Text: mql.Pretty(d), JSON: mql.CanonicalJSON(d)}
 	if id, ok := mql.Lookup(d, "_id"); ok {
 		doc.ID = mql.Compact(id)
 	}

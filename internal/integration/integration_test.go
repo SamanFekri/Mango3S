@@ -50,7 +50,7 @@ func setup(t *testing.T) env {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mgr := mongox.NewManager(log)
 	p := config.Profile{ID: "it", Name: "integration", URI: uri, ConnectTimeoutSeconds: 5}
-	if _, err := mgr.Connect(ctx, p, ""); err != nil {
+	if _, err := mgr.Connect(ctx, p, mongox.Credentials{}); err != nil {
 		t.Fatalf("cannot reach MongoDB at %s (set MONGO_URI): %v", uri, err)
 	}
 	db := "mango3s_it_" + config.NewID()
@@ -214,12 +214,11 @@ func TestAggregation(t *testing.T) {
 	}
 	// even numbers 0..48: 25 docs summing to 600
 	var even struct {
-		Count int `json:"count"`
-		Total int `json:"total"`
+		Count int `bson:"count"`
+		Total int `bson:"total"`
 	}
-	_ = json.Unmarshal([]byte(p.Documents[0].JSON), &even)
-	if even.Count != 25 || even.Total != 600 {
-		t.Fatalf("even group: %+v from %s", even, p.Documents[0].JSON)
+	if err := bson.UnmarshalExtJSON([]byte(p.Documents[0].JSON), true, &even); err != nil || even.Count != 25 || even.Total != 600 {
+		t.Fatalf("even group: %+v from %s (%v)", even, p.Documents[0].JSON, err)
 	}
 
 	// Preview up to the first stage, paged.
@@ -311,7 +310,7 @@ func TestReadOnlyConnection(t *testing.T) {
 		uri = "mongodb://localhost:27017"
 	}
 	ro := config.Profile{ID: "ro", Name: "ro", URI: uri, ReadOnly: true, ConnectTimeoutSeconds: 5}
-	if _, err := e.mgr.Connect(e.ctx, ro, ""); err != nil {
+	if _, err := e.mgr.Connect(e.ctx, ro, mongox.Credentials{}); err != nil {
 		t.Fatal(err)
 	}
 	docs := documents.New(e.mgr)

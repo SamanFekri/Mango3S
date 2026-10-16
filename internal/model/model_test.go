@@ -45,7 +45,7 @@ func TestNewDocument(t *testing.T) {
 	if d.ID != `ObjectId("`+oid.Hex()+`")` {
 		t.Fatalf("id: %s", d.ID)
 	}
-	if d.JSON != `{"_id":{"$oid":"`+oid.Hex()+`"},"n":2}` {
+	if d.JSON != `{"_id":{"$oid":"`+oid.Hex()+`"},"n":{"$numberLong":"2"}}` {
 		t.Fatalf("json: %s", d.JSON)
 	}
 	if NewDocument(bson.D{{Key: "x", Value: 1}}).ID != "" {

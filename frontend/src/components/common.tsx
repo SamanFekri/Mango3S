@@ -43,16 +43,22 @@ export function Modal({
   footer?: ReactNode
   wide?: boolean
 }) {
+  const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      // Only the topmost dialog closes (a confirmation over a form, …).
+      const dialogs = document.querySelectorAll('[role="dialog"]')
+      if (dialogs[dialogs.length - 1] !== ref.current) return
+      e.preventDefault()
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
+      <div ref={ref} className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
         <header className="modal-header">
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">
@@ -155,7 +161,7 @@ export function Segmented<T extends string>({
   label,
 }: {
   value: T
-  options: { value: T; label: string }[]
+  options: { value: T; label: string; title?: string }[]
   onChange: (v: T) => void
   label: string
 }) {
@@ -167,6 +173,7 @@ export function Segmented<T extends string>({
           role="radio"
           aria-checked={o.value === value}
           className={o.value === value ? 'active' : ''}
+          title={o.title}
           onClick={() => onChange(o.value)}
         >
           {o.label}

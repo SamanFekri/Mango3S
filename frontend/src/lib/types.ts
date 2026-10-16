@@ -6,7 +6,9 @@ export interface Settings {
   pageSize: number
   queryTimeoutSeconds: number
   confirmDeletes: boolean
-  defaultView: 'json' | 'table'
+  defaultView: 'tree' | 'json' | 'table'
+  /** Set once the user picks a default view in Settings; until then Tree is used. */
+  defaultViewChosen: boolean
   editorFontSize: number
   logLevel: 'debug' | 'info' | 'warn' | 'error'
   aiEnabled: boolean
@@ -15,6 +17,81 @@ export interface Settings {
   schedulerEnabled: boolean
 }
 
+export type ServerMode = 'uri' | 'manual'
+export type ServerType = 'standalone' | 'replicaSet' | 'sharded' | 'srv'
+
+export interface HostPort {
+  host: string
+  port: number
+}
+
+export interface ServerConfig {
+  mode: ServerMode
+  type: ServerType
+  hosts: HostPort[]
+  replicaSet: string
+  directConnection: boolean
+}
+
+export interface TLSConfig {
+  enabled: boolean
+  caFile: string
+  certKeyFile: string
+  allowInvalidCertificates: boolean
+  allowInvalidHostnames: boolean
+}
+
+export interface SSHConfig {
+  enabled: boolean
+  host: string
+  port: number
+  username: string
+  authMethod: 'password' | 'privateKey' | 'agent'
+  privateKeyFile: string
+  hostKey: string
+}
+
+export interface ProxyConfig {
+  type: 'none' | 'socks5' | 'http'
+  host: string
+  port: number
+  username: string
+}
+
+export interface ShellConfig {
+  defaultDb: string
+  initScript: string
+  runInitScript: boolean
+}
+
+export interface ToolsConfig {
+  dir: string
+  paths: Record<string, string>
+}
+
+export interface AdvancedConfig {
+  serverSelectionTimeoutSeconds: number
+  operationTimeoutSeconds: number
+  heartbeatSeconds: number
+  localThresholdMs: number
+  appName: string
+  readPreference: '' | 'primary' | 'primaryPreferred' | 'secondary' | 'secondaryPreferred' | 'nearest'
+  readPreferenceTags: string
+  maxStalenessSeconds: number
+  readConcern: string
+  writeConcernW: string
+  writeConcernJournal: '' | 'true' | 'false'
+  maxPoolSize: number
+  minPoolSize: number
+  maxConnecting: number
+  maxIdleTimeSeconds: number
+  retryWrites: '' | 'true' | 'false'
+  retryReads: '' | 'true' | 'false'
+  compressors: string[]
+}
+
+export type SecretKind = 'sshPassword' | 'sshPassphrase' | 'proxyPassword' | 'tlsKeyPassword' | 'awsSessionToken'
+
 export interface Profile {
   id: string
   name: string
@@ -22,24 +99,117 @@ export interface Profile {
   username?: string
   authSource?: string
   authMechanism?: string
+  authProperties?: string
   connectTimeoutSeconds: number
   readOnly: boolean
   hasPassword: boolean
   createdAt: string
   updatedAt: string
+  folder?: string
+  server: ServerConfig
+  tls: TLSConfig
+  ssh: SSHConfig
+  proxy: ProxyConfig
+  shell: ShellConfig
+  tools: ToolsConfig
+  advanced: AdvancedConfig
+  storedSecrets?: SecretKind[]
+  lastConnectedAt?: string
+}
+
+export interface SecretInput {
+  value: string
+  clear: boolean
 }
 
 export interface ProfileInput {
   id: string
   name: string
+  folder: string
   uri: string
+  server: ServerConfig
   username: string
   password: string
   clearPassword: boolean
   authSource: string
   authMechanism: string
+  authProperties: string
   connectTimeoutSeconds: number
   readOnly: boolean
+  tls: TLSConfig
+  ssh: SSHConfig
+  proxy: ProxyConfig
+  shell: ShellConfig
+  tools: ToolsConfig
+  advanced: AdvancedConfig
+  secrets: Partial<Record<SecretKind, SecretInput>>
+}
+
+export interface ParsedURI {
+  server: ServerConfig
+  username: string
+  hasPassword: boolean
+  authSource: string
+  authMechanism: string
+  tls: boolean
+  appName: string
+  readPreference: string
+  database: string
+  unmapped: string[] | null
+}
+
+export interface ToolInfo {
+  name: string
+  purpose: string
+  path: string
+  source: string
+  version: string
+  status: 'ok' | 'missing' | 'incompatible' | 'error'
+  message: string
+}
+
+export interface Capability {
+  id: string
+  label: string
+  supported: boolean
+  note?: string
+}
+
+export interface CollectionHistoryEntry {
+  db: string
+  coll: string
+  lastOpened: string
+  count: number
+}
+
+export interface FieldValue {
+  exists: boolean
+  type: string
+  text: string
+  expected: string
+  editable: boolean
+  reason?: string
+}
+
+export interface FieldUpdate {
+  connId: string
+  db: string
+  coll: string
+  id: string
+  path: string[]
+  type: string
+  text: string
+  value?: string
+  expected: string
+  expectedMissing: boolean
+  unset: boolean
+}
+
+export interface FieldResult {
+  document: Doc
+  previous: string
+  current: string
+  existed: boolean
 }
 
 export interface SessionInfo {
@@ -55,6 +225,7 @@ export interface TestResult {
   serverVersion: string
   topology: string
   latencyMs: number
+  via?: string
 }
 
 export interface DatabaseInfo {
@@ -67,6 +238,8 @@ export interface CollectionInfo {
   name: string
   type: string
   readOnly: boolean
+  /** Name starts with "system."; shown in the explorer's System folder. */
+  system: boolean
 }
 
 export interface IndexInfo {

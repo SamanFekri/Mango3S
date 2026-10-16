@@ -389,17 +389,41 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class SecretInput {
+	    value: string;
+	    clear: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SecretInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.value = source["value"];
+	        this.clear = source["clear"];
+	    }
+	}
 	export class ProfileInput {
 	    id: string;
 	    name: string;
+	    folder: string;
 	    uri: string;
+	    server: config.ServerConfig;
 	    username: string;
 	    password: string;
 	    clearPassword: boolean;
 	    authSource: string;
 	    authMechanism: string;
+	    authProperties: string;
 	    connectTimeoutSeconds: number;
 	    readOnly: boolean;
+	    tls: config.TLSConfig;
+	    ssh: config.SSHConfig;
+	    proxy: config.ProxyConfig;
+	    shell: config.ShellConfig;
+	    tools: config.ToolsConfig;
+	    advanced: config.AdvancedConfig;
+	    secrets: Record<string, SecretInput>;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProfileInput(source);
@@ -409,15 +433,43 @@ export namespace api {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.folder = source["folder"];
 	        this.uri = source["uri"];
+	        this.server = this.convertValues(source["server"], config.ServerConfig);
 	        this.username = source["username"];
 	        this.password = source["password"];
 	        this.clearPassword = source["clearPassword"];
 	        this.authSource = source["authSource"];
 	        this.authMechanism = source["authMechanism"];
+	        this.authProperties = source["authProperties"];
 	        this.connectTimeoutSeconds = source["connectTimeoutSeconds"];
 	        this.readOnly = source["readOnly"];
+	        this.tls = this.convertValues(source["tls"], config.TLSConfig);
+	        this.ssh = this.convertValues(source["ssh"], config.SSHConfig);
+	        this.proxy = this.convertValues(source["proxy"], config.ProxyConfig);
+	        this.shell = this.convertValues(source["shell"], config.ShellConfig);
+	        this.tools = this.convertValues(source["tools"], config.ToolsConfig);
+	        this.advanced = this.convertValues(source["advanced"], config.AdvancedConfig);
+	        this.secrets = this.convertValues(source["secrets"], SecretInput, true);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class SQLRequest {
 	    connId: string;
@@ -487,6 +539,7 @@ export namespace api {
 		    return a;
 		}
 	}
+	
 	
 	export class TransformPreview {
 	    planId: string;
@@ -908,38 +961,84 @@ export namespace compare {
 
 export namespace config {
 	
-	export class Profile {
-	    id: string;
-	    name: string;
-	    uri: string;
-	    username?: string;
-	    authSource?: string;
-	    authMechanism?: string;
-	    connectTimeoutSeconds: number;
-	    readOnly: boolean;
-	    hasPassword: boolean;
-	    // Go type: time
-	    createdAt: any;
-	    // Go type: time
-	    updatedAt: any;
+	export class AdvancedConfig {
+	    serverSelectionTimeoutSeconds: number;
+	    operationTimeoutSeconds: number;
+	    heartbeatSeconds: number;
+	    localThresholdMs: number;
+	    appName: string;
+	    readPreference: string;
+	    readPreferenceTags: string;
+	    maxStalenessSeconds: number;
+	    readConcern: string;
+	    writeConcernW: string;
+	    writeConcernJournal: string;
+	    maxPoolSize: number;
+	    minPoolSize: number;
+	    maxConnecting: number;
+	    maxIdleTimeSeconds: number;
+	    retryWrites: string;
+	    retryReads: string;
+	    compressors: string[];
 	
 	    static createFrom(source: any = {}) {
-	        return new Profile(source);
+	        return new AdvancedConfig(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.uri = source["uri"];
-	        this.username = source["username"];
-	        this.authSource = source["authSource"];
-	        this.authMechanism = source["authMechanism"];
-	        this.connectTimeoutSeconds = source["connectTimeoutSeconds"];
-	        this.readOnly = source["readOnly"];
-	        this.hasPassword = source["hasPassword"];
-	        this.createdAt = this.convertValues(source["createdAt"], null);
-	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	        this.serverSelectionTimeoutSeconds = source["serverSelectionTimeoutSeconds"];
+	        this.operationTimeoutSeconds = source["operationTimeoutSeconds"];
+	        this.heartbeatSeconds = source["heartbeatSeconds"];
+	        this.localThresholdMs = source["localThresholdMs"];
+	        this.appName = source["appName"];
+	        this.readPreference = source["readPreference"];
+	        this.readPreferenceTags = source["readPreferenceTags"];
+	        this.maxStalenessSeconds = source["maxStalenessSeconds"];
+	        this.readConcern = source["readConcern"];
+	        this.writeConcernW = source["writeConcernW"];
+	        this.writeConcernJournal = source["writeConcernJournal"];
+	        this.maxPoolSize = source["maxPoolSize"];
+	        this.minPoolSize = source["minPoolSize"];
+	        this.maxConnecting = source["maxConnecting"];
+	        this.maxIdleTimeSeconds = source["maxIdleTimeSeconds"];
+	        this.retryWrites = source["retryWrites"];
+	        this.retryReads = source["retryReads"];
+	        this.compressors = source["compressors"];
+	    }
+	}
+	export class HostPort {
+	    host: string;
+	    port: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new HostPort(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.port = source["port"];
+	    }
+	}
+	export class ServerConfig {
+	    mode: string;
+	    type: string;
+	    hosts: HostPort[];
+	    replicaSet: string;
+	    directConnection: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ServerConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.type = source["type"];
+	        this.hosts = this.convertValues(source["hosts"], HostPort);
+	        this.replicaSet = source["replicaSet"];
+	        this.directConnection = source["directConnection"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -960,12 +1059,231 @@ export namespace config {
 		    return a;
 		}
 	}
+	export class ParsedURI {
+	    server: ServerConfig;
+	    username: string;
+	    hasPassword: boolean;
+	    authSource: string;
+	    authMechanism: string;
+	    tls: boolean;
+	    appName: string;
+	    readPreference: string;
+	    database: string;
+	    unmapped: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ParsedURI(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.server = this.convertValues(source["server"], ServerConfig);
+	        this.username = source["username"];
+	        this.hasPassword = source["hasPassword"];
+	        this.authSource = source["authSource"];
+	        this.authMechanism = source["authMechanism"];
+	        this.tls = source["tls"];
+	        this.appName = source["appName"];
+	        this.readPreference = source["readPreference"];
+	        this.database = source["database"];
+	        this.unmapped = source["unmapped"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ToolsConfig {
+	    dir: string;
+	    paths: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new ToolsConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dir = source["dir"];
+	        this.paths = source["paths"];
+	    }
+	}
+	export class ShellConfig {
+	    defaultDb: string;
+	    initScript: string;
+	    runInitScript: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.defaultDb = source["defaultDb"];
+	        this.initScript = source["initScript"];
+	        this.runInitScript = source["runInitScript"];
+	    }
+	}
+	export class ProxyConfig {
+	    type: string;
+	    host: string;
+	    port: number;
+	    username: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProxyConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.username = source["username"];
+	    }
+	}
+	export class SSHConfig {
+	    enabled: boolean;
+	    host: string;
+	    port: number;
+	    username: string;
+	    authMethod: string;
+	    privateKeyFile: string;
+	    hostKey: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SSHConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.username = source["username"];
+	        this.authMethod = source["authMethod"];
+	        this.privateKeyFile = source["privateKeyFile"];
+	        this.hostKey = source["hostKey"];
+	    }
+	}
+	export class TLSConfig {
+	    enabled: boolean;
+	    caFile: string;
+	    certKeyFile: string;
+	    allowInvalidCertificates: boolean;
+	    allowInvalidHostnames: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TLSConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.caFile = source["caFile"];
+	        this.certKeyFile = source["certKeyFile"];
+	        this.allowInvalidCertificates = source["allowInvalidCertificates"];
+	        this.allowInvalidHostnames = source["allowInvalidHostnames"];
+	    }
+	}
+	export class Profile {
+	    id: string;
+	    name: string;
+	    uri: string;
+	    username?: string;
+	    authSource?: string;
+	    authMechanism?: string;
+	    connectTimeoutSeconds: number;
+	    readOnly: boolean;
+	    hasPassword: boolean;
+	    // Go type: time
+	    createdAt: any;
+	    // Go type: time
+	    updatedAt: any;
+	    folder?: string;
+	    server: ServerConfig;
+	    authProperties?: string;
+	    tls: TLSConfig;
+	    ssh: SSHConfig;
+	    proxy: ProxyConfig;
+	    shell: ShellConfig;
+	    tools: ToolsConfig;
+	    advanced: AdvancedConfig;
+	    storedSecrets?: string[];
+	    // Go type: time
+	    lastConnectedAt?: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Profile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.uri = source["uri"];
+	        this.username = source["username"];
+	        this.authSource = source["authSource"];
+	        this.authMechanism = source["authMechanism"];
+	        this.connectTimeoutSeconds = source["connectTimeoutSeconds"];
+	        this.readOnly = source["readOnly"];
+	        this.hasPassword = source["hasPassword"];
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	        this.folder = source["folder"];
+	        this.server = this.convertValues(source["server"], ServerConfig);
+	        this.authProperties = source["authProperties"];
+	        this.tls = this.convertValues(source["tls"], TLSConfig);
+	        this.ssh = this.convertValues(source["ssh"], SSHConfig);
+	        this.proxy = this.convertValues(source["proxy"], ProxyConfig);
+	        this.shell = this.convertValues(source["shell"], ShellConfig);
+	        this.tools = this.convertValues(source["tools"], ToolsConfig);
+	        this.advanced = this.convertValues(source["advanced"], AdvancedConfig);
+	        this.storedSecrets = source["storedSecrets"];
+	        this.lastConnectedAt = this.convertValues(source["lastConnectedAt"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
 	export class Settings {
 	    theme: string;
 	    pageSize: number;
 	    queryTimeoutSeconds: number;
 	    confirmDeletes: boolean;
 	    defaultView: string;
+	    defaultViewChosen: boolean;
 	    editorFontSize: number;
 	    logLevel: string;
 	    aiEnabled: boolean;
@@ -984,12 +1302,110 @@ export namespace config {
 	        this.queryTimeoutSeconds = source["queryTimeoutSeconds"];
 	        this.confirmDeletes = source["confirmDeletes"];
 	        this.defaultView = source["defaultView"];
+	        this.defaultViewChosen = source["defaultViewChosen"];
 	        this.editorFontSize = source["editorFontSize"];
 	        this.logLevel = source["logLevel"];
 	        this.aiEnabled = source["aiEnabled"];
 	        this.aiModel = source["aiModel"];
 	        this.aiAllowSamples = source["aiAllowSamples"];
 	        this.schedulerEnabled = source["schedulerEnabled"];
+	    }
+	}
+	
+	
+
+}
+
+export namespace documents {
+	
+	export class FieldResult {
+	    document: model.Document;
+	    previous: string;
+	    current: string;
+	    existed: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FieldResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.document = this.convertValues(source["document"], model.Document);
+	        this.previous = source["previous"];
+	        this.current = source["current"];
+	        this.existed = source["existed"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class FieldUpdate {
+	    connId: string;
+	    db: string;
+	    coll: string;
+	    id: string;
+	    path: string[];
+	    type: string;
+	    text: string;
+	    value?: string;
+	    expected: string;
+	    expectedMissing: boolean;
+	    unset: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FieldUpdate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connId = source["connId"];
+	        this.db = source["db"];
+	        this.coll = source["coll"];
+	        this.id = source["id"];
+	        this.path = source["path"];
+	        this.type = source["type"];
+	        this.text = source["text"];
+	        this.value = source["value"];
+	        this.expected = source["expected"];
+	        this.expectedMissing = source["expectedMissing"];
+	        this.unset = source["unset"];
+	    }
+	}
+	export class FieldValue {
+	    exists: boolean;
+	    type: string;
+	    text: string;
+	    expected: string;
+	    editable: boolean;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FieldValue(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.exists = source["exists"];
+	        this.type = source["type"];
+	        this.text = source["text"];
+	        this.expected = source["expected"];
+	        this.editable = source["editable"];
+	        this.reason = source["reason"];
 	    }
 	}
 
@@ -1189,6 +1605,7 @@ export namespace explorer {
 	    name: string;
 	    type: string;
 	    readOnly: boolean;
+	    system: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new CollectionInfo(source);
@@ -1199,6 +1616,7 @@ export namespace explorer {
 	        this.name = source["name"];
 	        this.type = source["type"];
 	        this.readOnly = source["readOnly"];
+	        this.system = source["system"];
 	    }
 	}
 	export class IndexInfo {
@@ -2059,6 +2477,7 @@ export namespace mongox {
 	    serverVersion: string;
 	    topology: string;
 	    latencyMs: number;
+	    via?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TestResult(source);
@@ -2069,6 +2488,7 @@ export namespace mongox {
 	        this.serverVersion = source["serverVersion"];
 	        this.topology = source["topology"];
 	        this.latencyMs = source["latencyMs"];
+	        this.via = source["via"];
 	    }
 	}
 
@@ -2105,6 +2525,48 @@ export namespace query {
 	        this.page = source["page"];
 	        this.pageSize = source["pageSize"];
 	    }
+	}
+
+}
+
+export namespace recent {
+	
+	export class Entry {
+	    db: string;
+	    coll: string;
+	    // Go type: time
+	    lastOpened: any;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.db = source["db"];
+	        this.coll = source["coll"];
+	        this.lastOpened = this.convertValues(source["lastOpened"], null);
+	        this.count = source["count"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -2642,6 +3104,35 @@ export namespace syncer {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace tools {
+	
+	export class Info {
+	    name: string;
+	    purpose: string;
+	    path: string;
+	    source: string;
+	    version: string;
+	    status: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.purpose = source["purpose"];
+	        this.path = source["path"];
+	        this.source = source["source"];
+	        this.version = source["version"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	    }
 	}
 
 }

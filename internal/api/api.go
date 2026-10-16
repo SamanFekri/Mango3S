@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -29,6 +29,7 @@ import (
 	"mango3s/internal/mongox"
 	"mango3s/internal/mql"
 	"mango3s/internal/query"
+	"mango3s/internal/recent"
 	"mango3s/internal/schema"
 	"mango3s/internal/secrets"
 	"mango3s/internal/shell"
@@ -73,6 +74,9 @@ type App struct {
 	library  *library.Store
 	history  *library.History
 
+	recent      *recent.Store
+	unsavedWork atomic.Bool // set by the UI; the window asks before quitting
+
 	settingsMu sync.RWMutex
 	settings   config.Settings
 
@@ -106,6 +110,7 @@ func New(d Deps) *App {
 		explain:  explain.New(d.Conns),
 		library:  library.NewStore(d.Store.Dir()),
 		history:  library.NewHistory(d.Store.Dir(), 500),
+		recent:   recent.New(d.Store.Dir()),
 	}
 	a.transfer = transfer.New(d.Conns, a.jobs)
 	a.p2 = newP2(a)
@@ -300,169 +305,6 @@ func (a *App) SaveSettings(s config.Settings) (config.Settings, error) {
 		a.logLevel.Set(logging.ParseLevel(saved.LogLevel))
 	}
 	return saved, nil
-}
-
-// ---- connection profiles --------------------------------------------------
-
-// ProfileInput is the connection form. Password semantics: a non-empty
-// Password replaces the stored one; ClearPassword removes it; otherwise the
-// stored password is kept.
-type ProfileInput struct {
-	ID                    string `json:"id"`
-	Name                  string `json:"name"`
-	URI                   string `json:"uri"`
-	Username              string `json:"username"`
-	Password              string `json:"password"`
-	ClearPassword         bool   `json:"clearPassword"`
-	AuthSource            string `json:"authSource"`
-	AuthMechanism         string `json:"authMechanism"`
-	ConnectTimeoutSeconds int    `json:"connectTimeoutSeconds"`
-	ReadOnly              bool   `json:"readOnly"`
-}
-
-// toProfile strips credentials out of the URI into the returned username and
-// password (the explicit form fields take precedence).
-func (in ProfileInput) toProfile() (config.Profile, string, error) {
-	uri, user, pass, err := config.SplitCredentials(in.URI)
-	if err != nil {
-		return config.Profile{}, "", err
-	}
-	username := strings.TrimSpace(in.Username)
-	if username == "" {
-		username = user
-	} else if user != "" && user != username {
-		return config.Profile{}, "", apperr.Invalid("The username in the connection string (%q) differs from the Username field (%q).", user, username)
-	}
-	password := in.Password
-	if password == "" {
-		password = pass
-	}
-	p := config.Profile{
-		ID:                    in.ID,
-		Name:                  strings.TrimSpace(in.Name),
-		URI:                   uri,
-		Username:              username,
-		AuthSource:            strings.TrimSpace(in.AuthSource),
-		AuthMechanism:         strings.TrimSpace(in.AuthMechanism),
-		ConnectTimeoutSeconds: in.ConnectTimeoutSeconds,
-		ReadOnly:              in.ReadOnly,
-	}
-	if p.ConnectTimeoutSeconds <= 0 {
-		p.ConnectTimeoutSeconds = 10
-	}
-	return p, password, p.Validate()
-}
-
-// ListProfiles returns saved connection profiles (never passwords).
-func (a *App) ListProfiles() ([]config.Profile, error) {
-	list, err := a.store.ListProfiles()
-	return list, a.encode("ListProfiles", err)
-}
-
-// SaveProfile creates or updates a profile; the password goes to the secret store.
-func (a *App) SaveProfile(in ProfileInput) (config.Profile, error) {
-	p, password, err := in.toProfile()
-	if err != nil {
-		return config.Profile{}, a.encode("SaveProfile", err)
-	}
-	if p.ID != "" {
-		existing, err := a.store.GetProfile(p.ID)
-		if err != nil {
-			return config.Profile{}, a.encode("SaveProfile", err)
-		}
-		p.HasPassword = existing.HasPassword
-	}
-	saved, err := a.store.SaveProfile(p)
-	if err != nil {
-		return config.Profile{}, a.encode("SaveProfile", err)
-	}
-	switch {
-	case password != "":
-		if err := a.secrets.Set(saved.ID, password); err != nil {
-			return saved, a.encode("SaveProfile", apperr.Wrap(apperr.CodeSecretBackend, err,
-				"The profile was saved, but the password could not be stored securely."))
-		}
-		saved.HasPassword = true
-	case in.ClearPassword:
-		if err := a.secrets.Delete(saved.ID); err != nil {
-			return saved, a.encode("SaveProfile", apperr.Wrap(apperr.CodeSecretBackend, err, "The stored password could not be removed."))
-		}
-		saved.HasPassword = false
-	}
-	if saved.HasPassword != p.HasPassword {
-		if saved, err = a.store.SaveProfile(saved); err != nil {
-			return config.Profile{}, a.encode("SaveProfile", err)
-		}
-	}
-	a.log.Info("profile saved", "profile", saved.Name, "uri", saved.URI, "hasPassword", saved.HasPassword)
-	return saved, nil
-}
-
-// DeleteProfile disconnects and removes a profile and its stored password.
-func (a *App) DeleteProfile(id string) error {
-	_ = a.conns.Disconnect(a.ctx, id)
-	if err := a.secrets.Delete(id); err != nil {
-		a.log.Warn("could not delete stored password", "err", err)
-	}
-	return a.encode("DeleteProfile", a.store.DeleteProfile(id))
-}
-
-func (a *App) passwordFor(p config.Profile) (string, error) {
-	if !p.HasPassword || p.ID == "" {
-		return "", nil
-	}
-	pw, err := a.secrets.Get(p.ID)
-	if errors.Is(err, secrets.ErrNotFound) {
-		return "", apperr.New(apperr.CodeSecretBackend, "The saved password for %q is missing. Edit the connection and enter it again.", p.Name)
-	}
-	if err != nil {
-		return "", apperr.Wrap(apperr.CodeSecretBackend, err, "The saved password could not be read from the secret store.")
-	}
-	return pw, nil
-}
-
-// TestConnection checks the form values without saving them.
-func (a *App) TestConnection(in ProfileInput) (mongox.TestResult, error) {
-	return call(a, "TestConnection", "", func(ctx context.Context) (mongox.TestResult, error) {
-		p, password, err := in.toProfile()
-		if err != nil {
-			return mongox.TestResult{}, err
-		}
-		if password == "" && !in.ClearPassword && p.ID != "" && p.Username != "" {
-			if existing, err := a.store.GetProfile(p.ID); err == nil {
-				if password, err = a.passwordFor(existing); err != nil {
-					return mongox.TestResult{}, err
-				}
-			}
-		}
-		return a.conns.Test(ctx, p, password)
-	})
-}
-
-// Connect opens a saved profile.
-func (a *App) Connect(profileID string) (mongox.SessionInfo, error) {
-	return call(a, "Connect", "connect:"+profileID, func(ctx context.Context) (mongox.SessionInfo, error) {
-		p, err := a.store.GetProfile(profileID)
-		if err != nil {
-			return mongox.SessionInfo{}, err
-		}
-		s, err := a.connectProfile(ctx, p)
-		if err != nil {
-			return mongox.SessionInfo{}, err
-		}
-		return mongox.SessionInfo{ID: s.ProfileID, Name: s.Name, ReadOnly: s.ReadOnly,
-			ServerVersion: s.ServerVersion, Topology: s.Topology, ConnectedAt: s.ConnectedAt}, nil
-	})
-}
-
-// connectProfile opens (or reuses) a session with the stored credentials.
-// Used by Connect and by background work (scheduled tasks, MCP).
-func (a *App) connectProfile(ctx context.Context, p config.Profile) (*mongox.Session, error) {
-	pw, err := a.passwordFor(p)
-	if err != nil {
-		return nil, err
-	}
-	return a.conns.Connect(ctx, p, pw)
 }
 
 // ensureConnected returns a session for a profile ID, connecting if needed.

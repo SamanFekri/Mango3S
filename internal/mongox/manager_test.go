@@ -17,7 +17,7 @@ func TestBuildClientOptions(t *testing.T) {
 		Username:              "bob",
 		ConnectTimeoutSeconds: 3,
 	}
-	o, err := BuildClientOptions(p, "pw")
+	o, err := BuildClientOptions(p, Credentials{Password: "pw"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,17 +35,17 @@ func TestBuildClientOptions(t *testing.T) {
 	}
 
 	p.AuthSource, p.AuthMechanism = "admin", "SCRAM-SHA-256"
-	o, _ = BuildClientOptions(p, "")
+	o, _ = BuildClientOptions(p, Credentials{})
 	if o.Auth.AuthSource != "admin" || o.Auth.AuthMechanism != "SCRAM-SHA-256" || o.Auth.PasswordSet {
 		t.Fatalf("explicit auth fields: %+v", o.Auth)
 	}
 
-	o, _ = BuildClientOptions(config.Profile{URI: "mongodb://h"}, "")
+	o, _ = BuildClientOptions(config.Profile{URI: "mongodb://h"}, Credentials{})
 	if o.Auth != nil || *o.AppName != "Mango3S" {
 		t.Fatal("anonymous profile should have no credential and default app name")
 	}
 
-	if _, err := BuildClientOptions(config.Profile{URI: "mongodb://h/?connectTimeoutMS=abc"}, ""); !apperr.Is(err, apperr.CodeInvalidInput) {
+	if _, err := BuildClientOptions(config.Profile{URI: "mongodb://h/?connectTimeoutMS=abc"}, Credentials{}); !apperr.Is(err, apperr.CodeInvalidInput) {
 		t.Fatalf("invalid URI: %v", err)
 	}
 }
@@ -53,11 +53,11 @@ func TestBuildClientOptions(t *testing.T) {
 func TestUnreachableServerIsClassified(t *testing.T) {
 	m := NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	p := config.Profile{ID: "x", Name: "dead", URI: "mongodb://127.0.0.1:1/?directConnection=true", ConnectTimeoutSeconds: 1}
-	_, err := m.Test(context.Background(), p, "")
+	_, err := m.Test(context.Background(), p, Credentials{})
 	if !apperr.Is(err, apperr.CodeUnreachable) && !apperr.Is(err, apperr.CodeTimeout) {
 		t.Fatalf("want UNREACHABLE or TIMEOUT, got %v", err)
 	}
-	if _, err := m.Connect(context.Background(), p, ""); err == nil {
+	if _, err := m.Connect(context.Background(), p, Credentials{}); err == nil {
 		t.Fatal("connect to dead server succeeded")
 	}
 	if _, err := m.Session("x"); !apperr.Is(err, apperr.CodeNotConnected) {

@@ -1,102 +1,214 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
-import type { Profile, ProfileInput, TestResult } from '../lib/types'
+import type { AdvancedConfig, Capability, CollectionHistoryEntry, Profile, ProfileInput, TestResult } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { ErrorBanner, Modal, Spinner } from './common'
+import { AdvancedTab, AuthTab, HistoryTab, ProxyTab, ServerTab, ShellTab, SSHTab, TLSTab, ToolsTab, type Patch, type Setter } from './ConnectionTabs'
 
-const MECHANISMS = ['', 'SCRAM-SHA-256', 'SCRAM-SHA-1', 'MONGODB-X509', 'PLAIN', 'MONGODB-AWS']
+export const CONNECTION_TABS = [
+  { id: 'server', label: 'Server' },
+  { id: 'auth', label: 'Authentication' },
+  { id: 'tls', label: 'SSL / TLS' },
+  { id: 'ssh', label: 'SSH' },
+  { id: 'proxy', label: 'Proxy' },
+  { id: 'shell', label: 'IntelliShell' },
+  { id: 'tools', label: 'MongoDB Tools' },
+  { id: 'advanced', label: 'Advanced' },
+  { id: 'history', label: 'Collection History' },
+] as const
+type TabId = (typeof CONNECTION_TABS)[number]['id']
 
-function blank(): ProfileInput {
+/** Error messages start with the tab to fix ("SSH: …"); this finds it. */
+const ERROR_TABS: [string, TabId][] = [
+  ['Server:', 'server'],
+  ['Authentication', 'auth'],
+  ['SSL / TLS', 'tls'],
+  ['TLS', 'tls'],
+  ['SSH', 'ssh'],
+  ['Proxy', 'proxy'],
+  ['Advanced', 'advanced'],
+]
+
+const emptyAdvanced = (): AdvancedConfig => ({
+  serverSelectionTimeoutSeconds: 0, operationTimeoutSeconds: 0, heartbeatSeconds: 0, localThresholdMs: 0, appName: '',
+  readPreference: '', readPreferenceTags: '', maxStalenessSeconds: 0, readConcern: '', writeConcernW: '', writeConcernJournal: '',
+  maxPoolSize: 0, minPoolSize: 0, maxConnecting: 0, maxIdleTimeSeconds: 0, retryWrites: '', retryReads: '', compressors: [],
+})
+
+export function blankProfile(): ProfileInput {
   return {
-    id: '',
-    name: '',
-    uri: 'mongodb://localhost:27017',
-    username: '',
-    password: '',
-    clearPassword: false,
-    authSource: '',
-    authMechanism: '',
-    connectTimeoutSeconds: 10,
-    readOnly: false,
+    id: '', name: '', folder: '', uri: 'mongodb://localhost:27017',
+    server: { mode: 'manual', type: 'standalone', hosts: [{ host: 'localhost', port: 27017 }], replicaSet: '', directConnection: false },
+    username: '', password: '', clearPassword: false, authSource: '', authMechanism: '', authProperties: '',
+    connectTimeoutSeconds: 10, readOnly: false,
+    tls: { enabled: false, caFile: '', certKeyFile: '', allowInvalidCertificates: false, allowInvalidHostnames: false },
+    ssh: { enabled: false, host: '', port: 22, username: '', authMethod: 'password', privateKeyFile: '', hostKey: '' },
+    proxy: { type: 'none', host: '', port: 0, username: '' },
+    shell: { defaultDb: '', initScript: '', runInitScript: false },
+    tools: { dir: '', paths: {} },
+    advanced: emptyAdvanced(),
+    secrets: {},
   }
 }
 
-function fromProfile(p: Profile): ProfileInput {
+export function fromProfile(p: Profile): ProfileInput {
+  const b = blankProfile()
   return {
+    ...b,
     id: p.id,
     name: p.name,
+    folder: p.folder ?? '',
     uri: p.uri,
+    server: p.server?.mode ? { ...p.server, hosts: p.server.hosts ?? [] } : { ...b.server, mode: 'uri' },
     username: p.username ?? '',
-    password: '',
-    clearPassword: false,
     authSource: p.authSource ?? '',
     authMechanism: p.authMechanism ?? '',
+    authProperties: p.authProperties ?? '',
     connectTimeoutSeconds: p.connectTimeoutSeconds,
     readOnly: p.readOnly,
+    tls: { ...b.tls, ...p.tls },
+    ssh: { ...b.ssh, ...p.ssh },
+    proxy: { ...b.proxy, ...p.proxy, type: p.proxy?.type || 'none' },
+    shell: { ...b.shell, ...p.shell },
+    tools: { dir: p.tools?.dir ?? '', paths: p.tools?.paths ?? {} },
+    advanced: { ...emptyAdvanced(), ...p.advanced, compressors: p.advanced?.compressors ?? [] },
   }
+}
+
+interface FolderNode {
+  name: string
+  path: string
+  folders: FolderNode[]
+  profiles: Profile[]
+}
+
+function folderTree(profiles: Profile[], filter: string): FolderNode {
+  const root: FolderNode = { name: '', path: '', folders: [], profiles: [] }
+  const f = filter.trim().toLowerCase()
+  for (const p of profiles) {
+    if (f && !`${p.name} ${p.folder ?? ''} ${p.uri}`.toLowerCase().includes(f)) continue
+    let node = root
+    for (const part of (p.folder ?? '').split('/').filter(Boolean)) {
+      let child = node.folders.find((c) => c.name === part)
+      if (!child) {
+        child = { name: part, path: node.path ? `${node.path}/${part}` : part, folders: [], profiles: [] }
+        node.folders.push(child)
+        node.folders.sort((a, b) => a.name.localeCompare(b.name))
+      }
+      node = child
+    }
+    node.profiles.push(p)
+  }
+  return root
 }
 
 export function ConnectionManager() {
-  const { profiles, reloadProfiles, openConnectionManager, connect, sessions, toast, confirm, disconnect } = useApp()
-  const [selected, setSelected] = useState<string | null>(profiles[0]?.id ?? null)
-  const [form, setForm] = useState<ProfileInput>(() => (profiles[0] ? fromProfile(profiles[0]) : blank()))
+  const { profiles, reloadProfiles, openConnectionManager, connectionManagerSelect, connect, sessions, toast, confirm, disconnect, dispatchTabs } = useApp()
+  const initial = connectionManagerSelect === 'new' ? null : (profiles.find((p) => p.id === connectionManagerSelect) ?? profiles[0] ?? null)
+  const [selected, setSelected] = useState<string | null>(initial?.id ?? null)
+  const [form, setForm] = useState<ProfileInput>(() => (initial ? fromProfile(initial) : blankProfile()))
+  const [tab, setTab] = useState<TabId>('server')
   const [busy, setBusy] = useState<'' | 'test' | 'save' | 'connect'>('')
   const [error, setError] = useState<AppError | null>(null)
   const [test, setTest] = useState<TestResult | null>(null)
   const [dirty, setDirty] = useState(false)
-
-  const current = profiles.find((p) => p.id === selected)
-  const close = () => openConnectionManager(false)
+  const [filter, setFilter] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [caps, setCaps] = useState<Record<string, Capability[]>>({})
 
   useEffect(() => {
-    setError(null)
-    setTest(null)
-  }, [selected])
+    backend.connectionCapabilities().then(setCaps).catch(() => undefined)
+  }, [])
 
-  const select = (p: Profile | null) => {
-    setSelected(p?.id ?? null)
-    setForm(p ? fromProfile(p) : blank())
-    setDirty(false)
+  const current = profiles.find((p) => p.id === selected)
+  const tree = useMemo(() => folderTree(profiles, filter), [profiles, filter])
+  const folders = useMemo(() => [...new Set(profiles.map((p) => p.folder).filter(Boolean) as string[])].sort(), [profiles])
+
+  const close = async () => {
+    if (dirty && !(await confirm({ title: 'Discard changes?', message: 'This connection has unsaved changes.', confirmLabel: 'Discard', danger: true }))) return
+    openConnectionManager(false)
   }
 
-  const set = <K extends keyof ProfileInput>(k: K, v: ProfileInput[K]) => {
+  const select = async (p: Profile | null) => {
+    if (dirty && !(await confirm({ title: 'Discard changes?', message: `Discard the unsaved changes to “${form.name || 'the new connection'}”?`, confirmLabel: 'Discard', danger: true }))) {
+      return
+    }
+    setSelected(p?.id ?? null)
+    setForm(p ? fromProfile(p) : blankProfile())
+    setDirty(false)
+    setError(null)
+    setTest(null)
+    setTab('server')
+  }
+
+  const set: Setter = (k, v) => {
     setForm((f) => ({ ...f, [k]: v }))
     setDirty(true)
     setTest(null)
   }
+  const patch: Patch = (k, v) => {
+    setForm((f) => ({ ...f, [k]: { ...(f[k] as object), ...v } }))
+    setDirty(true)
+    setTest(null)
+  }
 
-  const run = async (kind: 'test' | 'save' | 'connect') => {
+  const run = async (kind: 'test' | 'save' | 'connect', f: ProfileInput = form) => {
     setBusy(kind)
     setError(null)
     setTest(null)
     try {
       if (kind === 'test') {
-        setTest(await backend.testConnection(form))
+        setTest(await backend.testConnection(f))
         return
       }
-      let id = form.id
+      let id = f.id
       if (dirty || !id) {
-        const saved = await backend.saveProfile(form)
+        const saved = await backend.saveProfile(f)
         await reloadProfiles()
         setSelected(saved.id)
         setForm(fromProfile(saved))
         setDirty(false)
         id = saved.id
         if (sessions.some((s) => s.id === saved.id)) {
-          toast({ kind: 'info', title: 'Saved', message: 'Reconnect to apply changes to the open connection.' })
+          toast({ kind: 'info', title: 'Saved', message: 'Reconnect to apply the changes to the open connection.' })
         } else if (kind === 'save') {
-          toast({ kind: 'success', title: `Saved "${saved.name}"` })
+          toast({ kind: 'success', title: `Saved “${saved.name}”` })
         }
       }
       if (kind === 'connect') {
         const info = await connect(id)
-        if (info) close()
+        if (info) openConnectionManager(false)
       }
     } catch (err) {
-      setError(toAppError(err))
+      const e = toAppError(err)
+      setError(e)
+      const t = ERROR_TABS.find(([prefix]) => e.message.startsWith(prefix))
+      if (t) setTab(t[1])
     } finally {
       setBusy('')
+    }
+  }
+
+  const trustHostKey = () => {
+    if (!error?.detail) return
+    const next = { ...form, ssh: { ...form.ssh, hostKey: error.detail } }
+    setForm(next)
+    setDirty(true)
+    void run('test', next)
+  }
+
+  const duplicate = async () => {
+    if (!current) return
+    try {
+      const cp = await backend.duplicateProfile(current.id)
+      await reloadProfiles()
+      setSelected(cp.id)
+      setForm(fromProfile(cp))
+      setDirty(false)
+      toast({ kind: 'success', title: `Duplicated as “${cp.name}”` })
+    } catch (err) {
+      setError(toAppError(err))
     }
   }
 
@@ -104,7 +216,7 @@ export function ConnectionManager() {
     if (!current) return
     const ok = await confirm({
       title: 'Delete connection',
-      message: `Delete the saved connection "${current.name}" and its stored password?`,
+      message: `Delete “${current.name}”, its stored passwords and its collection history?`,
       confirmLabel: 'Delete',
       danger: true,
     })
@@ -113,31 +225,91 @@ export function ConnectionManager() {
       if (sessions.some((s) => s.id === current.id)) await disconnect(current.id)
       await backend.deleteProfile(current.id)
       await reloadProfiles()
-      select(null)
+      setDirty(false)
+      setSelected(null)
+      setForm(blankProfile())
     } catch (err) {
       setError(toAppError(err))
     }
   }
 
-  const uriHasPassword = /^mongodb(\+srv)?:\/\/[^/@]*:[^/@]*@/.test(form.uri)
+  const reopen = async (e: CollectionHistoryEntry) => {
+    if (!current) return
+    const live = sessions.find((s) => s.id === current.id) ?? (await connect(current.id))
+    if (!live) return
+    dispatchTabs({ type: 'open', tab: { kind: 'collection', connId: live.id, connName: live.name, db: e.db, coll: e.coll }, reuse: true })
+    openConnectionManager(false)
+  }
+
+  const renderFolder = (node: FolderNode, depth: number) => (
+    <>
+      {node.folders.map((f) => {
+        const open = !collapsed.has(f.path)
+        return (
+          <li key={`f:${f.path}`}>
+            <button
+              type="button"
+              className="conn-folder"
+              style={{ paddingLeft: 8 + depth * 14 }}
+              aria-expanded={open}
+              onClick={() =>
+                setCollapsed((c) => {
+                  const n = new Set(c)
+                  if (n.has(f.path)) n.delete(f.path)
+                  else n.add(f.path)
+                  return n
+                })
+              }
+            >
+              <span className={open ? 'caret open' : 'caret'} />
+              <span className="icon-folder" aria-hidden />
+              {f.name}
+            </button>
+            {open && <ul>{renderFolder(f, depth + 1)}</ul>}
+          </li>
+        )
+      })}
+      {node.profiles.map((p) => (
+        <li key={p.id}>
+          <button
+            type="button"
+            className={p.id === selected ? 'conn-item active' : 'conn-item'}
+            style={{ paddingLeft: 8 + depth * 14 }}
+            onClick={() => void select(p)}
+            onDoubleClick={() => void run('connect', p.id === selected ? form : fromProfile(p))}
+            title={p.uri}
+          >
+            <span className={sessions.some((s) => s.id === p.id) ? 'dot on' : 'dot'} />
+            <span className="conn-name">{p.name}</span>
+            {p.ssh?.enabled && <span className="badge">SSH</span>}
+            {p.readOnly && <span className="badge">RO</span>}
+          </button>
+        </li>
+      ))}
+    </>
+  )
+
+  const tabProps = { form, set, patch, stored: current, caps }
+  const isNew = !form.id
 
   return (
-    <Modal title="Connections" onClose={close} wide>
+    <Modal title="Connection Manager" onClose={() => void close()} wide>
       <div className="conn-manager">
         <aside className="conn-list">
-          <button className="primary block" onClick={() => select(null)}>
-            + New connection
-          </button>
-          <ul>
-            {profiles.map((p) => (
-              <li key={p.id}>
-                <button className={p.id === selected ? 'conn-item active' : 'conn-item'} onClick={() => select(p)}>
-                  <span className={sessions.some((s) => s.id === p.id) ? 'dot on' : 'dot'} />
-                  <span className="conn-name">{p.name}</span>
-                  {p.readOnly && <span className="badge">RO</span>}
-                </button>
-              </li>
-            ))}
+          <div className="conn-list-actions">
+            <button type="button" className="primary" onClick={() => void select(null)}>
+              + New
+            </button>
+            <button type="button" onClick={duplicate} disabled={!current} title="Duplicate the selected connection">
+              Duplicate
+            </button>
+            <button type="button" className="ghost danger-text" onClick={remove} disabled={!current}>
+              Delete
+            </button>
+          </div>
+          <input className="conn-search" placeholder="Search connections" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search connections" />
+          <ul role="tree" aria-label="Saved connections">
+            {renderFolder(tree, 0)}
             {profiles.length === 0 && <li className="muted small pad">No saved connections yet.</li>}
           </ul>
         </aside>
@@ -146,109 +318,74 @@ export function ConnectionManager() {
           className="conn-form"
           onSubmit={(e) => {
             e.preventDefault()
-            run('connect')
+            void run('connect')
           }}
         >
-          <h3>{form.id ? 'Edit connection' : 'New connection'}</h3>
-          <label className="field">
-            <span>Name</span>
-            <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Local dev" autoFocus required />
-          </label>
-          <label className="field">
-            <span>Connection string</span>
-            <input
-              className="mono"
-              value={form.uri}
-              onChange={(e) => set('uri', e.target.value)}
-              placeholder="mongodb://host:27017 or mongodb+srv://cluster.example.net"
-              spellCheck={false}
-              required
-            />
-            {uriHasPassword && (
-              <small className="hint">
-                The password in this string will be moved to the {`OS credential store`} and removed from the saved URI.
-              </small>
-            )}
-          </label>
-          <div className="field-row">
-            <label className="field">
-              <span>Username</span>
-              <input value={form.username} onChange={(e) => set('username', e.target.value)} autoComplete="off" spellCheck={false} />
-            </label>
-            <label className="field">
-              <span>Password</span>
-              <input
-                type="password"
-                value={form.password}
-                onChange={(e) => set('password', e.target.value)}
-                placeholder={current?.hasPassword && !form.clearPassword ? '•••••• (saved)' : ''}
-                autoComplete="new-password"
-              />
-            </label>
+          <h3>
+            {isNew ? 'New connection' : form.name || 'Connection'}
+            {dirty && <span className="badge">unsaved</span>}
+          </h3>
+          <div className="conn-tabs" role="tablist" aria-label="Connection settings">
+            {CONNECTION_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`conn-tab-${t.id}`}
+                aria-selected={tab === t.id}
+                aria-controls="conn-tab-panel"
+                className={tab === t.id ? 'active' : ''}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+                {t.id === 'ssh' && form.ssh.enabled && <span className="tab-dot" aria-label="enabled" />}
+                {t.id === 'tls' && form.tls.enabled && <span className="tab-dot" aria-label="enabled" />}
+                {t.id === 'proxy' && form.proxy.type !== 'none' && <span className="tab-dot" aria-label="enabled" />}
+              </button>
+            ))}
           </div>
-          {current?.hasPassword && (
-            <label className="check">
-              <input type="checkbox" checked={form.clearPassword} onChange={(e) => set('clearPassword', e.target.checked)} />
-              Remove saved password
-            </label>
-          )}
-          <div className="field-row">
-            <label className="field">
-              <span>Auth database</span>
-              <input value={form.authSource} onChange={(e) => set('authSource', e.target.value)} placeholder="admin" spellCheck={false} />
-            </label>
-            <label className="field">
-              <span>Auth mechanism</span>
-              <select value={form.authMechanism} onChange={(e) => set('authMechanism', e.target.value)}>
-                {MECHANISMS.map((m) => (
-                  <option key={m} value={m}>
-                    {m || 'Default (negotiate)'}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field narrow">
-              <span>Timeout (s)</span>
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={form.connectTimeoutSeconds}
-                onChange={(e) => set('connectTimeoutSeconds', Number(e.target.value))}
-              />
-            </label>
+          <div className="conn-tab-panel" role="tabpanel" id="conn-tab-panel" aria-labelledby={`conn-tab-${tab}`}>
+            {tab === 'server' && <ServerTab {...tabProps} folders={folders} />}
+            {tab === 'auth' && <AuthTab {...tabProps} />}
+            {tab === 'tls' && <TLSTab {...tabProps} />}
+            {tab === 'ssh' && <SSHTab {...tabProps} />}
+            {tab === 'proxy' && <ProxyTab {...tabProps} />}
+            {tab === 'shell' && <ShellTab {...tabProps} />}
+            {tab === 'tools' && <ToolsTab {...tabProps} />}
+            {tab === 'advanced' && <AdvancedTab {...tabProps} />}
+            {tab === 'history' && <HistoryTab {...tabProps} onReopen={reopen} />}
           </div>
-          <label className="check">
-            <input type="checkbox" checked={form.readOnly} onChange={(e) => set('readOnly', e.target.checked)} />
-            Read-only (block inserts, updates, deletes and drops)
-          </label>
-          <p className="muted small">
-            TLS, replica set, direct connection and other options can be set in the connection string, e.g.{' '}
-            <code>?tls=true&amp;replicaSet=rs0</code>.
-          </p>
 
           <ErrorBanner error={error} onDismiss={() => setError(null)} />
+          {error?.code === 'SSH_HOST_KEY' && error.detail && (
+            <div className="info-banner">
+              <span>
+                Verify with the server administrator that the SSH host key fingerprint is <code>{error.detail}</code>.
+              </span>
+              <button type="button" className="small" onClick={trustHostKey}>
+                Trust this key and retry
+              </button>
+            </div>
+          )}
           {test && (
             <div className="success-banner" role="status">
-              <strong>Connection OK</strong> — MongoDB {test.serverVersion} · {test.topology} · {test.latencyMs} ms
+              <strong>Connection OK</strong> — MongoDB {test.serverVersion} · {test.topology} · {test.latencyMs} ms{test.via ? ` · via ${test.via}` : ''}
             </div>
           )}
 
           <div className="form-actions">
-            {current && (
-              <button type="button" className="danger ghost" onClick={remove} disabled={!!busy}>
-                Delete
-              </button>
-            )}
-            <span className="spacer" />
-            <button type="button" onClick={() => run('test')} disabled={!!busy}>
-              {busy === 'test' ? <Spinner small /> : null} Test
+            <button type="button" onClick={() => void run('test')} disabled={!!busy}>
+              {busy === 'test' ? <Spinner small /> : null} Test connection
             </button>
-            <button type="button" onClick={() => run('save')} disabled={!!busy || (!dirty && !!form.id)}>
+            <span className="spacer" />
+            <button type="button" onClick={() => void close()} disabled={!!busy}>
+              Cancel
+            </button>
+            <button type="button" onClick={() => void run('save')} disabled={!!busy || (!dirty && !isNew)}>
               {busy === 'save' ? <Spinner small /> : null} Save
             </button>
             <button type="submit" className="primary" disabled={!!busy}>
-              {busy === 'connect' ? <Spinner small /> : null} {dirty || !form.id ? 'Save & connect' : 'Connect'}
+              {busy === 'connect' ? <Spinner small /> : null} {dirty || isNew ? 'Save & connect' : 'Connect'}
             </button>
           </div>
         </form>

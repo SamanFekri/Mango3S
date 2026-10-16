@@ -61,7 +61,19 @@ interface AppState {
   resolveConfirm: (ok: boolean) => void
 
   connectionManagerOpen: boolean
-  openConnectionManager: (open: boolean) => void
+  /** Opens (or closes) the connection manager; `select` picks a profile, 'new' starts a blank one. */
+  openConnectionManager: (open: boolean, select?: string | 'new') => void
+  connectionManagerSelect: string | 'new' | undefined
+
+  /** Tabs with unsaved work: tab id → what would be lost. */
+  dirtyTabs: Record<string, string>
+  setTabDirty: (tabId: string, reason: string | null) => void
+  /** Closes a tab, asking first when it has unsaved work (unless force). Resolves false if the user kept it. */
+  closeTab: (tabId: string, force?: boolean) => Promise<boolean>
+  closeOtherTabs: (tabId: string) => Promise<void>
+
+  shortcutsOpen: boolean
+  setShortcutsOpen: (open: boolean) => void
 
   /** Background jobs, newest first. */
   jobs: Job[]
@@ -90,11 +102,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
   const [toasts, setToasts] = useState<Toast[]>([])
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null)
-  const [connectionManagerOpen, openConnectionManager] = useState(false)
+  const [connectionManagerOpen, setConnectionManagerOpen] = useState(false)
+  const [connectionManagerSelect, setConnectionManagerSelect] = useState<string | 'new' | undefined>()
+  const openConnectionManager = useCallback((open: boolean, select?: string | 'new') => {
+    setConnectionManagerSelect(select)
+    setConnectionManagerOpen(open)
+  }, [])
+  const [dirtyTabs, setDirtyTabs] = useState<Record<string, string>>({})
+  const dirtyRef = useRef(dirtyTabs)
+  dirtyRef.current = dirtyTabs
+  const tabsRef = useRef<TabsState>({ tabs: [], activeId: null })
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const setTabDirty = useCallback((tabId: string, reason: string | null) => {
+    setDirtyTabs((d) => {
+      if ((d[tabId] ?? null) === reason) return d
+      const n = { ...d }
+      if (reason) n[tabId] = reason
+      else delete n[tabId]
+      return n
+    })
+  }, [])
+  // Lets the window ask before quitting with unsaved work.
+  const anyDirty = Object.keys(dirtyTabs).length > 0
+  useEffect(() => {
+    backend.setUnsavedWork?.(anyDirty)?.catch?.(() => undefined)
+  }, [anyDirty])
   const [jobMap, setJobMap] = useState<Record<string, Job>>({})
   const jobMapRef = useRef<Record<string, Job>>({})
   const [promptRequest, setPromptRequest] = useState<PromptRequest | null>(null)
   const toastSeq = useRef(0)
+  tabsRef.current = tabs
 
   const dismissToast = useCallback((id: number) => setToasts((ts) => ts.filter((t) => t.id !== id)), [])
 
@@ -117,6 +154,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast],
   )
 
+  const reloadProfilesRef = useRef<(() => void) | undefined>(undefined)
   const reloadProfiles = useCallback(async () => {
     try {
       setProfiles(await backend.listProfiles())
@@ -125,6 +163,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [toastError])
 
+  reloadProfilesRef.current = () => void reloadProfiles()
   useEffect(() => {
     backend.getSettings().then(setSettings).catch((err) => toastError(err, 'Could not load settings'))
     backend.getAppInfo().then(setAppInfo).catch(() => undefined)
@@ -190,6 +229,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const info = await backend.connect(profileId)
         setSessions((ss) => [...ss.filter((s) => s.id !== info.id), info].sort((a, b) => a.name.localeCompare(b.name)))
+        // Each connection gets its own workspace tab (Welcome stays open).
+        dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: info.id, connName: info.name } })
+        reloadProfilesRef.current?.()
         toast({ kind: 'success', title: `Connected to ${info.name}`, message: `MongoDB ${info.serverVersion} · ${info.topology}` })
         return info
       } catch (err) {
@@ -206,22 +248,71 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast, toastError],
   )
 
+  const confirm = useCallback(
+    (o: ConfirmOptions) => new Promise<boolean>((resolve) => setConfirmRequest({ ...o, resolve })),
+    [],
+  )
+
+  /** Asks before discarding the unsaved work of the given tabs. */
+  const confirmDiscard = useCallback(
+    async (tabIds: string[]) => {
+      const dirty = tabIds.filter((id) => dirtyRef.current[id])
+      if (dirty.length === 0) return true
+      const titles = dirty.map((id) => tabsRef.current.tabs.find((t) => t.id === id)?.title ?? id)
+      return confirm({
+        title: dirty.length === 1 ? `Discard changes in “${titles[0]}”?` : `Discard changes in ${dirty.length} tabs?`,
+        message: (
+          <ul className="plain-list">
+            {dirty.map((id, i) => (
+              <li key={id}>
+                <strong>{titles[i]}</strong>: {dirtyRef.current[id]}
+              </li>
+            ))}
+          </ul>
+        ),
+        confirmLabel: 'Discard',
+        danger: true,
+      })
+    },
+    [confirm],
+  )
+
+  const closeTab = useCallback(
+    async (tabId: string, force = false) => {
+      if (!force && !(await confirmDiscard([tabId]))) return false
+      setTabDirty(tabId, null)
+      dispatchTabs({ type: 'close', id: tabId })
+      return true
+    },
+    [confirmDiscard, setTabDirty],
+  )
+
+  const closeOtherTabs = useCallback(
+    async (tabId: string) => {
+      const others = tabsRef.current.tabs.filter((t) => t.id !== tabId && t.kind !== 'welcome').map((t) => t.id)
+      if (!(await confirmDiscard(others))) return
+      for (const id of others) {
+        setTabDirty(id, null)
+        dispatchTabs({ type: 'close', id })
+      }
+    },
+    [confirmDiscard, setTabDirty],
+  )
+
   const disconnect = useCallback(
     async (connId: string) => {
+      const affected = tabsRef.current.tabs.filter((t) => t.connId === connId).map((t) => t.id)
+      if (!(await confirmDiscard(affected))) return
       try {
         await backend.disconnect(connId)
       } catch (err) {
         toastError(err, 'Disconnect failed')
       }
       setSessions((ss) => ss.filter((s) => s.id !== connId))
+      for (const id of affected) setTabDirty(id, null)
       dispatchTabs({ type: 'closeConnection', connId })
     },
-    [toastError],
-  )
-
-  const confirm = useCallback(
-    (o: ConfirmOptions) => new Promise<boolean>((resolve) => setConfirmRequest({ ...o, resolve })),
-    [],
+    [toastError, confirmDiscard, setTabDirty],
   )
   const resolveConfirm = useCallback(
     (ok: boolean) => {
@@ -253,6 +344,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resolveConfirm,
       connectionManagerOpen,
       openConnectionManager,
+      connectionManagerSelect,
+      dirtyTabs,
+      setTabDirty,
+      closeTab,
+      closeOtherTabs,
+      shortcutsOpen,
+      setShortcutsOpen,
       jobs,
       refreshJobs,
       prompt,
@@ -262,9 +360,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       settings, saveSettings, appInfo, profiles, reloadProfiles, sessions, connect, disconnect, connecting,
       tabs, toast, toastError, toasts, dismissToast, confirm, confirmRequest, resolveConfirm, connectionManagerOpen,
+      openConnectionManager, connectionManagerSelect, dirtyTabs, setTabDirty, closeTab, closeOtherTabs, shortcutsOpen,
       jobs, refreshJobs, prompt, promptRequest, resolvePrompt,
     ],
   )
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+}
+
+/** Reports a tab's unsaved work so closing it (or quitting) asks first. */
+export function useTabDirty(tabId: string, reason: string | null | false | undefined) {
+  const { setTabDirty } = useApp()
+  const value = reason || null
+  useEffect(() => {
+    setTabDirty(tabId, value)
+  }, [tabId, value, setTabDirty])
+  useEffect(() => () => setTabDirty(tabId, null), [tabId, setTabDirty])
 }

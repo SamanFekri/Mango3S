@@ -45,9 +45,13 @@ type Settings struct {
 	PageSize            int    `json:"pageSize"`
 	QueryTimeoutSeconds int    `json:"queryTimeoutSeconds"`
 	ConfirmDeletes      bool   `json:"confirmDeletes"`
-	DefaultView         string `json:"defaultView"` // json | table
-	EditorFontSize      int    `json:"editorFontSize"`
-	LogLevel            string `json:"logLevel"` // debug | info | warn | error
+	DefaultView         string `json:"defaultView"` // tree | table | json
+	// DefaultViewChosen is set when the user picks a default view in
+	// Settings; until then Tree is used (older files saved "json" without
+	// the user ever choosing it).
+	DefaultViewChosen bool   `json:"defaultViewChosen"`
+	EditorFontSize    int    `json:"editorFontSize"`
+	LogLevel          string `json:"logLevel"` // debug | info | warn | error
 
 	// AI-assisted query generation (off until the user enables it).
 	AIEnabled        bool   `json:"aiEnabled"`
@@ -63,7 +67,7 @@ func DefaultSettings() Settings {
 		PageSize:            50,
 		QueryTimeoutSeconds: 60,
 		ConfirmDeletes:      true,
-		DefaultView:         "json",
+		DefaultView:         "tree",
 		EditorFontSize:      13,
 		LogLevel:            "info",
 		AIModel:             "claude-opus-5-5",
@@ -89,8 +93,8 @@ func (s Settings) Normalize() Settings {
 	if s.QueryTimeoutSeconds > 3600 {
 		s.QueryTimeoutSeconds = 3600
 	}
-	if s.DefaultView != "table" {
-		s.DefaultView = "json"
+	if !s.DefaultViewChosen || (s.DefaultView != "table" && s.DefaultView != "json") {
+		s.DefaultView = "tree"
 	}
 	if s.EditorFontSize < 9 || s.EditorFontSize > 28 {
 		s.EditorFontSize = d.EditorFontSize
@@ -120,17 +124,20 @@ type Profile struct {
 	HasPassword           bool      `json:"hasPassword"`
 	CreatedAt             time.Time `json:"createdAt"`
 	UpdatedAt             time.Time `json:"updatedAt"`
-}
 
-// Validate checks required fields and the URI scheme.
-func (p Profile) Validate() error {
-	if strings.TrimSpace(p.Name) == "" {
-		return apperr.Invalid("Connection name is required.")
-	}
-	if !strings.HasPrefix(p.URI, "mongodb://") && !strings.HasPrefix(p.URI, "mongodb+srv://") {
-		return apperr.Invalid("Connection string must start with mongodb:// or mongodb+srv://")
-	}
-	return nil
+	// Connection manager tabs (see profile.go). Zero values keep the
+	// behavior of profiles saved before these existed.
+	Folder          string         `json:"folder,omitempty"`
+	Server          ServerConfig   `json:"server"`
+	AuthProperties  string         `json:"authProperties,omitempty"` // authMechanismProperties, e.g. ENVIRONMENT:azure
+	TLS             TLSConfig      `json:"tls"`
+	SSH             SSHConfig      `json:"ssh"`
+	Proxy           ProxyConfig    `json:"proxy"`
+	Shell           ShellConfig    `json:"shell"`
+	Tools           ToolsConfig    `json:"tools"`
+	Advanced        AdvancedConfig `json:"advanced"`
+	StoredSecrets   []string       `json:"storedSecrets,omitempty"` // secret kinds other than the password
+	LastConnectedAt *time.Time     `json:"lastConnectedAt,omitempty"`
 }
 
 // SplitCredentials removes user info from a MongoDB URI and returns it
@@ -239,6 +246,7 @@ func (s *Store) GetProfile(id string) (Profile, error) {
 
 // SaveProfile inserts (empty ID) or updates a profile and returns it.
 func (s *Store) SaveProfile(p Profile) (Profile, error) {
+	p = p.Normalize()
 	if err := p.Validate(); err != nil {
 		return Profile{}, err
 	}
@@ -258,6 +266,9 @@ func (s *Store) SaveProfile(p Profile) (Profile, error) {
 		for i := range list {
 			if list[i].ID == p.ID {
 				p.CreatedAt = list[i].CreatedAt
+				if p.LastConnectedAt == nil {
+					p.LastConnectedAt = list[i].LastConnectedAt
+				}
 				list[i] = p
 				found = true
 			}
@@ -271,6 +282,24 @@ func (s *Store) SaveProfile(p Profile) (Profile, error) {
 		list = append(list, p)
 	}
 	return p, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+}
+
+// TouchConnected records a successful connection (for "recent connections").
+func (s *Store) TouchConnected(id string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list, err := s.listLocked()
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		if list[i].ID == id {
+			t := at.UTC()
+			list[i].LastConnectedAt = &t
+			return writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+		}
+	}
+	return nil
 }
 
 // DeleteProfile removes a profile; deleting a missing profile is not an error.

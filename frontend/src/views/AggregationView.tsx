@@ -10,7 +10,9 @@ import { toAppError, type AppError } from '../lib/errors'
 import { STAGE_TEMPLATES, newStage, pipelineReducer, toStages } from '../lib/pipeline'
 import type { Tab } from '../lib/tabs'
 import type { AggregateRequest, CodeRequest, ExplainRequest, Page } from '../lib/types'
-import { useApp } from '../state/AppContext'
+import { shortcutHint } from '../lib/shortcuts'
+import { useApp, useTabDirty } from '../state/AppContext'
+import { useShortcut } from '../state/shortcuts'
 
 export function AggregationView({ tab }: { tab: Tab }) {
   const { settings, sessions, prompt, toast, toastError } = useApp()
@@ -26,7 +28,7 @@ export function AggregationView({ tab }: { tab: Tab }) {
   const [savedId, setSavedId] = useState(tab.init?.savedId)
   const [dialog, setDialog] = useState<{ kind: 'explain'; req: ExplainRequest } | { kind: 'code'; req: Omit<CodeRequest, 'language'> } | { kind: 'ai' } | null>(null)
   const [allowDiskUse, setAllowDiskUse] = useState(false)
-  const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'json')
+  const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'tree')
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
   const [page, setPage] = useState<Page | null>(null)
   const [loading, setLoading] = useState(false)
@@ -35,6 +37,11 @@ export function AggregationView({ tab }: { tab: Tab }) {
   const [fields, setFields] = useState<string[]>([])
   const [textMode, setTextMode] = useState<{ text: string; error: AppError | null } | null>(null)
   const lastReq = useRef<AggregateRequest | null>(null)
+  // What was last loaded or saved, to detect unsaved pipeline changes.
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(toStages(stages)))
+  const snapshot = JSON.stringify(toStages(stages))
+  const untouchedDefault = !tab.init?.stages?.length && !savedId && stages.length === 1 && !stages[0].body.replace(/[{}\s]/g, '')
+  useTabDirty(tab.id, (snapshot !== savedSnapshot && !untouchedDefault) || textMode ? 'pipeline changes that are not saved to the library' : null)
 
   useEffect(() => {
     backend.sampleFields(connId, db, coll).then(setFields).catch(() => undefined)
@@ -83,17 +90,40 @@ export function AggregationView({ tab }: { tab: Tab }) {
 
   const enabledCount = stages.filter((s) => s.enabled).length
 
-  const savePipeline = async () => {
-    const name = await prompt({ title: 'Save pipeline', label: 'Name', initial: tab.init?.savedName ?? `${coll} pipeline`, confirmLabel: 'Save' })
+  const savePipeline = async (asNew = false) => {
+    const name = await prompt({ title: asNew ? 'Save pipeline as' : 'Save pipeline', label: 'Name', initial: tab.init?.savedName ?? `${coll} pipeline`, confirmLabel: 'Save' })
     if (!name) return
     try {
-      const item = await backend.saveItem({ id: savedId, kind: 'aggregation', name, db, coll, stages: toStages(stages) })
+      const item = await backend.saveItem({ id: asNew ? undefined : savedId, kind: 'aggregation', name, db, coll, stages: toStages(stages) })
       setSavedId(item.id)
+      setSavedSnapshot(JSON.stringify(toStages(stages)))
       toast({ kind: 'success', title: `Saved "${item.name}"` })
     } catch (err) {
       toastError(err, 'Save failed')
     }
   }
+
+  const format = async () => {
+    try {
+      const bodies = await Promise.all(stages.map((st) => (st.body.trim().startsWith('{') ? backend.formatDocument(st.body) : Promise.resolve(st.body.trim()))))
+      bodies.forEach((body, index) => body !== stages[index].body && dispatch({ type: 'update', index, patch: { body } }))
+    } catch (err) {
+      toastError(err, 'Cannot format')
+    }
+  }
+  const canRun = !loading && !textMode && enabledCount > 0
+  useShortcut('query.run', () => (canRun ? void run(-1) : false))
+  useShortcut('view.refresh', () => (lastReq.current ? void execute(lastReq.current) : false))
+  useShortcut('op.cancel', () => (loading ? void backend.cancel(opId) : false))
+  useShortcut('query.format', () => (textMode ? false : void format()))
+  useShortcut('query.save', () => void savePipeline())
+  useShortcut('query.saveAs', () => void savePipeline(true))
+  useShortcut('query.code', () => setDialog({ kind: 'code', req: { source: 'aggregate', db, coll, stages: toStages(stages) } }))
+  useShortcut('query.explain', () => setDialog({ kind: 'explain', req: { kind: 'aggregate', connId, db, coll, stages: toStages(stages) } }))
+  useShortcut('agg.addStage', () => (textMode ? false : dispatch({ type: 'add' })))
+  useShortcut('results.tree', () => setView('tree'))
+  useShortcut('results.table', () => setView('table'))
+  useShortcut('results.json', () => setView('json'))
 
   return (
     <div className="view aggregation-view">
@@ -120,7 +150,7 @@ export function AggregationView({ tab }: { tab: Tab }) {
         <button className="small ghost" disabled={!!textMode} onClick={() => setDialog({ kind: 'code', req: { source: 'aggregate', db, coll, stages: toStages(stages) } })}>
           Code
         </button>
-        <button className="small ghost" disabled={!!textMode} onClick={savePipeline}>
+        <button className="small ghost" disabled={!!textMode} onClick={() => void savePipeline()} title={`Save (${shortcutHint('query.save')})`}>
           Save
         </button>
         {textMode ? (
@@ -137,7 +167,7 @@ export function AggregationView({ tab }: { tab: Tab }) {
             Edit as text
           </button>
         )}
-        <button className="primary" onClick={() => run(-1)} disabled={loading || !!textMode || enabledCount === 0} title="Run full pipeline (Cmd/Ctrl+Enter)">
+        <button className="primary" onClick={() => run(-1)} disabled={loading || !!textMode || enabledCount === 0} title={`Run full pipeline (${shortcutHint('query.run')} or F5)`}>
           {loading ? <Spinner small /> : '▶'} Run pipeline
         </button>
       </div>
@@ -219,7 +249,7 @@ export function AggregationView({ tab }: { tab: Tab }) {
             </ol>
           )}
           {!textMode && (
-            <button className="block" onClick={() => dispatch({ type: 'add' })}>
+            <button className="block" onClick={() => dispatch({ type: 'add' })} title={`Add stage (${shortcutHint('agg.addStage')})`}>
               + Add stage
             </button>
           )}

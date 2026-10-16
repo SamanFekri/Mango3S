@@ -1,108 +1,105 @@
-import { useCallback, useEffect, useState } from "react";
-import { Segmented, Spinner } from "../components/common";
-import { backend } from "../lib/backend";
-import { formatDuration } from "../lib/format";
-import { KIND_LABELS, openAction, timeAgo } from "../lib/library";
-import type {
-  BackupInfo,
-  HistoryEntry,
-  ItemKind,
-  SavedItem,
-} from "../lib/types";
-import { useApp } from "../state/AppContext";
+import { useCallback, useEffect, useState } from 'react'
+import { Segmented, Spinner } from '../components/common'
+import { backend } from '../lib/backend'
+import { formatDuration } from '../lib/format'
+import { KIND_LABELS, openAction, timeAgo } from '../lib/library'
+import type { Tab } from '../lib/tabs'
+import type { BackupInfo, HistoryEntry, ItemKind, SavedItem } from '../lib/types'
+import { useApp } from '../state/AppContext'
 
-type Section = "saved" | "history" | "backups";
+type Section = 'saved' | 'history' | 'backups'
 
-export function LibraryView() {
-  const { sessions, dispatchTabs, toast, toastError, confirm, prompt } =
-    useApp();
-  const [section, setSection] = useState<Section>("saved");
-  const [kind, setKind] = useState<ItemKind | "">("");
-  const [search, setSearch] = useState("");
-  const [saved, setSaved] = useState<SavedItem[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [backups, setBackups] = useState<BackupInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [connId, setConnId] = useState("");
+export function LibraryView({ tab }: { tab?: Tab }) {
+  const { sessions, dispatchTabs, toast, toastError, confirm, prompt } = useApp()
+  const [section, setSection] = useState<Section>(tab?.init?.section ?? 'saved')
+  // Re-opening the library (e.g. "Open query history") selects that section.
+  useEffect(() => {
+    if (tab?.init?.section) setSection(tab.init.section)
+  }, [tab?.init])
+  const [kind, setKind] = useState<ItemKind | ''>('')
+  const [search, setSearch] = useState('')
+  const [saved, setSaved] = useState<SavedItem[]>([])
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [backups, setBackups] = useState<BackupInfo[]>([])
+  const [loading, setLoading] = useState(false)
+  const [connId, setConnId] = useState('')
 
-  const session = sessions.find((s) => s.id === connId) ?? sessions[0];
+  const session = sessions.find((s) => s.id === connId) ?? sessions[0]
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      if (section === "saved") setSaved(await backend.listSaved(kind));
-      else if (section === "history")
-        setHistory(await backend.listHistory(kind, search, 300));
-      else setBackups(await backend.listBackups());
+      if (section === 'saved') setSaved(await backend.listSaved(kind))
+      else if (section === 'history') setHistory(await backend.listHistory(kind, search, 300))
+      else setBackups(await backend.listBackups())
     } catch (err) {
-      toastError(err, "Could not load the library");
+      toastError(err, 'Could not load the library')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [section, kind, search, toastError]);
+  }, [section, kind, search, toastError])
 
   useEffect(() => {
-    const id = window.setTimeout(load, 150);
-    return () => window.clearTimeout(id);
-  }, [load]);
+    const id = window.setTimeout(load, 150)
+    return () => window.clearTimeout(id)
+  }, [load])
 
   const open = (item: SavedItem | HistoryEntry, asSaved?: SavedItem) => {
     if (!session) {
       toast({
-        kind: "info",
-        title: "Connect first",
-        message: "Open a connection to run this item.",
-      });
-      return;
+        kind: 'info',
+        title: 'Connect first',
+        message: 'Open a connection to run this item.',
+      })
+      return
     }
-    const action = openAction(item, session, asSaved);
-    if (typeof action === "string")
-      toast({ kind: "error", title: "Cannot open", message: action });
-    else dispatchTabs(action);
-  };
+    const action = openAction(item, session, asSaved)
+    if (typeof action === 'string') toast({ kind: 'error', title: 'Cannot open', message: action })
+    else dispatchTabs(action)
+  }
 
   const remove = async (item: SavedItem) => {
     if (
       !(await confirm({
-        title: "Delete saved item",
+        title: 'Delete saved item',
         message: `Delete "${item.name}"?`,
-        confirmLabel: "Delete",
+        confirmLabel: 'Delete',
         danger: true,
       }))
     )
-      return;
+      return
     try {
-      await backend.deleteItem(item.id);
-      load();
+      await backend.deleteItem(item.id)
+      load()
     } catch (err) {
-      toastError(err);
+      toastError(err)
     }
-  };
+  }
 
   const rename = async (item: SavedItem) => {
     const name = await prompt({
-      title: "Rename",
-      label: "Name",
+      title: 'Rename',
+      label: 'Name',
       initial: item.name,
-      confirmLabel: "Rename",
-    });
-    if (!name) return;
+      confirmLabel: 'Rename',
+    })
+    if (!name) return
     try {
-      await backend.saveItem({ ...item, name });
-      load();
+      await backend.saveItem({ ...item, name })
+      load()
     } catch (err) {
-      toastError(err);
+      toastError(err)
     }
-  };
+  }
 
   const saveFromHistory = async (e: HistoryEntry) => {
     const name = await prompt({
-      title: "Save to library",
-      label: "Name",
+      title: 'Save to library',
+      label: 'Name',
       initial: e.summary.slice(0, 60),
-      confirmLabel: "Save",
-    });
-    if (!name) return;
+      confirmLabel: 'Save',
+    })
+    if (!name) return
     try {
       await backend.saveItem({
         kind: e.kind,
@@ -112,71 +109,63 @@ export function LibraryView() {
         query: e.query,
         stages: e.stages,
         text: e.text,
-      });
-      toast({ kind: "success", title: `Saved "${name}"` });
+      })
+      toast({ kind: 'success', title: `Saved "${name}"` })
     } catch (err) {
-      toastError(err, "Save failed");
+      toastError(err, 'Save failed')
     }
-  };
+  }
 
   const clearHistory = async () => {
     if (
       !(await confirm({
-        title: "Clear history",
-        message: "Delete the entire query history?",
-        confirmLabel: "Clear",
+        title: 'Clear history',
+        message: 'Delete the entire query history?',
+        confirmLabel: 'Clear',
         danger: true,
       }))
     )
-      return;
-    await backend.clearHistory();
-    load();
-  };
+      return
+    await backend.clearHistory()
+    load()
+  }
 
   const restore = async (b: BackupInfo) => {
     if (!session) {
       toast({
-        kind: "info",
-        title: "Connect first",
-        message: "Open the connection to restore into.",
-      });
-      return;
+        kind: 'info',
+        title: 'Connect first',
+        message: 'Open the connection to restore into.',
+      })
+      return
     }
-    const target = `${b.db}.${b.coll}`;
+    const target = `${b.db}.${b.coll}`
     const typed = await prompt({
       title: `Restore into ${session.name}`,
       label: `Puts back ${b.replaced + b.deleted} document(s) as they were and removes ${b.inserted} inserted one(s). Type ${target} to confirm.`,
-      initial: "",
-      confirmLabel: "Restore",
-    });
-    if (!typed) return;
+      initial: '',
+      confirmLabel: 'Restore',
+    })
+    if (!typed) return
     try {
-      await backend.startRestore(b.path, session.id, typed);
+      await backend.startRestore(b.path, session.id, typed)
       toast({
-        kind: "info",
-        title: "Restore started",
-        message: "Progress is shown in the jobs panel.",
-      });
+        kind: 'info',
+        title: 'Restore started',
+        message: 'Progress is shown in the jobs panel.',
+      })
     } catch (err) {
-      toastError(err, "Restore failed");
+      toastError(err, 'Restore failed')
     }
-  };
+  }
 
   const shownBackups = search
-    ? backups.filter((b) =>
-        `${b.operation} ${b.description} ${b.db}.${b.coll}`
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      )
-    : backups;
+    ? backups.filter((b) => `${b.operation} ${b.description} ${b.db}.${b.coll}`.toLowerCase().includes(search.toLowerCase()))
+    : backups
 
   const shownSaved = search
-    ? saved.filter((s) =>
-        `${s.name} ${s.description} ${s.db}.${s.coll} ${s.text ?? ""}`
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      )
-    : saved;
+    ? saved.filter((s) => `${s.name} ${s.description} ${s.db}.${s.coll} ${s.text ?? ''}`.toLowerCase().includes(search.toLowerCase()))
+    : saved
 
   return (
     <div className="view library-view">
@@ -186,10 +175,7 @@ export function LibraryView() {
         {sessions.length > 1 && (
           <label className="inline">
             Open on
-            <select
-              value={session?.id ?? ""}
-              onChange={(e) => setConnId(e.target.value)}
-            >
+            <select value={session?.id ?? ''} onChange={(e) => setConnId(e.target.value)}>
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -205,17 +191,13 @@ export function LibraryView() {
           value={section}
           onChange={setSection}
           options={[
-            { value: "saved", label: "Saved" },
-            { value: "history", label: "History" },
-            { value: "backups", label: "Backups" },
+            { value: 'saved', label: 'Saved' },
+            { value: 'history', label: 'History' },
+            { value: 'backups', label: 'Backups' },
           ]}
         />
-        {section !== "backups" && (
-          <select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as ItemKind | "")}
-            aria-label="Type"
-          >
+        {section !== 'backups' && (
+          <select value={kind} onChange={(e) => setKind(e.target.value as ItemKind | '')} aria-label="Type">
             <option value="">All types</option>
             {(Object.keys(KIND_LABELS) as ItemKind[]).map((k) => (
               <option key={k} value={k}>
@@ -224,28 +206,20 @@ export function LibraryView() {
             ))}
           </select>
         )}
-        <input
-          placeholder="Search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search library"
-        />
+        <input placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search library" />
         {loading && <Spinner small />}
         <span className="spacer" />
-        {section === "history" && history.length > 0 && (
+        {section === 'history' && history.length > 0 && (
           <button className="small ghost danger-text" onClick={clearHistory}>
             Clear history
           </button>
         )}
       </div>
 
-      {section === "backups" ? (
+      {section === 'backups' ? (
         <ul className="library-list">
           {shownBackups.length === 0 && !loading && (
-            <li className="empty-state">
-              No backups. Sync, in-place transforms, AI writes and MCP writes
-              save the documents they change here first.
-            </li>
+            <li className="empty-state">No backups. Sync, in-place transforms, AI writes and MCP writes save the documents they change here first.</li>
           )}
           {shownBackups.map((b) => (
             <li key={b.id} className="library-item">
@@ -257,15 +231,9 @@ export function LibraryView() {
                   </strong>
                 </div>
                 <div className="muted small">
-                  {[
-                    b.description,
-                    `${b.replaced} replaced`,
-                    `${b.deleted} deleted`,
-                    `${b.inserted} inserted`,
-                    `${Math.ceil(b.bytes / 1024)} KB`,
-                  ]
+                  {[b.description, `${b.replaced} replaced`, `${b.deleted} deleted`, `${b.inserted} inserted`, `${Math.ceil(b.bytes / 1024)} KB`]
                     .filter(Boolean)
-                    .join(" · ")}
+                    .join(' · ')}
                 </div>
               </div>
               <span className="muted small">{timeAgo(b.created)}</span>
@@ -275,33 +243,22 @@ export function LibraryView() {
             </li>
           ))}
         </ul>
-      ) : section === "saved" ? (
+      ) : section === 'saved' ? (
         <ul className="library-list">
-          {shownSaved.length === 0 && !loading && (
-            <li className="empty-state">
-              Nothing saved yet. Use "Save" in a query, pipeline, shell or SQL
-              tab.
-            </li>
-          )}
+          {shownSaved.length === 0 && !loading && <li className="empty-state">Nothing saved yet. Use "Save" in a query, pipeline, shell or SQL tab.</li>}
           {shownSaved.map((it) => (
             <li key={it.id} className="library-item">
               <div className="library-main" onDoubleClick={() => open(it, it)}>
                 <div>
-                  <span className={`kind-badge kind-${it.kind}`}>
-                    {KIND_LABELS[it.kind]}
-                  </span>
+                  <span className={`kind-badge kind-${it.kind}`}>{KIND_LABELS[it.kind]}</span>
                   <strong>{it.name}</strong>
                 </div>
                 <div className="muted small mono">
-                  {[
-                    it.db && it.coll ? `${it.db}.${it.coll}` : it.db,
-                    it.kind === "aggregation" &&
-                      `${it.stages?.length ?? 0} stages`,
-                  ]
+                  {[it.db && it.coll ? `${it.db}.${it.coll}` : it.db, it.kind === 'aggregation' && `${it.stages?.length ?? 0} stages`]
                     .filter(Boolean)
-                    .join(" · ")}
+                    .join(' · ')}
                   {it.query?.filter && ` · ${it.query.filter}`}
-                  {it.text && ` · ${it.text.split("\n")[0].slice(0, 80)}`}
+                  {it.text && ` · ${it.text.split('\n')[0].slice(0, 80)}`}
                 </div>
               </div>
               <span className="muted small">{timeAgo(it.updatedAt)}</span>
@@ -311,10 +268,7 @@ export function LibraryView() {
               <button className="small ghost" onClick={() => rename(it)}>
                 Rename
               </button>
-              <button
-                className="small ghost danger-text"
-                onClick={() => remove(it)}
-              >
+              <button className="small ghost danger-text" onClick={() => remove(it)}>
                 Delete
               </button>
             </li>
@@ -322,40 +276,23 @@ export function LibraryView() {
         </ul>
       ) : (
         <ul className="library-list">
-          {history.length === 0 && !loading && (
-            <li className="empty-state">No history yet.</li>
-          )}
+          {history.length === 0 && !loading && <li className="empty-state">No history yet.</li>}
           {history.map((h) => (
-            <li
-              key={h.id}
-              className={h.ok ? "library-item" : "library-item failed"}
-            >
+            <li key={h.id} className={h.ok ? 'library-item' : 'library-item failed'}>
               <div className="library-main" onDoubleClick={() => open(h)}>
                 <div>
-                  <span className={`kind-badge kind-${h.kind}`}>
-                    {KIND_LABELS[h.kind]}
-                  </span>
+                  <span className={`kind-badge kind-${h.kind}`}>{KIND_LABELS[h.kind]}</span>
                   <code className="history-summary">{h.summary}</code>
                 </div>
                 <div className="muted small">
-                  {[
-                    h.connName,
-                    h.db && (h.coll ? `${h.db}.${h.coll}` : h.db),
-                    formatDuration(h.durationMs),
-                    timeAgo(h.at),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {[h.connName, h.db && (h.coll ? `${h.db}.${h.coll}` : h.db), formatDuration(h.durationMs), timeAgo(h.at)].filter(Boolean).join(' · ')}
                   {!h.ok && <span className="error-text"> · {h.error}</span>}
                 </div>
               </div>
               <button className="small" onClick={() => open(h)}>
                 Open
               </button>
-              <button
-                className="small ghost"
-                onClick={() => saveFromHistory(h)}
-              >
+              <button className="small ghost" onClick={() => saveFromHistory(h)}>
                 Save
               </button>
             </li>
@@ -363,5 +300,5 @@ export function LibraryView() {
         </ul>
       )}
     </div>
-  );
+  )
 }

@@ -50,7 +50,7 @@ func mongoURI() string {
 func secondConn(t *testing.T, e env, id string, readOnly bool) {
 	t.Helper()
 	p := config.Profile{ID: id, Name: id, URI: mongoURI(), ConnectTimeoutSeconds: 5, ReadOnly: readOnly}
-	if _, err := e.mgr.Connect(e.ctx, p, ""); err != nil {
+	if _, err := e.mgr.Connect(e.ctx, p, mongox.Credentials{}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -183,8 +183,8 @@ func TestSyncPreviewMatchesApplyAndRestores(t *testing.T) {
 	bdir := t.TempDir()
 	svc := syncer.New(e.mgr, jm, cmp, bdir)
 	o := compare.Options{
-		Source: compare.Endpoint{ConnID: e.conn, DB: e.db, Coll: "people"},
-		Target: compare.Endpoint{ConnID: "it-target", DB: e.db + "_copy", Coll: "people"},
+		Source:       compare.Endpoint{ConnID: e.conn, DB: e.db, Coll: "people"},
+		Target:       compare.Endpoint{ConnID: "it-target", DB: e.db + "_copy", Coll: "people"},
 		IgnoreFields: []string{"updatedAt"}, IgnoreFieldOrder: true,
 	}
 	cj, _ := cmp.StartCollections(o)
