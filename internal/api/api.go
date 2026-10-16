@@ -75,7 +75,8 @@ type App struct {
 	history  *library.History
 
 	recent      *recent.Store
-	unsavedWork atomic.Bool // set by the UI; the window asks before quitting
+	unsavedWork atomic.Bool          // set by the UI; the window asks before quitting
+	emitStep    func(ConnectionStep) // connection log events (nil until the UI starts)
 
 	settingsMu sync.RWMutex
 	settings   config.Settings
@@ -136,6 +137,7 @@ func NewLifecycle(a *App) Lifecycle { return Lifecycle{app: a} }
 // Startup stores the runtime context.
 func (l Lifecycle) Startup(ctx context.Context) {
 	l.app.ctx = ctx
+	l.app.emitStep = func(st ConnectionStep) { runtime.EventsEmit(ctx, "conn:step", st) }
 	// Push job progress to the UI; the frontend listens for "jobs:update".
 	l.app.jobs.SetEmitter(func(j jobs.Job) { runtime.EventsEmit(ctx, "jobs:update", j) })
 	if l.app.currentSettings().SchedulerEnabled {

@@ -4,6 +4,7 @@ package mongox
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
@@ -12,7 +13,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 
 	"mango3s/internal/apperr"
 	"mango3s/internal/config"
@@ -81,35 +81,6 @@ func NewManager(log *slog.Logger) *Manager {
 	return &Manager{log: log, sessions: map[string]*Session{}}
 }
 
-func open(ctx context.Context, p config.Profile, c Credentials) (*mongo.Client, func(), TestResult, error) {
-	opts, err := BuildClientOptions(p, c)
-	if err != nil {
-		return nil, nil, TestResult{}, err
-	}
-	dialer, closeTunnel, err := buildDialer(ctx, p, c)
-	if err != nil {
-		return nil, nil, TestResult{}, err
-	}
-	if dialer != nil {
-		opts.SetDialer(dialer)
-	}
-	client, err := mongo.Connect(opts)
-	if err != nil {
-		closeTunnel()
-		return nil, nil, TestResult{}, apperr.From(err)
-	}
-	start := time.Now()
-	if err := client.Ping(ctx, readpref.Nearest()); err != nil {
-		_ = client.Disconnect(context.Background())
-		closeTunnel()
-		return nil, nil, TestResult{}, apperr.From(err)
-	}
-	res := TestResult{LatencyMs: time.Since(start).Milliseconds()}
-	res.ServerVersion, res.Topology = describe(ctx, client)
-	res.Via = via(p)
-	return client, closeTunnel, res, nil
-}
-
 // via describes the network path for the connection test result.
 func via(p config.Profile) string {
 	p = p.Normalize()
@@ -149,7 +120,13 @@ func describe(ctx context.Context, c *mongo.Client) (version, topology string) {
 
 // Test opens a temporary client, pings the server and closes it.
 func (m *Manager) Test(ctx context.Context, p config.Profile, c Credentials) (TestResult, error) {
-	client, closeTunnel, res, err := open(ctx, p, c)
+	return m.TestWithLog(ctx, p, c, nil)
+}
+
+// TestWithLog is Test, reporting each step (settings, DNS, tunnel, reach,
+// TLS, sign-in, server info) to rep as it happens.
+func (m *Manager) TestWithLog(ctx context.Context, p config.Profile, c Credentials, rep Reporter) (TestResult, error) {
+	client, closeTunnel, res, err := open(ctx, p, c, rep)
 	if err != nil {
 		m.log.Info("connection test failed", "profile", p.Name, "err", err)
 		return TestResult{}, err
@@ -162,10 +139,18 @@ func (m *Manager) Test(ctx context.Context, p config.Profile, c Credentials) (Te
 
 // Connect opens (or returns the existing) session for a profile.
 func (m *Manager) Connect(ctx context.Context, p config.Profile, c Credentials) (*Session, error) {
+	return m.ConnectWithLog(ctx, p, c, nil)
+}
+
+// ConnectWithLog is Connect, reporting each step to rep.
+func (m *Manager) ConnectWithLog(ctx context.Context, p config.Profile, c Credentials, rep Reporter) (*Session, error) {
 	if s, err := m.Session(p.ID); err == nil {
+		if rep != nil {
+			rep(Step{ID: "info", Label: "Already connected", State: "ok", Detail: fmt.Sprintf("MongoDB %s · %s", s.ServerVersion, s.Topology)})
+		}
 		return s, nil
 	}
-	client, closeTunnel, res, err := open(ctx, p, c)
+	client, closeTunnel, res, err := open(ctx, p, c, rep)
 	if err != nil {
 		m.log.Warn("connect failed", "profile", p.Name, "uri", logging.Redact(p.URI), "err", err)
 		return nil, err

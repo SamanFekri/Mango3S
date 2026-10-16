@@ -56,6 +56,7 @@ import type {
   SQLTranslation,
   Profile,
   ProfileInput,
+  ConnectionStep,
   BulkPreview,
   BulkResult,
   BulkWriteRequest,
@@ -100,6 +101,8 @@ export const backend = {
   saveProfile: (p: ProfileInput) => wrap<Profile>(a.SaveProfile(p)),
   deleteProfile: (id: string) => wrap<void>(a.DeleteProfile(id)),
   testConnection: (p: ProfileInput) => wrap<TestResult>(a.TestConnection(p)),
+  testConnectionWithLog: (opId: string, p: ProfileInput) => wrap<TestResult>(a.TestConnectionWithLog(opId, p)),
+  connectWithLog: (opId: string, profileId: string) => wrap<SessionInfo>(a.ConnectWithLog(opId, profileId)),
   duplicateProfile: (id: string) => wrap<Profile>(a.DuplicateProfile(id)),
   parseConnectionString: (uri: string) => wrap<ParsedURI>(a.ParseConnectionString(uri)),
   buildConnectionString: (s: ServerConfig) => wrap<string>(a.BuildConnectionString(s)),
@@ -230,6 +233,15 @@ export const backend = {
 }
 
 /** Subscribes to backend job updates; returns an unsubscribe function. */
+/** Subscribes to connection log steps ("conn:step"). */
+export function onConnectionStep(cb: (e: { opId: string; step: ConnectionStep }) => void): () => void {
+  try {
+    return EventsOn('conn:step', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
 /** Subscribes to native menu clicks ("menu:<name>"). */
 export function onMenu(name: string, cb: () => void): () => void {
   try {

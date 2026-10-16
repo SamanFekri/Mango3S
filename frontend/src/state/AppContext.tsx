@@ -1,10 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { backend, onJobUpdate } from '../lib/backend'
+import { backend, newOpId, onConnectionStep, onJobUpdate } from '../lib/backend'
 import { errorTitle, toAppError, type AppError } from '../lib/errors'
 import { setKeymapOverrides } from '../lib/shortcuts'
 import { tabsReducer, type TabsAction, type TabsState } from '../lib/tabs'
-import type { AppInfo, Job, Profile, SessionInfo, Settings } from '../lib/types'
+import type { AppInfo, ConnectionStep, Job, Profile, ProfileInput, SessionInfo, Settings, TestResult } from '../lib/types'
 
 export interface Toast {
   id: number
@@ -35,6 +35,21 @@ export interface PromptOptions {
 
 interface PromptRequest extends PromptOptions {
   resolve: (value: string | null) => void
+}
+
+/** The connection log dialog: each step of a Test or Connect as it happens. */
+export interface ConnectionLog {
+  opId: string
+  kind: 'test' | 'connect'
+  /** For Connect: the cancel id (the backend runs it as connect:<profile id>). */
+  cancelId: string
+  title: string
+  steps: ConnectionStep[]
+  status: 'running' | 'ok' | 'failed'
+  error?: AppError
+  summary?: string
+  startedAt: number
+  finishedAt?: number
 }
 
 interface AppState {
@@ -72,6 +87,11 @@ interface AppState {
   /** Closes a tab, asking first when it has unsaved work (unless force). Resolves false if the user kept it. */
   closeTab: (tabId: string, force?: boolean) => Promise<boolean>
   closeOtherTabs: (tabId: string) => Promise<void>
+
+  connectionLog: ConnectionLog | null
+  closeConnectionLog: () => void
+  /** Tests unsaved connection settings, showing the connection log. Throws on failure. */
+  testConnection: (form: ProfileInput) => Promise<TestResult>
 
   shortcutsOpen: boolean
   setShortcutsOpen: (open: boolean) => void
@@ -114,6 +134,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   dirtyRef.current = dirtyTabs
   const tabsRef = useRef<TabsState>({ tabs: [], activeId: null })
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [connectionLog, setConnectionLog] = useState<ConnectionLog | null>(null)
+  const closeConnectionLog = useCallback(() => setConnectionLog(null), [])
+  // Steps arrive as events while the call runs; keep them in first-seen order.
+  useEffect(
+    () =>
+      onConnectionStep(({ opId, step }) =>
+        setConnectionLog((log) => {
+          if (!log || log.opId !== opId) return log
+          const i = log.steps.findIndex((s) => s.id === step.id)
+          const steps = i < 0 ? [...log.steps, step] : log.steps.map((s, j) => (j === i ? step : s))
+          return { ...log, steps }
+        }),
+      ),
+    [],
+  )
+  const startLog = (kind: ConnectionLog['kind'], title: string, cancelId: string) => {
+    const opId = newOpId(kind === 'test' ? 'test' : 'connect')
+    setConnectionLog({ opId, kind, title, cancelId: cancelId || opId, steps: [], status: 'running', startedAt: Date.now() })
+    return opId
+  }
+  const finishLog = (opId: string, patch: Partial<ConnectionLog>) =>
+    setConnectionLog((log) => (log && log.opId === opId ? { ...log, ...patch, finishedAt: Date.now() } : log))
   const setTabDirty = useCallback((tabId: string, reason: string | null) => {
     setDirtyTabs((d) => {
       if ((d[tabId] ?? null) === reason) return d
@@ -156,6 +198,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const reloadProfilesRef = useRef<(() => void) | undefined>(undefined)
+  const profilesRef = useRef<Profile[]>([])
+  profilesRef.current = profiles
   const reloadProfiles = useCallback(async () => {
     try {
       setProfiles(await backend.listProfiles())
@@ -231,8 +275,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const connect = useCallback(
     async (profileId: string) => {
       setConnecting((c) => new Set(c).add(profileId))
+      const name = profilesRef.current.find((p) => p.id === profileId)?.name ?? 'connection'
+      const opId = startLog('connect', `Connecting to ${name}`, `connect:${profileId}`)
       try {
-        const info = await backend.connect(profileId)
+        const info = await backend.connectWithLog(opId, profileId)
+        finishLog(opId, { status: 'ok', summary: `Connected to ${info.name} · MongoDB ${info.serverVersion} · ${info.topology}` })
         setSessions((ss) => [...ss.filter((s) => s.id !== info.id), info].sort((a, b) => a.name.localeCompare(b.name)))
         // Each connection gets its own workspace tab (Welcome stays open).
         dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: info.id, connName: info.name } })
@@ -240,7 +287,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast({ kind: 'success', title: `Connected to ${info.name}`, message: `MongoDB ${info.serverVersion} · ${info.topology}` })
         return info
       } catch (err) {
-        toastError(err, 'Connection failed')
+        const e = toAppError(err)
+        finishLog(opId, { status: 'failed', error: e })
         return null
       } finally {
         setConnecting((c) => {
@@ -257,6 +305,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (o: ConfirmOptions) => new Promise<boolean>((resolve) => setConfirmRequest({ ...o, resolve })),
     [],
   )
+
+  const testConnection = useCallback(async (form: ProfileInput) => {
+    const opId = startLog('test', `Testing ${form.name || 'the connection'}`, '')
+    try {
+      const res = await backend.testConnectionWithLog(opId, form)
+      finishLog(opId, { status: 'ok', summary: `Connection OK · MongoDB ${res.serverVersion} · ${res.topology} · ${res.latencyMs} ms${res.via ? ` · via ${res.via}` : ''}` })
+      return res
+    } catch (err) {
+      finishLog(opId, { status: 'failed', error: toAppError(err) })
+      throw err
+    }
+  }, [])
 
   /** Asks before discarding the unsaved work of the given tabs. */
   const confirmDiscard = useCallback(
@@ -356,6 +416,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       closeOtherTabs,
       shortcutsOpen,
       setShortcutsOpen,
+      connectionLog,
+      closeConnectionLog,
+      testConnection,
       jobs,
       refreshJobs,
       prompt,
@@ -366,6 +429,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       settings, saveSettings, appInfo, profiles, reloadProfiles, sessions, connect, disconnect, connecting,
       tabs, toast, toastError, toasts, dismissToast, confirm, confirmRequest, resolveConfirm, connectionManagerOpen,
       openConnectionManager, connectionManagerSelect, dirtyTabs, setTabDirty, closeTab, closeOtherTabs, shortcutsOpen,
+      connectionLog, closeConnectionLog, testConnection,
       jobs, refreshJobs, prompt, promptRequest, resolvePrompt,
     ],
   )

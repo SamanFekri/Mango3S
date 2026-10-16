@@ -59,6 +59,8 @@ export function CollectionStats(arg1:string,arg2:string,arg3:string):Promise<exp
 
 export function Connect(arg1:string):Promise<mongox.SessionInfo>;
 
+export function ConnectWithLog(arg1:string,arg2:string):Promise<mongox.SessionInfo>;
+
 export function ConnectionCapabilities():Promise<Record<string, Array<api.Capability>>>;
 
 export function CountQuery(arg1:string,arg2:query.Request):Promise<number>;
@@ -248,6 +250,8 @@ export function StartTransform(arg1:string,arg2:string):Promise<jobs.Job>;
 export function TestAI(arg1:string):Promise<string>;
 
 export function TestConnection(arg1:api.ProfileInput):Promise<mongox.TestResult>;
+
+export function TestConnectionWithLog(arg1:string,arg2:api.ProfileInput):Promise<mongox.TestResult>;
 
 export function TranslateSQL(arg1:string):Promise<api.SQLTranslation>;
 

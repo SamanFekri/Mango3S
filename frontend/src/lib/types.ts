@@ -1057,3 +1057,14 @@ export interface BulkResult {
   deleted: number
   backupPath: string
 }
+
+/** One stage of testing or opening a connection (the connection log). */
+export interface ConnectionStep {
+  id: string
+  label: string
+  state: 'pending' | 'running' | 'ok' | 'warning' | 'failed' | 'skipped'
+  detail?: string
+  error?: string
+  code?: string
+  durationMs: number
+}

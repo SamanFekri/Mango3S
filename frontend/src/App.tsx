@@ -8,6 +8,7 @@ import { TabActiveContext, runShortcut, useShortcut, useShortcutDispatcher } fro
 import { ConnectionView } from './views/ConnectionView'
 import type { ErrorInfo, ReactNode } from 'react'
 import { ConfirmDialog, PromptDialog, Toasts } from './components/common'
+import { ConnectionLogDialog } from './components/ConnectionLogDialog'
 import { ConnectionManager } from './components/ConnectionManager'
 import { JobsIndicator } from './components/JobsPanel'
 import { Sidebar } from './components/Sidebar'
@@ -260,6 +261,7 @@ function Shell() {
       <GlobalShortcuts />
       {connectionManagerOpen && <ConnectionManager />}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      <ConnectionLogDialog />
       <ConfirmDialog />
       <PromptDialog />
       <Toasts />

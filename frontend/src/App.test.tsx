@@ -48,6 +48,8 @@ const backend = vi.hoisted(() => ({
   getField: vi.fn(),
   updateField: vi.fn(),
   parseCollectionQuery: vi.fn(),
+  connectWithLog: vi.fn(),
+  testConnectionWithLog: vi.fn(),
   detectAIProviders: vi.fn(),
   listLocalModels: vi.fn(),
   testAI: vi.fn(),
@@ -56,11 +58,16 @@ const backend = vi.hoisted(() => ({
 }))
 
 const jobListeners = vi.hoisted(() => [] as ((j: unknown) => void)[])
+const stepListeners = vi.hoisted(() => [] as ((e: unknown) => void)[])
 
 vi.mock('./lib/backend', () => ({
   backend,
   newOpId: (p: string) => `${p}-1`,
   onMenu: () => () => undefined,
+  onConnectionStep: (cb: (e: unknown) => void) => {
+    stepListeners.push(cb)
+    return () => undefined
+  },
   onJobUpdate: (cb: (j: unknown) => void) => {
     jobListeners.push(cb)
     return () => undefined
@@ -134,6 +141,9 @@ beforeEach(() => {
   })
   setShortcutPlatform('other')
   jobListeners.length = 0
+  // Connect goes through the logging variant; keep the connect mock as the source of truth.
+  backend.connectWithLog.mockImplementation((_op: string, id: string) => backend.connect(id))
+  backend.testConnectionWithLog.mockImplementation((_op: string, p: unknown) => backend.testConnection(p))
 })
 
 describe('App', () => {
@@ -207,10 +217,19 @@ const key = (init: KeyboardEventInit & { code?: string }, target: EventTarget = 
     target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
   })
 
+/** A successful connect shows the connection log briefly; close it. */
+async function dismissConnectLog() {
+  const dlg = await screen.findByRole('dialog', { name: /Connecting to/ })
+  await within(dlg).findByText(/Connected to/)
+  fireEvent.click(within(dlg).getAllByRole('button', { name: 'Close' }).at(-1)!)
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connecting to/ })).toBeNull())
+}
+
 async function connectAndOpenOrders() {
   render(<App />)
   const sidebar = screen.getByRole('navigation', { name: 'Database explorer' })
   fireEvent.click(await within(sidebar).findByRole('button', { name: 'Connect' }))
+  await dismissConnectLog()
   fireEvent.click(await within(sidebar).findByText('shop'))
   fireEvent.click(await within(sidebar).findByText('orders'))
   await screen.findByRole('treegrid')
@@ -269,6 +288,7 @@ describe('keyboard shortcuts', () => {
     render(<App />)
     const sidebar = screen.getByRole('navigation', { name: 'Database explorer' })
     fireEvent.click(await within(sidebar).findByRole('button', { name: 'Connect' }))
+    await dismissConnectLog()
     const filter = await within(sidebar).findByRole('textbox', { name: 'Filter collections' })
     filter.focus()
     key({ key: '1', code: 'Digit1', altKey: true }, filter) // quick-connect, but the user is typing
@@ -446,5 +466,70 @@ describe('AI settings', () => {
     fireEvent.click(screen.getByRole('button', { name: /Save settings/ }))
     await waitFor(() => expect(backend.saveSettings).toHaveBeenCalled())
     expect(backend.saveSettings.mock.calls[0][0]).toMatchObject({ aiProvider: 'local', localUrl: 'http://localhost:11434', localApi: 'ollama', localModel: 'qwen2.5-coder:7b' })
+  })
+})
+
+describe('connection log', () => {
+  const step = (opId: string, id: string, label: string, state: string, extra: Record<string, unknown> = {}) =>
+    act(() => stepListeners.forEach((l) => l({ opId, step: { id, label, state, durationMs: 12, ...extra } })))
+
+  it('shows each step while connecting and keeps a failed attempt open with the reason', async () => {
+    let finish: (v: unknown) => void = () => undefined
+    let fail: (e: unknown) => void = () => undefined
+    backend.connectWithLog.mockImplementation(() => new Promise((res, rej) => ((finish = res), (fail = rej))))
+    render(<App />)
+    const sidebar = screen.getByRole('navigation', { name: 'Database explorer' })
+    fireEvent.click(await within(sidebar).findByRole('button', { name: 'Connect' }))
+    const dlg = await screen.findByRole('dialog', { name: 'Connecting to Local dev' })
+    const opId = backend.connectWithLog.mock.calls[0][0]
+    expect(backend.connectWithLog).toHaveBeenCalledWith(opId, 'p1')
+    step(opId, 'settings', 'Check connection settings', 'ok', { detail: 'Hosts: localhost:27017' })
+    step(opId, 'reach', 'Reach the server', 'running')
+    step(opId, 'auth', 'Connect', 'pending')
+    expect(within(dlg).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      expect.stringContaining('Check connection settings'), expect.stringContaining('Reach the server'), expect.stringContaining('Connect'),
+    ])
+    step(opId, 'reach', 'Reach the server', 'failed', { error: 'No server could be reached.', detail: '✗ localhost:27017 — connection refused' })
+    step(opId, 'auth', 'Connect', 'skipped')
+    await act(async () => fail(new Error(JSON.stringify({ code: 'UNREACHABLE', message: 'No server could be reached.' }))))
+    expect(within(dlg).getByRole('alert')).toHaveTextContent('No server could be reached.')
+    expect(within(dlg).getByText(/Failed at “Reach the server”/)).toBeInTheDocument()
+    expect(within(dlg).getByText(/connection refused/)).toBeInTheDocument()
+    // Copy log gives the whole log as text.
+    const write = vi.fn()
+    Object.assign(navigator, { clipboard: { writeText: write } })
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Copy log' }))
+    expect(write.mock.calls[0][0]).toMatch(/\[OK\] Check connection settings[\s\S]*\[FAILED\] Reach the server[\s\S]*error: No server could be reached\.[\s\S]*\[SKIPPED\] Connect/)
+    // A failed attempt stays open.
+    await new Promise((r) => setTimeout(r, 1700))
+    expect(screen.getByRole('dialog', { name: 'Connecting to Local dev' })).toBeInTheDocument()
+    fireEvent.click(within(dlg).getAllByRole('button', { name: 'Close' }).at(-1)!)
+    expect(screen.queryByRole('dialog', { name: /Connecting/ })).toBeNull()
+    void finish
+  })
+
+  it('closes by itself after a successful connect unless kept open', async () => {
+    backend.connectWithLog.mockImplementation(async () => session)
+    render(<App />)
+    const sidebar = screen.getByRole('navigation', { name: 'Database explorer' })
+    fireEvent.click(await within(sidebar).findByRole('button', { name: 'Connect' }))
+    const dlg = await screen.findByRole('dialog', { name: 'Connecting to Local dev' })
+    expect(await within(dlg).findByText(/Connected to Local dev/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connecting/ })).toBeNull(), { timeout: 3000 })
+  })
+
+  it('Test in the connection manager shows the log too', async () => {
+    backend.testConnection.mockResolvedValue({ serverVersion: '8.0.0', topology: 'standalone', latencyMs: 3 })
+    render(<App />)
+    await screen.findByText('Local dev', { selector: '.welcome-name' })
+    fireEvent.click(within(screen.getByRole('tabpanel')).getByRole('button', { name: 'New connection' }))
+    const mgr = await screen.findByRole('dialog', { name: 'Connection Manager' })
+    fireEvent.change(within(mgr).getByLabelText('Connection name'), { target: { value: 'Dev' } })
+    fireEvent.click(within(mgr).getByRole('button', { name: /Test connection/ }))
+    const log = await screen.findByRole('dialog', { name: 'Testing Dev' })
+    expect(await within(log).findByText(/Connection OK · MongoDB 8.0.0/)).toBeInTheDocument()
+    // A test result stays until closed.
+    await new Promise((r) => setTimeout(r, 1700))
+    expect(screen.getByRole('dialog', { name: 'Testing Dev' })).toBeInTheDocument()
   })
 })

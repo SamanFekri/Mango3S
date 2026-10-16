@@ -2796,3 +2796,79 @@ tr.clickable {
 .tree-grid tr.tree-root.doc-even {
   --doc-row: var(--doc-row-even);
 }
+
+/* ---------- Connection log ---------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.conn-log {
+  min-width: min(560px, 80vw);
+}
+.conn-steps {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.conn-step {
+  display: flex;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+}
+.conn-step.failed {
+  background: var(--danger-soft);
+}
+.conn-step.pending,
+.conn-step.skipped {
+  color: var(--text-faint);
+}
+.step-icon {
+  width: 18px;
+  flex: none;
+  text-align: center;
+  font-weight: 700;
+  line-height: 20px;
+}
+.conn-step.ok .step-icon {
+  color: var(--success);
+}
+.conn-step.warning .step-icon {
+  color: var(--accent);
+}
+.conn-step.failed .step-icon {
+  color: var(--danger);
+}
+.step-body {
+  flex: 1;
+  min-width: 0;
+}
+.step-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  line-height: 20px;
+}
+.conn-step.running .step-label {
+  font-weight: 600;
+}
+.step-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.step-detail {
+  margin: 3px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

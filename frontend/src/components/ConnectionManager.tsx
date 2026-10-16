@@ -104,7 +104,7 @@ function folderTree(profiles: Profile[], filter: string): FolderNode {
 }
 
 export function ConnectionManager() {
-  const { profiles, reloadProfiles, openConnectionManager, connectionManagerSelect, connect, sessions, toast, confirm, disconnect, dispatchTabs } = useApp()
+  const { profiles, reloadProfiles, openConnectionManager, connectionManagerSelect, connect, sessions, toast, confirm, disconnect, dispatchTabs, testConnection } = useApp()
   const initial = connectionManagerSelect === 'new' ? null : (profiles.find((p) => p.id === connectionManagerSelect) ?? profiles[0] ?? null)
   const [selected, setSelected] = useState<string | null>(initial?.id ?? null)
   const [form, setForm] = useState<ProfileInput>(() => (initial ? fromProfile(initial) : blankProfile()))
@@ -159,7 +159,7 @@ export function ConnectionManager() {
     setTest(null)
     try {
       if (kind === 'test') {
-        setTest(await backend.testConnection(f))
+        setTest(await testConnection(f)) // shows the step-by-step connection log
         return
       }
       let id = f.id
@@ -179,6 +179,7 @@ export function ConnectionManager() {
       if (kind === 'connect') {
         const info = await connect(id)
         if (info) openConnectionManager(false)
+        // On failure the connection log shows which step failed.
       }
     } catch (err) {
       const e = toAppError(err)

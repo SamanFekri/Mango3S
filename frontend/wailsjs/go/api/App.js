@@ -66,6 +66,10 @@ export function Connect(arg1) {
   return window['go']['api']['App']['Connect'](arg1);
 }
 
+export function ConnectWithLog(arg1, arg2) {
+  return window['go']['api']['App']['ConnectWithLog'](arg1, arg2);
+}
+
 export function ConnectionCapabilities() {
   return window['go']['api']['App']['ConnectionCapabilities']();
 }
@@ -444,6 +448,10 @@ export function TestAI(arg1) {
 
 export function TestConnection(arg1) {
   return window['go']['api']['App']['TestConnection'](arg1);
+}
+
+export function TestConnectionWithLog(arg1, arg2) {
+  return window['go']['api']['App']['TestConnectionWithLog'](arg1, arg2);
 }
 
 export function TranslateSQL(arg1) {

@@ -288,7 +288,55 @@ func (a *App) credentials(p config.Profile, form map[string]SecretInput) (mongox
 
 // TestConnection checks the form values without saving them.
 func (a *App) TestConnection(in ProfileInput) (mongox.TestResult, error) {
-	return call(a, "TestConnection", "", func(ctx context.Context) (mongox.TestResult, error) {
+	return a.testConnection("", in, nil)
+}
+
+// TestConnectionWithLog is TestConnection, sending each step (settings,
+// DNS, tunnel, reachability, TLS, sign-in, server info) to the UI as a
+// "conn:step" event tagged with opID, so the connection log dialog can show
+// where it fails.
+func (a *App) TestConnectionWithLog(opID string, in ProfileInput) (mongox.TestResult, error) {
+	return a.testConnection(opID, in, a.stepReporter(opID, "test", in.Name))
+}
+
+// ConnectWithLog is Connect with the same step-by-step log.
+func (a *App) ConnectWithLog(opID, profileID string) (mongox.SessionInfo, error) {
+	name := profileID
+	if p, err := a.store.GetProfile(profileID); err == nil {
+		name = p.Name
+	}
+	return a.connect(profileID, a.stepReporter(opID, "connect", name))
+}
+
+// ConnectionStep is the "conn:step" event payload.
+type ConnectionStep struct {
+	OpID string      `json:"opId"`
+	Step mongox.Step `json:"step"`
+}
+
+// stepReporter sends steps to the UI and writes failures to the log (the
+// steps carry no secrets).
+func (a *App) stepReporter(opID, action, name string) mongox.Reporter {
+	return func(st mongox.Step) {
+		switch st.State {
+		case "failed":
+			a.log.Warn("connection step failed", "action", action, "profile", name, "step", st.ID, "error", st.Error, "ms", st.DurationMs)
+		case "ok", "warning":
+			a.log.Debug("connection step", "action", action, "profile", name, "step", st.ID, "state", st.State, "ms", st.DurationMs)
+		}
+		if a.emitStep != nil {
+			a.emitStep(ConnectionStep{OpID: opID, Step: st})
+		}
+	}
+}
+
+// SetStepListener receives connection steps (the desktop runtime forwards
+// them to the UI; tests record them). A function, not a method, so Wails
+// does not bind it.
+func SetStepListener(a *App, f func(ConnectionStep)) { a.emitStep = f }
+
+func (a *App) testConnection(opID string, in ProfileInput, rep mongox.Reporter) (mongox.TestResult, error) {
+	return call(a, "TestConnection", opID, func(ctx context.Context) (mongox.TestResult, error) {
 		p, password, err := in.toProfile()
 		if err != nil {
 			return mongox.TestResult{}, err
@@ -310,18 +358,29 @@ func (a *App) TestConnection(in ProfileInput) (mongox.TestResult, error) {
 		if p.Username == "" {
 			c.Password = ""
 		}
-		return a.conns.Test(ctx, p, c)
+		return a.conns.TestWithLog(ctx, p, c, rep)
 	})
 }
 
 // Connect opens a saved profile.
 func (a *App) Connect(profileID string) (mongox.SessionInfo, error) {
+	return a.connect(profileID, nil)
+}
+
+func (a *App) connect(profileID string, rep mongox.Reporter) (mongox.SessionInfo, error) {
 	return call(a, "Connect", "connect:"+profileID, func(ctx context.Context) (mongox.SessionInfo, error) {
 		p, err := a.store.GetProfile(profileID)
 		if err != nil {
 			return mongox.SessionInfo{}, err
 		}
-		s, err := a.connectProfile(ctx, p)
+		c, err := a.credentials(p, nil)
+		if err != nil {
+			if rep != nil {
+				rep(mongox.Step{ID: "settings", Label: "Read saved credentials", State: "failed", Error: apperr.From(err).Message, Code: string(apperr.From(err).Code)})
+			}
+			return mongox.SessionInfo{}, err
+		}
+		s, err := a.conns.ConnectWithLog(ctx, p, c, rep)
 		if err != nil {
 			return mongox.SessionInfo{}, err
 		}
