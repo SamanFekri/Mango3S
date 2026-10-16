@@ -20,13 +20,13 @@
     "semantic_hash": "e0926be8dde2f9667609d91c5c7d02f6"
   },
   "frontend/src/App.test.tsx": {
-    "mtime": 1792139489.2965426,
-    "ast_hash": "01ee8556ae9b589e6607d70705f96172",
+    "mtime": 1792141645.4835877,
+    "ast_hash": "4c5c76b4b03ff6f67ca71149fa01ac2f",
     "semantic_hash": ""
   },
   "frontend/src/App.tsx": {
-    "mtime": 1792136516.1269057,
-    "ast_hash": "7cb27ade5d1bb10cc02ff5f332530d9b",
+    "mtime": 1792141391.8386211,
+    "ast_hash": "e46e52d26ccc45c742dd8c99323d4eca",
     "semantic_hash": ""
   },
   "frontend/src/components/CodeDialog.tsx": {
@@ -230,32 +230,32 @@
     "semantic_hash": "7e07f69d0715b89e614249fc226c2573"
   },
   "frontend/wailsjs/go/api/App.d.ts": {
-    "mtime": 1792141136.724374,
+    "mtime": 1792141663.3202105,
     "ast_hash": "0738b0584accde00f4452ade9b7a035d",
     "semantic_hash": ""
   },
   "frontend/wailsjs/go/api/App.js": {
-    "mtime": 1792141136.7242913,
+    "mtime": 1792141663.320034,
     "ast_hash": "ac20990934f78bd834e4cafa50950460",
     "semantic_hash": ""
   },
   "frontend/wailsjs/go/models.ts": {
-    "mtime": 1792141136.7357824,
+    "mtime": 1792141663.3304844,
     "ast_hash": "0d8d23051422b1b9f19de6e2c83887a8",
     "semantic_hash": ""
   },
   "frontend/wailsjs/runtime/package.json": {
-    "mtime": 1792141136.7413886,
+    "mtime": 1792141670.379003,
     "ast_hash": "a79e9c39ebcda0fdeb14a44939bc489e",
     "semantic_hash": "a79e9c39ebcda0fdeb14a44939bc489e"
   },
   "frontend/wailsjs/runtime/runtime.d.ts": {
-    "mtime": 1792141136.7415311,
+    "mtime": 1792141670.3793225,
     "ast_hash": "dcd9fca4af1912f552547c22f315c25e",
     "semantic_hash": "dcd9fca4af1912f552547c22f315c25e"
   },
   "frontend/wailsjs/runtime/runtime.js": {
-    "mtime": 1792141136.7416208,
+    "mtime": 1792141670.3794827,
     "ast_hash": "efc7f0ddc7f96e446ad0252df27b477f",
     "semantic_hash": "efc7f0ddc7f96e446ad0252df27b477f"
   },
@@ -790,8 +790,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/DocViews.tsx": {
-    "mtime": 1792140369.3331554,
-    "ast_hash": "a815064862b515eed2b674a5509cf1f0",
+    "mtime": 1792141645.4840522,
+    "ast_hash": "607c0dfe0cadbe402e5e18600557bea4",
     "semantic_hash": ""
   },
   "frontend/src/components/ShortcutsDialog.tsx": {
@@ -800,13 +800,13 @@
     "semantic_hash": ""
   },
   "frontend/src/components/docviews.test.tsx": {
-    "mtime": 1792135070.9086592,
-    "ast_hash": "7fe1fb6335c602419acdf06a97632ced",
+    "mtime": 1792141645.4850166,
+    "ast_hash": "bd35224985d7120a630265b456317777",
     "semantic_hash": ""
   },
   "frontend/src/components/icons.tsx": {
-    "mtime": 1792135342.1435232,
-    "ast_hash": "c2a2e6534e0b4af69aecafa3aca5c1c2",
+    "mtime": 1792141391.8161972,
+    "ast_hash": "50e02e41ef4b40c7efc5b1e988e3545e",
     "semantic_hash": ""
   },
   "frontend/src/lib/docTree.ts": {
