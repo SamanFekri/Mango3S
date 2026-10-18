@@ -2905,3 +2905,13 @@ tr.clickable {
 .about-note {
   margin-top: 14px;
 }
+
+/* Pagination repeated under the results. */
+.results-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}

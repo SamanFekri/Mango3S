@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { emptyBuilder, type BuilderState } from '../lib/queryBuilder'
@@ -40,9 +40,10 @@ describe('ResultsView', () => {
   it('shows documents, range and pages forward', () => {
     const p = renderResults()
     expect(screen.getByText('ObjectId("a")')).toBeInTheDocument()
-    expect(screen.getByText(/1–2/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Previous page')).toBeDisabled()
-    fireEvent.click(screen.getByLabelText('Next page'))
+    expect(screen.getAllByText(/1–2/)).toHaveLength(2) // above and below the results
+    const top = screen.getByRole('navigation', { name: 'Pagination' })
+    expect(within(top).getByLabelText('Previous page')).toBeDisabled()
+    fireEvent.click(within(top).getByLabelText('Next page'))
     expect(p.onPage).toHaveBeenCalledWith(1)
   })
 
@@ -120,5 +121,22 @@ describe('highlight', () => {
     expect(container.querySelector('.tok-num')).toHaveTextContent('1.5')
     expect(container.querySelector('.tok-kw')).toHaveTextContent('true')
     expect(container.textContent).toBe('{"a": ObjectId("x"), "n": 1.5, "s": "v", "b": true}')
+  })
+})
+
+describe('pagination under the results', () => {
+  it('repeats the pager below the results; both page the same way', () => {
+    const p = renderResults()
+    const bottom = screen.getByRole('navigation', { name: 'Pagination (bottom)' })
+    expect(within(bottom).getByLabelText('Previous page')).toBeDisabled()
+    expect(within(bottom).getByLabelText('Page')).toHaveTextContent('1')
+    fireEvent.click(within(bottom).getByLabelText('Next page'))
+    expect(p.onPage).toHaveBeenCalledWith(1)
+    expect(screen.getByText('1–2', { selector: '.results-footer span' })).toBeInTheDocument()
+  })
+
+  it('is hidden when there are no documents', () => {
+    renderResults({ page: { ...page, documents: [], hasMore: false } })
+    expect(screen.queryByRole('navigation', { name: 'Pagination (bottom)' })).toBeNull()
   })
 })

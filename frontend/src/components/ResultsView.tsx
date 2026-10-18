@@ -73,6 +73,7 @@ export function ResultsView(props: ResultsViewProps) {
   const ask = props.confirm ?? defaultConfirm
   const sectionRef = useRef<HTMLElement | null>(null)
   const gridRef = useRef<HTMLDivElement | null>(null)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
 
   // Selection is per page.
   const pageKey = `${page?.page}-${docs.length}-${docs[0]?.id ?? ''}`
@@ -101,7 +102,6 @@ export function ResultsView(props: ResultsViewProps) {
 
   const selectedDocs = docs.filter((d) => d.id && selected.has(d.id))
   const editable = !!onEdit && !readOnly
-  const canPrev = !!page && page.page > 0
 
   /** Runs an action that would leave the current edit, asking first if it has changes. */
   const leaveEdit = async (action: () => void) => {
@@ -322,25 +322,14 @@ export function ResultsView(props: ResultsViewProps) {
             ))}
           </select>
         )}
-        <div className="pager">
-          <button className="small" aria-label="First page" disabled={!canPrev || loading} onClick={() => void leaveEdit(() => onPage(0))}>
-            «
-          </button>
-          <button className="small" aria-label="Previous page" disabled={!canPrev || loading} onClick={() => void leaveEdit(() => onPage(page!.page - 1))}>
-            ‹
-          </button>
-          <span className="page-num">{page ? page.page + 1 : '–'}</span>
-          <button className="small" aria-label="Next page" disabled={!page?.hasMore || loading} onClick={() => void leaveEdit(() => onPage(page!.page + 1))}>
-            ›
-          </button>
-        </div>
+        <Pager label="Pagination" page={page} loading={loading} onPage={(n) => void leaveEdit(() => onPage(n))} />
       </div>
 
       <ErrorBanner error={error} onDismiss={props.onDismissError} />
       {page?.notice && <div className="info-banner">{page.notice}</div>}
       {ce.notice && <ResultsNotice text={ce.notice} onDismiss={() => ce.setNotice(null)} />}
 
-      <div className={loading ? 'results-body dimmed' : 'results-body'}>
+      <div className={loading ? 'results-body dimmed' : 'results-body'} ref={bodyRef}>
         {!page && !loading && !error && <div className="empty-state">{props.emptyHint ?? 'Run a query to see results.'}</div>}
         {page && docs.length === 0 && !page.notice && <div className="empty-state">No documents match.</div>}
         {view === 'json' && (
@@ -384,6 +373,26 @@ export function ResultsView(props: ResultsViewProps) {
           />
         )}
       </div>
+      {page && docs.length > 0 && (
+        <div className="results-footer">
+          <span className="muted small">
+            {pageRange(page.page, page.pageSize, docs.length)}
+            {props.total != null && ` of ${formatCount(props.total)}`}
+          </span>
+          <span className="spacer" />
+          <Pager
+            label="Pagination (bottom)"
+            page={page}
+            loading={loading}
+            onPage={(n) =>
+              void leaveEdit(() => {
+                onPage(n)
+                bodyRef.current?.scrollTo?.({ top: 0 })
+              })
+            }
+          />
+        </div>
+      )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems()} onClose={() => setMenu(null)} />}
       {dialog?.kind === 'view' && (
         <DocumentViewer
@@ -469,3 +478,24 @@ const DocCard = memo(function DocCard({
     </article>
   )
 })
+
+/** First / previous / page number / next. Shown above and below the results. */
+function Pager({ label, page, loading, onPage }: { label: string; page: Page | null; loading: boolean; onPage: (n: number) => void }) {
+  const canPrev = !!page && page.page > 0
+  return (
+    <nav className="pager" aria-label={label}>
+      <button className="small" aria-label="First page" disabled={!canPrev || loading} onClick={() => onPage(0)}>
+        «
+      </button>
+      <button className="small" aria-label="Previous page" disabled={!canPrev || loading} onClick={() => onPage(page!.page - 1)}>
+        ‹
+      </button>
+      <span className="page-num" aria-label="Page">
+        {page ? page.page + 1 : '–'}
+      </span>
+      <button className="small" aria-label="Next page" disabled={!page?.hasMore || loading} onClick={() => onPage(page!.page + 1)}>
+        ›
+      </button>
+    </nav>
+  )
+}
