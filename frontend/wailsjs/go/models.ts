@@ -384,6 +384,14 @@ export namespace api {
 	    configDir: string;
 	    logFile: string;
 	    secretBackend: string;
+	    commit: string;
+	    buildTime: string;
+	    modified: boolean;
+	    goVersion: string;
+	    platform: string;
+	    executable: string;
+	    backupDir: string;
+	    components: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -395,6 +403,14 @@ export namespace api {
 	        this.configDir = source["configDir"];
 	        this.logFile = source["logFile"];
 	        this.secretBackend = source["secretBackend"];
+	        this.commit = source["commit"];
+	        this.buildTime = source["buildTime"];
+	        this.modified = source["modified"];
+	        this.goVersion = source["goVersion"];
+	        this.platform = source["platform"];
+	        this.executable = source["executable"];
+	        this.backupDir = source["backupDir"];
+	        this.components = source["components"];
 	    }
 	}
 	export class BulkPreview {

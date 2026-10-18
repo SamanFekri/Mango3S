@@ -8,6 +8,7 @@ import { TabActiveContext, runShortcut, useShortcut, useShortcutDispatcher } fro
 import { ConnectionView } from './views/ConnectionView'
 import type { ErrorInfo, ReactNode } from 'react'
 import { ConfirmDialog, PromptDialog, Toasts } from './components/common'
+import { AboutDialog } from './components/AboutDialog'
 import { ConnectionLogDialog } from './components/ConnectionLogDialog'
 import { ConnectionManager } from './components/ConnectionManager'
 import { JobsIndicator } from './components/JobsPanel'
@@ -58,7 +59,7 @@ function TabContent({ tab }: { tab: Tab }) {
     case 'welcome':
       return <WelcomeView />
     case 'settings':
-      return <SettingsView />
+      return <SettingsView tab={tab} />
     case 'collection':
       return <CollectionView tab={tab} />
     case 'aggregation':
@@ -144,7 +145,7 @@ function TabBar() {
 
 /** App-wide shortcuts and native menu items. */
 function GlobalShortcuts() {
-  const { tabs, dispatchTabs, closeTab, openConnectionManager, profiles, sessions, connect, disconnect, shortcutsOpen, setShortcutsOpen } = useApp()
+  const { tabs, dispatchTabs, closeTab, openConnectionManager, profiles, sessions, connect, disconnect, shortcutsOpen, setShortcutsOpen, setAboutOpen } = useApp()
   const active = tabs.tabs.find((t) => t.id === tabs.activeId)
   const activeSession = sessions.find((s) => s.id === active?.connId)
 
@@ -191,16 +192,11 @@ function GlobalShortcuts() {
       onMenu('tasks', () => dispatchTabs({ type: 'open', tab: { kind: 'tasks' } })),
       onMenu('settings', () => dispatchTabs({ type: 'open', tab: { kind: 'settings' } })),
       onMenu('shortcuts', () => setShortcutsOpen(true)),
-      onMenu('quit', () => {
-        try {
-          ;(window as unknown as { runtime?: { Quit?: () => void } }).runtime?.Quit?.()
-        } catch {
-          /* not in Wails */
-        }
-      }),
+      onMenu('about', () => setAboutOpen(true)),
+      onMenu('keymap', () => dispatchTabs({ type: 'open', tab: { kind: 'settings', init: { settingsSection: 'keymap' } } })),
     ]
     return () => offs.forEach((off) => off())
-  }, [openConnectionManager, dispatchTabs, setShortcutsOpen])
+  }, [openConnectionManager, dispatchTabs, setShortcutsOpen, setAboutOpen])
   return null
 }
 
@@ -227,7 +223,7 @@ function StatusBar() {
 }
 
 function Shell() {
-  const { tabs, dispatchTabs, connectionManagerOpen, shortcutsOpen, setShortcutsOpen } = useApp()
+  const { tabs, dispatchTabs, connectionManagerOpen, shortcutsOpen, setShortcutsOpen, aboutOpen, setAboutOpen } = useApp()
   useShortcutDispatcher()
 
   return (
@@ -262,6 +258,7 @@ function Shell() {
       {connectionManagerOpen && <ConnectionManager />}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       <ConnectionLogDialog />
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
       <ConfirmDialog />
       <PromptDialog />
       <Toasts />

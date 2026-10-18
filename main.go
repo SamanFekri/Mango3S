@@ -85,30 +85,49 @@ func runMCP() error {
 // (required on macOS for Cmd+C/V/X/Z to work).
 func appMenu(app *api.App) *menu.Menu {
 	m := menu.NewMenu()
-	if goruntime.GOOS == "darwin" {
-		m.Append(menu.AppMenu())
-	}
 	emit := func(name string) func(*menu.CallbackData) {
 		return func(*menu.CallbackData) { api.MenuEvent(app, name) }
+	}
+	mac := goruntime.GOOS == "darwin"
+	if mac {
+		// Our own application menu (macOS uses the first menu as the app
+		// menu): Wails' built-in one has no place for Settings… ⌘,.
+		am := m.AddSubmenu("Mango3S")
+		am.AddText("About Mango3S", nil, emit("about"))
+		am.AddSeparator()
+		am.AddText("Settings…", keys.CmdOrCtrl(","), emit("settings"))
+		am.AddText("Keymap…", nil, emit("keymap"))
+		am.AddSeparator()
+		am.AddText("Hide Mango3S", keys.CmdOrCtrl("h"), func(*menu.CallbackData) { api.HideApp(app) })
+		am.AddSeparator()
+		am.AddText("Quit Mango3S", keys.CmdOrCtrl("q"), func(*menu.CallbackData) { api.QuitApp(app) })
 	}
 	file := m.AddSubmenu("File")
 	file.AddText("Connection Manager…", nil, emit("connection-manager"))
 	file.AddText("New Connection…", nil, emit("new-connection"))
 	file.AddSeparator()
 	file.AddText("Close Tab", nil, emit("close-tab"))
-	if goruntime.GOOS != "darwin" {
+	if !mac {
 		file.AddSeparator()
-		file.AddText("Quit", keys.CmdOrCtrl("q"), func(*menu.CallbackData) { api.MenuEvent(app, "quit") })
+		file.AddText("Settings…", nil, emit("settings"))
+		file.AddSeparator()
+		file.AddText("Quit", keys.CmdOrCtrl("q"), func(*menu.CallbackData) { api.QuitApp(app) })
 	}
 	m.Append(menu.EditMenu())
 	view := m.AddSubmenu("View")
 	view.AddText("Welcome", nil, emit("welcome"))
 	view.AddText("Library", nil, emit("library"))
 	view.AddText("Scheduled Tasks", nil, emit("tasks"))
-	view.AddText("Settings", nil, emit("settings"))
+	if mac {
+		m.Append(menu.WindowMenu())
+	}
 	help := m.AddSubmenu("Help")
 	help.AddText("Keyboard Shortcuts", nil, emit("shortcuts"))
 	help.AddText("Welcome", nil, emit("welcome"))
+	if !mac {
+		help.AddSeparator()
+		help.AddText("About Mango3S", nil, emit("about"))
+	}
 	return m
 }
 
@@ -137,7 +156,7 @@ func runDesktop() error {
 		Mac: &mac.Options{
 			About: &mac.AboutInfo{
 				Title:   "Mango3S",
-				Message: "A MongoDB IDE · v" + api.Version,
+				Message: "A desktop IDE for MongoDB · v" + api.Version,
 			},
 		},
 	})

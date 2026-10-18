@@ -13,6 +13,8 @@ export interface TabInit {
   savedName?: string
   /** Library tab: which section to show. */
   section?: 'saved' | 'history' | 'backups'
+  /** Settings tab: section to scroll to. */
+  settingsSection?: 'keymap'
 }
 
 export interface Tab {

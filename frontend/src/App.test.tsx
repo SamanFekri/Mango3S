@@ -59,11 +59,15 @@ const backend = vi.hoisted(() => ({
 
 const jobListeners = vi.hoisted(() => [] as ((j: unknown) => void)[])
 const stepListeners = vi.hoisted(() => [] as ((e: unknown) => void)[])
+const menuListeners = vi.hoisted(() => ({}) as Record<string, (() => void)[]>)
 
 vi.mock('./lib/backend', () => ({
   backend,
   newOpId: (p: string) => `${p}-1`,
-  onMenu: () => () => undefined,
+  onMenu: (name: string, cb: () => void) => {
+    ;(menuListeners[name] ??= []).push(cb)
+    return () => undefined
+  },
   onConnectionStep: (cb: (e: unknown) => void) => {
     stepListeners.push(cb)
     return () => undefined
@@ -82,7 +86,13 @@ import { setShortcutPlatform } from './state/shortcuts'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  backend.getAppInfo.mockResolvedValue({ version: 'test', configDir: '/tmp', logFile: '', secretBackend: 'file' })
+  backend.getAppInfo.mockResolvedValue({
+    version: '1.2.3', configDir: '/Users/me/Library/Application Support/Mango3S', logFile: '/Users/me/Library/Application Support/Mango3S/logs/mango3s.log',
+    secretBackend: 'keyring', commit: 'abcdef1234567890', buildTime: '2026-10-18T10:00:00Z', modified: false, goVersion: 'go1.26.0',
+    platform: 'darwin/arm64', executable: '/Applications/Mango3S.app/Contents/MacOS/mango3s', backupDir: '/Users/me/Library/Application Support/Mango3S/backups',
+    components: { Wails: 'v2.16.0', 'MongoDB Go driver': 'v2.9.2' },
+  })
+  for (const k of Object.keys(menuListeners)) delete menuListeners[k]
   backend.getSettings.mockResolvedValue({
     theme: 'dark', pageSize: 50, queryTimeoutSeconds: 60, confirmDeletes: true, defaultView: 'tree', editorFontSize: 13, logLevel: 'info',
     aiEnabled: true, aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiTimeoutSeconds: 180, claudeCodePath: '', claudeCodeModel: '', codexPath: '', codexModel: '',
@@ -531,5 +541,41 @@ describe('connection log', () => {
     // A test result stays until closed.
     await new Promise((r) => setTimeout(r, 1700))
     expect(screen.getByRole('dialog', { name: 'Testing Dev' })).toBeInTheDocument()
+  })
+})
+
+describe('app menu', () => {
+  const menu = (name: string) => act(() => (menuListeners[name] ?? []).forEach((f) => f()))
+
+  it('Settings… (⌘,) opens Settings, and Keymap… opens it at the keymap', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+    menu('settings')
+    expect(await screen.findByRole('tab', { name: /Settings/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { name: 'Keymap' })).toBeInTheDocument()
+    const scrolled = vi.fn()
+    Element.prototype.scrollIntoView = scrolled
+    menu('welcome')
+    menu('keymap')
+    await waitFor(() => expect(scrolled).toHaveBeenCalled())
+    expect(screen.getByRole('tab', { name: /Settings/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByRole('tab', { name: /Settings/ })).toHaveLength(1) // reused, not duplicated
+  })
+
+  it('About Mango3S shows the version, build and installation details', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+    menu('about')
+    const dlg = await screen.findByRole('dialog', { name: 'About Mango3S' })
+    expect(dlg.textContent).toMatch(/Version 1\.2\.3 · build abcdef1/)
+    for (const text of [/abcdef1/, /darwin\/arm64/, /go1\.26\.0/, /MongoDB Go driver/, /v2\.9\.2/, /OS credential store/, /Mango3S\/backups/]) {
+      expect(within(dlg).getAllByText(text).length).toBeGreaterThan(0)
+    }
+    const write = vi.fn()
+    Object.assign(navigator, { clipboard: { writeText: write } })
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Copy details' }))
+    expect(write.mock.calls[0][0]).toMatch(/^Mango3S 1\.2\.3\nBuild: abcdef123456 · 2026-10-18T10:00:00Z\nPlatform: darwin\/arm64 · go1\.26\.0\n/)
+    fireEvent.click(within(dlg).getAllByRole('button', { name: 'Close' }).at(-1)!)
+    expect(screen.queryByRole('dialog', { name: 'About Mango3S' })).toBeNull()
   })
 })

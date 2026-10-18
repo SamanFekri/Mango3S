@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react'
 import { Spinner } from '../components/common'
 import { KeymapSettings } from '../components/KeymapSettings'
 import { AISettings, MCPSettings } from '../components/P2Settings'
+import type { Tab } from '../lib/tabs'
 import type { Settings } from '../lib/types'
 import { useApp } from '../state/AppContext'
 
-export function SettingsView() {
+export function SettingsView({ tab }: { tab?: Tab }) {
   const { settings, saveSettings, appInfo, toast, toastError } = useApp()
   const [form, setForm] = useState<Settings | null>(settings)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => setForm(settings), [settings])
+  // App menu → Keymap… opens Settings at the Keymap section.
+  useEffect(() => {
+    if (tab?.init?.settingsSection === 'keymap') document.getElementById('settings-keymap')?.scrollIntoView?.({ block: 'start' })
+  }, [tab?.init, form === null])
   if (!form) return <Spinner />
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setForm({ ...form, [k]: v })
@@ -113,7 +118,9 @@ export function SettingsView() {
         </button>
       </div>
       <MCPSettings />
-      <KeymapSettings />
+      <div id="settings-keymap">
+        <KeymapSettings />
+      </div>
     </div>
   )
 }

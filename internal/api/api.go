@@ -9,6 +9,10 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
+	goruntime "runtime"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -280,11 +284,61 @@ type AppInfo struct {
 	ConfigDir     string `json:"configDir"`
 	LogFile       string `json:"logFile"`
 	SecretBackend string `json:"secretBackend"`
+
+	// Shown in About Mango3S.
+	Commit     string            `json:"commit"`    // VCS revision the binary was built from
+	BuildTime  string            `json:"buildTime"` // VCS commit time
+	Modified   bool              `json:"modified"`  // built with uncommitted changes
+	GoVersion  string            `json:"goVersion"`
+	Platform   string            `json:"platform"`   // e.g. darwin/arm64
+	Executable string            `json:"executable"` // path of the running binary (used by `mango3s mcp`)
+	BackupDir  string            `json:"backupDir"`
+	Components map[string]string `json:"components"` // key libraries and their versions
 }
 
-// GetAppInfo returns version and paths.
+// keyModules are the libraries listed in About Mango3S.
+var keyModules = map[string]string{
+	"github.com/wailsapp/wails/v2":           "Wails",
+	"go.mongodb.org/mongo-driver/v2":         "MongoDB Go driver",
+	"github.com/anthropics/anthropic-sdk-go": "Anthropic Go SDK",
+	"github.com/modelcontextprotocol/go-sdk": "MCP Go SDK",
+	"github.com/jackc/pgx/v5":                "pgx (PostgreSQL)",
+	"github.com/go-sql-driver/mysql":         "MySQL driver",
+	"modernc.org/sqlite":                     "SQLite (modernc)",
+	"golang.org/x/crypto":                    "x/crypto (SSH)",
+	"github.com/zalando/go-keyring":          "go-keyring",
+}
+
+// GetAppInfo returns version, build details and paths.
 func (a *App) GetAppInfo() AppInfo {
-	return AppInfo{Version: Version, ConfigDir: a.store.Dir(), LogFile: a.logPath, SecretBackend: a.secrets.Backend()}
+	info := AppInfo{Version: Version, ConfigDir: a.store.Dir(), LogFile: a.logPath, SecretBackend: a.secrets.Backend(),
+		GoVersion: goruntime.Version(), Platform: goruntime.GOOS + "/" + goruntime.GOARCH,
+		BackupDir: filepath.Join(a.store.Dir(), "backups"), Components: map[string]string{}}
+	if exe, err := os.Executable(); err == nil {
+		info.Executable = exe
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range bi.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				info.Commit = s.Value
+			case "vcs.time":
+				info.BuildTime = s.Value
+			case "vcs.modified":
+				info.Modified = s.Value == "true"
+			}
+		}
+		for _, d := range bi.Deps {
+			if name, ok := keyModules[d.Path]; ok {
+				v := d.Version
+				if d.Replace != nil {
+					v = d.Replace.Version
+				}
+				info.Components[name] = v
+			}
+		}
+	}
+	return info
 }
 
 // GetSettings returns the current settings.

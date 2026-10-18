@@ -354,6 +354,14 @@ export interface AppInfo {
   configDir: string
   logFile: string
   secretBackend: string
+  commit?: string
+  buildTime?: string
+  modified?: boolean
+  goVersion?: string
+  platform?: string
+  executable?: string
+  backupDir?: string
+  components: Record<string, string>
 }
 
 // ---- P1 ----------------------------------------------------------------------

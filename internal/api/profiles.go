@@ -597,3 +597,10 @@ func (a *App) ImportTextFile(title string) (string, error) {
 	}
 	return string(b), nil
 }
+
+// QuitApp quits like ⌘Q, asking first when tabs have unsaved work
+// (BeforeClose). A function, not a method, so Wails does not bind it.
+func QuitApp(a *App) { wruntime.Quit(a.ctx) }
+
+// HideApp hides the application (macOS ⌘H).
+func HideApp(a *App) { wruntime.Hide(a.ctx) }

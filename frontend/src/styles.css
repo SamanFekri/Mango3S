@@ -2872,3 +2872,36 @@ tr.clickable {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ---------- About ---------- */
+.about {
+  max-width: 560px;
+}
+.about-head {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.about-head img {
+  border-radius: 16px;
+}
+.about-head h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.about-head p {
+  margin: 2px 0;
+}
+.about h4 {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+.about-stats dd {
+  font-size: 12px;
+}
+.about-note {
+  margin-top: 14px;
+}

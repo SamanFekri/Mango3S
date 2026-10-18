@@ -95,6 +95,8 @@ interface AppState {
 
   shortcutsOpen: boolean
   setShortcutsOpen: (open: boolean) => void
+  aboutOpen: boolean
+  setAboutOpen: (open: boolean) => void
 
   /** Background jobs, newest first. */
   jobs: Job[]
@@ -134,6 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   dirtyRef.current = dirtyTabs
   const tabsRef = useRef<TabsState>({ tabs: [], activeId: null })
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [connectionLog, setConnectionLog] = useState<ConnectionLog | null>(null)
   const closeConnectionLog = useCallback(() => setConnectionLog(null), [])
   // Steps arrive as events while the call runs; keep them in first-seen order.
@@ -416,6 +419,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       closeOtherTabs,
       shortcutsOpen,
       setShortcutsOpen,
+      aboutOpen,
+      setAboutOpen,
       connectionLog,
       closeConnectionLog,
       testConnection,
@@ -428,7 +433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       settings, saveSettings, appInfo, profiles, reloadProfiles, sessions, connect, disconnect, connecting,
       tabs, toast, toastError, toasts, dismissToast, confirm, confirmRequest, resolveConfirm, connectionManagerOpen,
-      openConnectionManager, connectionManagerSelect, dirtyTabs, setTabDirty, closeTab, closeOtherTabs, shortcutsOpen,
+      openConnectionManager, connectionManagerSelect, dirtyTabs, setTabDirty, closeTab, closeOtherTabs, shortcutsOpen, aboutOpen,
       connectionLog, closeConnectionLog, testConnection,
       jobs, refreshJobs, prompt, promptRequest, resolvePrompt,
     ],
