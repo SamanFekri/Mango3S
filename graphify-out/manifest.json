@@ -75,8 +75,8 @@
     "semantic_hash": "441ae14d535ebdf9bff19e64ca2d8802"
   },
   "frontend/src/components/ResultsView.tsx": {
-    "mtime": 1792140739.7248561,
-    "ast_hash": "caa76fdecb8f64eafc0616ba59a96bf6",
+    "mtime": 1792338235.274981,
+    "ast_hash": "2c5fda94c8f69855a0f9184f4f1e58bc",
     "semantic_hash": ""
   },
   "frontend/src/components/Sidebar.tsx": {
@@ -90,9 +90,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/components.test.tsx": {
-    "mtime": 1792092795.3715858,
-    "ast_hash": "d4a51c892e170b9deeedb17bdb1ad196",
-    "semantic_hash": "d4a51c892e170b9deeedb17bdb1ad196"
+    "mtime": 1792338257.0459597,
+    "ast_hash": "86452a162f50727ab5c8bbb5d318f9b2",
+    "semantic_hash": ""
   },
   "frontend/src/components/highlight.tsx": {
     "mtime": 1792092534.013364,
@@ -230,32 +230,32 @@
     "semantic_hash": "7e07f69d0715b89e614249fc226c2573"
   },
   "frontend/wailsjs/go/api/App.d.ts": {
-    "mtime": 1792338104.1243935,
+    "mtime": 1792338274.5710664,
     "ast_hash": "6114b2fb96995f1aae0974ff347e46bc",
     "semantic_hash": ""
   },
   "frontend/wailsjs/go/api/App.js": {
-    "mtime": 1792338104.12432,
+    "mtime": 1792338274.5709887,
     "ast_hash": "ebba4ac33a5f9e3a1e8e041c39ed9e5d",
     "semantic_hash": ""
   },
   "frontend/wailsjs/go/models.ts": {
-    "mtime": 1792338104.1345942,
+    "mtime": 1792338274.5817602,
     "ast_hash": "893a082d8e9ebbac9840641ffa83e80d",
     "semantic_hash": ""
   },
   "frontend/wailsjs/runtime/package.json": {
-    "mtime": 1792338110.9849896,
+    "mtime": 1792338281.1480625,
     "ast_hash": "a79e9c39ebcda0fdeb14a44939bc489e",
     "semantic_hash": "a79e9c39ebcda0fdeb14a44939bc489e"
   },
   "frontend/wailsjs/runtime/runtime.d.ts": {
-    "mtime": 1792338110.9853804,
+    "mtime": 1792338281.1483576,
     "ast_hash": "dcd9fca4af1912f552547c22f315c25e",
     "semantic_hash": "dcd9fca4af1912f552547c22f315c25e"
   },
   "frontend/wailsjs/runtime/runtime.js": {
-    "mtime": 1792338110.9855292,
+    "mtime": 1792338281.1485152,
     "ast_hash": "efc7f0ddc7f96e446ad0252df27b477f",
     "semantic_hash": "efc7f0ddc7f96e446ad0252df27b477f"
   },
