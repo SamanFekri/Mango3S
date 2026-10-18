@@ -20,13 +20,13 @@
     "semantic_hash": "e0926be8dde2f9667609d91c5c7d02f6"
   },
   "frontend/src/App.test.tsx": {
-    "mtime": 1792153117.413135,
-    "ast_hash": "74135881fe682231ff43688e12edd3c5",
+    "mtime": 1792338084.7727516,
+    "ast_hash": "efc6f12a3f36aead669e96118ea46a3f",
     "semantic_hash": ""
   },
   "frontend/src/App.tsx": {
-    "mtime": 1792153018.904908,
-    "ast_hash": "c3cd6fadd0cff002f3b6834a5b413fb6",
+    "mtime": 1792338039.5421782,
+    "ast_hash": "d61cebaee3f6515a81cafb6239b80a7c",
     "semantic_hash": ""
   },
   "frontend/src/components/CodeDialog.tsx": {
@@ -150,13 +150,13 @@
     "semantic_hash": "613f5db48593c5fb9e21f422450de7c5"
   },
   "frontend/src/lib/tabs.ts": {
-    "mtime": 1792135284.3933485,
-    "ast_hash": "d021845cfe64e0d974d158c59b740460",
+    "mtime": 1792338039.541813,
+    "ast_hash": "4c349ba0e1a0d6da7e0cb8a03928bd7f",
     "semantic_hash": ""
   },
   "frontend/src/lib/types.ts": {
-    "mtime": 1792152948.2548676,
-    "ast_hash": "b93f3bba836b8e1d3c31016e83939663",
+    "mtime": 1792338026.9873645,
+    "ast_hash": "a0e21c69ab2b5c8f209ed75028a377af",
     "semantic_hash": ""
   },
   "frontend/src/main.tsx": {
@@ -165,8 +165,8 @@
     "semantic_hash": "48754d00058c1719cba159718852b29a"
   },
   "frontend/src/state/AppContext.tsx": {
-    "mtime": 1792152991.2518806,
-    "ast_hash": "09c8f0d93ead5f8a5dc7b083c9c89643",
+    "mtime": 1792338026.9881346,
+    "ast_hash": "7af0d30e9865da3afb133c68d35084e5",
     "semantic_hash": ""
   },
   "frontend/src/test/setup.ts": {
@@ -195,8 +195,8 @@
     "semantic_hash": "eb5b91f2bbd7f8b70fcccab8eb24f913"
   },
   "frontend/src/views/SettingsView.tsx": {
-    "mtime": 1792140629.7680504,
-    "ast_hash": "cac82adc7c2d88d05734e69c57340ac4",
+    "mtime": 1792338039.5420148,
+    "ast_hash": "1c298e3324720ff6bdc9c6fcf7772de3",
     "semantic_hash": ""
   },
   "frontend/src/views/ShellView.tsx": {
@@ -230,32 +230,32 @@
     "semantic_hash": "7e07f69d0715b89e614249fc226c2573"
   },
   "frontend/wailsjs/go/api/App.d.ts": {
-    "mtime": 1792154683.6522427,
+    "mtime": 1792338104.1243935,
     "ast_hash": "6114b2fb96995f1aae0974ff347e46bc",
     "semantic_hash": ""
   },
   "frontend/wailsjs/go/api/App.js": {
-    "mtime": 1792154683.6520536,
+    "mtime": 1792338104.12432,
     "ast_hash": "ebba4ac33a5f9e3a1e8e041c39ed9e5d",
     "semantic_hash": ""
   },
   "frontend/wailsjs/go/models.ts": {
-    "mtime": 1792154683.676188,
-    "ast_hash": "0d8d23051422b1b9f19de6e2c83887a8",
+    "mtime": 1792338104.1345942,
+    "ast_hash": "893a082d8e9ebbac9840641ffa83e80d",
     "semantic_hash": ""
   },
   "frontend/wailsjs/runtime/package.json": {
-    "mtime": 1792154691.0927234,
+    "mtime": 1792338110.9849896,
     "ast_hash": "a79e9c39ebcda0fdeb14a44939bc489e",
     "semantic_hash": "a79e9c39ebcda0fdeb14a44939bc489e"
   },
   "frontend/wailsjs/runtime/runtime.d.ts": {
-    "mtime": 1792154691.0928545,
+    "mtime": 1792338110.9853804,
     "ast_hash": "dcd9fca4af1912f552547c22f315c25e",
     "semantic_hash": "dcd9fca4af1912f552547c22f315c25e"
   },
   "frontend/wailsjs/runtime/runtime.js": {
-    "mtime": 1792154691.0930133,
+    "mtime": 1792338110.9855292,
     "ast_hash": "efc7f0ddc7f96e446ad0252df27b477f",
     "semantic_hash": "efc7f0ddc7f96e446ad0252df27b477f"
   },
@@ -275,8 +275,8 @@
     "semantic_hash": "102d2fbbc2eba3598a786b0b4510177e"
   },
   "internal/api/api.go": {
-    "mtime": 1792152884.7466242,
-    "ast_hash": "930a5649a223675412f9916ab6ac3689",
+    "mtime": 1792337938.2542078,
+    "ast_hash": "8f11ba9c9ba8ce178637e79043000fd5",
     "semantic_hash": ""
   },
   "internal/api/api_test.go": {
@@ -515,8 +515,8 @@
     "semantic_hash": "28e25de16f539c50e0759d5a441e9f06"
   },
   "main.go": {
-    "mtime": 1792133900.7053804,
-    "ast_hash": "ef9c20850db1f9bc87c801b5016700b3",
+    "mtime": 1792337977.7767613,
+    "ast_hash": "90ef22761100bdaa2bb8d15dd2f8318e",
     "semantic_hash": ""
   },
   "wails.json": {
@@ -835,8 +835,8 @@
     "semantic_hash": ""
   },
   "internal/api/profiles.go": {
-    "mtime": 1792152873.8054826,
-    "ast_hash": "d7642365c2cdb24794c1f5847aa4e331",
+    "mtime": 1792337977.7513032,
+    "ast_hash": "4d07ac2a0c01caebc71d6060bc9c8721",
     "semantic_hash": ""
   },
   "internal/api/profiles_test.go": {
@@ -1022,6 +1022,16 @@
   "internal/mongox/steps_test.go": {
     "mtime": 1792152916.6523101,
     "ast_hash": "2e21542a66e3541847c5f443db79e1e9",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/AboutDialog.tsx": {
+    "mtime": 1792338026.9655068,
+    "ast_hash": "e8b6f489468591e302e13cb7f16db3d6",
+    "semantic_hash": ""
+  },
+  "frontend/src/assets/appicon.png": {
+    "mtime": 1792337996.2946043,
+    "ast_hash": "ace5084869522de34c78b1d875b601a5",
     "semantic_hash": ""
   }
 }
