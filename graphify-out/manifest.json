@@ -1208,5 +1208,10 @@
     "mtime": 1792398746.492636,
     "ast_hash": "53953cc16e4db604717d5ec8bc048b21",
     "semantic_hash": ""
+  },
+  "docs/ROADMAP.md": {
+    "mtime": 1792399393.6899085,
+    "ast_hash": "fca6a9073477d0ea44eee328d6300a84",
+    "semantic_hash": ""
   }
 }
