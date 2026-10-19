@@ -5,6 +5,7 @@ import { toAppError, type AppError } from '../lib/errors'
 import type { AdvancedConfig, Capability, CollectionHistoryEntry, Profile, ProfileInput, TestResult } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { ErrorBanner, Modal, Spinner } from './common'
+import { ConnectionExportDialog, ConnectionImportDialog } from './ConnectionIODialogs'
 import { FolderIcon } from './icons'
 import { AdvancedTab, AuthTab, HistoryTab, ProxyTab, ServerTab, ShellTab, SSHTab, TLSTab, ToolsTab, type Patch, type Setter } from './ConnectionTabs'
 
@@ -201,6 +202,17 @@ export function ConnectionManager() {
     void run('test', next)
   }
 
+  const [io, setIo] = useState<'import' | 'export' | null>(null)
+  const copyURI = async () => {
+    if (!current) return
+    try {
+      await navigator.clipboard.writeText(await backend.connectionURI(current.id, false))
+      toast({ kind: 'success', title: 'Connection string copied', message: 'The password is not included.' })
+    } catch (err) {
+      setError(toAppError(err))
+    }
+  }
+
   const duplicate = async () => {
     if (!current) return
     try {
@@ -369,6 +381,8 @@ export function ConnectionManager() {
 
   return (
     <Modal title="Connection Manager" onClose={() => void close()} wide>
+      {io === 'import' && <ConnectionImportDialog onClose={() => setIo(null)} />}
+      {io === 'export' && <ConnectionExportDialog selected={current ?? null} onClose={() => setIo(null)} />}
       <div className="conn-manager">
         <aside className="conn-list">
           <div className="conn-list-actions">
@@ -380,6 +394,17 @@ export function ConnectionManager() {
             </button>
             <button type="button" className="ghost danger-text" onClick={remove} disabled={!current}>
               Delete
+            </button>
+          </div>
+          <div className="conn-list-actions">
+            <button type="button" className="small ghost" onClick={() => setIo('import')} title="Import from a Mango3S file, a MongoDB Compass export or a list of connection strings">
+              Import…
+            </button>
+            <button type="button" className="small ghost" onClick={() => setIo('export')} disabled={profiles.length === 0}>
+              Export…
+            </button>
+            <button type="button" className="small ghost" onClick={copyURI} disabled={!current} title="Copy the connection string (without the password)">
+              Copy URI
             </button>
           </div>
           <input className="conn-search" placeholder="Search connections" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search connections" />

@@ -120,6 +120,7 @@ func New(d Deps) *App {
 	a.transfer = transfer.New(d.Conns, a.jobs)
 	a.p2 = newP2(a)
 	a.registerTaskTypes()
+	a.registerChainTask()
 	st, err := d.Store.LoadSettings()
 	if err != nil {
 		a.log.Warn("settings could not be loaded; using defaults", "err", err)

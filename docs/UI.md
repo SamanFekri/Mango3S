@@ -6,8 +6,9 @@
   with Shift+F1, Help → Welcome or View → Welcome.
 - **Actions:** new connection, open saved connections (the Connection Manager), keyboard
   shortcuts and settings.
-- **Recent connections:** profiles sorted by when you last connected. Each row has Connect / Open
-  and Edit, and its quick-connect key (Alt+1…9, ⌥1…9 on macOS).
+- **Connections:** profiles in your own order (the same order as the explorer; drag to
+  reorder). Each row has Connect / Open and Edit, and its quick-connect key (Alt+1…9, ⌥1…9 on
+  macOS). Reordering connections renumbers their keys.
 - **Workspace tabs:** connecting opens a workspace tab for that connection. The tab shows:
   - server version, topology, hosts, user and network path (TLS, proxy, SSH);
   - recently opened collections;
@@ -200,7 +201,7 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
 |---|---|---|---|
 | Open the connection manager | `⌘N` | `Ctrl+N` | anywhere |
 | New connection | `⌥⌘N` | `Ctrl+Alt+N` | anywhere |
-| Connect to recent connection 1–9 — In the order shown under Recent connections on the Welcome tab. | `⌥1…9` | `Alt+1…9` | anywhere |
+| Connect to connection 1–9 — Follows your connection order; drag connections to reorder them. | `⌥1…9` | `Alt+1…9` | anywhere |
 | Disconnect the current connection | `⌃⌥D` | `Ctrl+Alt+D` | anywhere |
 
 **Tabs**
@@ -316,6 +317,42 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
 | Autocomplete | `⌃Space` | `Ctrl+Space` | editors |
 | Previous / next script from history (shell) | `⌥↑` / `⌥↓` | `Alt+↑` / `Alt+↓` | editors |
 
+## Explorer menus for administration
+
+- **Connection:**
+  - Back up…
+  - Restore…
+  - Copy connection string
+- **Database:**
+  - Create collection or view…
+  - Database statistics…
+  - Query profiler…
+  - Copy database…
+  - Rename database…
+  - Back up database…
+  - Restore into database…
+  - Drop database…
+- **Collection:**
+  - Collection info…
+  - Indexes…
+  - Validation rules…
+  - Export…
+  - Export to SQL…
+  - Back up collection…
+  - Copy collection…
+  - Rename…
+  - Clear (delete all documents)…
+  - Drop collection…
+- **Connection Manager:**
+  - Import… and Export… for connection files.
+  - Copy URI.
+- **Tasks:**
+  - Import… and Export… for task definitions.
+  - The Backup and Multi-step task types.
+
+Destructive actions ask for a typed confirmation. [FEATURES.md](FEATURES.md) lists the
+behavior, the safety rules and the limits of each feature.
+
 ## Unsupported and limitations
 
 - **Authentication:**
@@ -330,7 +367,9 @@ All shortcuts live in one registry (`frontend/src/lib/shortcuts.ts`):
 - **Proxy:** SOCKS4 is not supported, and HTTP proxies support only Basic authentication.
 - **Go driver v2 options:** socket timeout and write-concern `wtimeout` were removed in Go driver
   v2; use the operation timeout. OCSP and CRL options are not exposed.
-- **MongoDB Tools:** tools are detected and checked, but Mango3S doesn't run them.
+- **MongoDB Tools:** tools are detected and checked. Mango3S runs only mongodump and mongorestore,
+  for archive backups. They can't use SSH-tunnelled or proxied connections; the built-in backup
+  format can.
 - **Shell:** initialization commands use the built-in interpreter (no JavaScript).
 - **Field editing:**
   - Field names containing `.` or starting with `$` must be edited through Edit document (JSON).

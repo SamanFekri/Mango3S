@@ -72,8 +72,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   // Connections
   S('conn.manager', 'Open the connection manager', 'Connections', ['Mod+N'], 'global', 'standard', { allowInInputs: true }),
   S('conn.new', 'New connection', 'Connections', ['Mod+Alt+N'], 'global', 'default', { allowInInputs: true }),
-  S('conn.quick', 'Connect to recent connection 1–9', 'Connections', digits('Alt+'), 'global', 'standard', {
-    note: 'In the order shown under Recent connections on the Welcome tab.',
+  S('conn.quick', 'Connect to connection 1–9', 'Connections', digits('Alt+'), 'global', 'standard', {
+    note: 'Follows your connection order; drag connections to reorder them.',
   }),
   S('conn.disconnect', 'Disconnect the current connection', 'Connections', { mac: ['Ctrl+Alt+D'], other: ['Ctrl+Alt+D'] }, 'global', 'standard', {
     allowInInputs: true,

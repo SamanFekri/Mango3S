@@ -657,3 +657,88 @@ func (s *Scheduler) attempts(ctx context.Context, t Task, tt TaskType, run *Run,
 	}
 	return "", lastErr
 }
+
+// Type returns a registered task type.
+func (s *Scheduler) Type(id string) (TaskType, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.types[id]
+	return t, ok
+}
+
+// TaskFileFormat identifies an exported task definitions file.
+const TaskFileFormat = "mango3s-tasks"
+
+// TaskDefinition is a task as exported: no ID, approval or run state.
+type TaskDefinition struct {
+	Name     string          `json:"name"`
+	Type     string          `json:"type"`
+	Params   json.RawMessage `json:"params"`
+	Schedule Schedule        `json:"schedule"`
+	Enabled  bool            `json:"enabled"`
+	Retry    Retry           `json:"retry"`
+	Misfire  string          `json:"misfire"`
+}
+
+type taskDefinitions struct {
+	Format   string           `json:"format"`
+	Version  int              `json:"version"`
+	Exported time.Time        `json:"exported"`
+	Tasks    []TaskDefinition `json:"tasks"`
+}
+
+// ExportDefinitions writes the chosen tasks (all when ids is empty).
+// Approvals are machine-local decisions and are never exported.
+func (s *Scheduler) ExportDefinitions(ids []string) ([]byte, int, error) {
+	ts, err := s.List()
+	if err != nil {
+		return nil, 0, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	f := taskDefinitions{Format: TaskFileFormat, Version: 1, Exported: s.now().UTC(), Tasks: []TaskDefinition{}}
+	for _, t := range ts {
+		if len(want) > 0 && !want[t.ID] {
+			continue
+		}
+		f.Tasks = append(f.Tasks, TaskDefinition{Name: t.Name, Type: t.Type, Params: t.Params, Schedule: t.Schedule, Enabled: t.Enabled, Retry: t.Retry, Misfire: t.Misfire})
+	}
+	if len(f.Tasks) == 0 {
+		return nil, 0, apperr.Invalid("There are no tasks to export.")
+	}
+	b, err := json.MarshalIndent(f, "", "  ")
+	return b, len(f.Tasks), err
+}
+
+// ImportResult summarizes an import of task definitions.
+type ImportResult struct {
+	Imported []string `json:"imported"` // names
+	Errors   []string `json:"errors"`
+}
+
+// ImportDefinitions saves each task as a new, unapproved task: nothing an
+// imported file defines can run until the user reviews and approves it here.
+func (s *Scheduler) ImportDefinitions(data []byte) (ImportResult, error) {
+	var f taskDefinitions
+	if err := json.Unmarshal(data, &f); err != nil {
+		return ImportResult{}, apperr.Invalid("This is not a task definitions file: %v", err)
+	}
+	if f.Format != TaskFileFormat {
+		return ImportResult{}, apperr.Invalid("This is not a Mango3S task definitions file.")
+	}
+	if f.Version > 1 {
+		return ImportResult{}, apperr.Invalid("This file was written by a newer version of Mango3S.")
+	}
+	res := ImportResult{Imported: []string{}, Errors: []string{}}
+	for _, d := range f.Tasks {
+		t := Task{Name: d.Name, Type: d.Type, Params: d.Params, Schedule: d.Schedule, Enabled: d.Enabled, Retry: d.Retry, Misfire: d.Misfire}
+		if _, err := s.Save(t); err != nil {
+			res.Errors = append(res.Errors, fmt.Sprintf("%s: %s", d.Name, apperr.From(err).Message))
+			continue
+		}
+		res.Imported = append(res.Imported, d.Name)
+	}
+	return res, nil
+}

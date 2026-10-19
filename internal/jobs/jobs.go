@@ -34,19 +34,27 @@ func (s State) Finished() bool { return s == Succeeded || s == Failed || s == Ca
 
 // Job is a snapshot of a background job.
 type Job struct {
-	ID         string    `json:"id"`
-	Kind       string    `json:"kind"`
-	Title      string    `json:"title"`
-	State      State     `json:"state"`
-	Done       int64     `json:"done"`
-	Total      int64     `json:"total"` // 0 when unknown
-	Unit       string    `json:"unit"`
-	Message    string    `json:"message"`
-	Error      string    `json:"error,omitempty"`
-	Result     string    `json:"result,omitempty"`
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Title   string `json:"title"`
+	State   State  `json:"state"`
+	Done    int64  `json:"done"`
+	Total   int64  `json:"total"` // 0 when unknown
+	Unit    string `json:"unit"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+	Result  string `json:"result,omitempty"`
+	// Log is the job's step-by-step log (the last MaxLogLines lines).
+	Log        []string  `json:"log,omitempty"`
 	CreatedAt  time.Time `json:"createdAt"`
 	StartedAt  time.Time `json:"startedAt"`
 	FinishedAt time.Time `json:"finishedAt"`
+}
+
+// clone copies a job so a snapshot never shares the log with the running job.
+func (j Job) clone() Job {
+	j.Log = append([]string(nil), j.Log...)
+	return j
 }
 
 // Func is the work of a job. It returns a one-line result summary.
@@ -72,6 +80,21 @@ func (p *Progress) Add(n int64) { p.m.update(p.id, false, func(j *Job) { j.Done 
 
 // Set sets absolute progress.
 func (p *Progress) Set(n int64) { p.m.update(p.id, false, func(j *Job) { j.Done = n }) }
+
+// MaxLogLines caps a job's log.
+const MaxLogLines = 400
+
+// Log appends a timestamped line to the job's log (and shows it as the status).
+func (p *Progress) Log(format string, args ...any) {
+	line := time.Now().Format("15:04:05") + "  " + fmt.Sprintf(format, args...)
+	p.m.update(p.id, true, func(j *Job) {
+		j.Log = append(j.Log, line)
+		if len(j.Log) > MaxLogLines {
+			j.Log = append([]string{"…"}, j.Log[len(j.Log)-MaxLogLines+1:]...)
+		}
+		j.Message = fmt.Sprintf(format, args...)
+	})
+}
 
 // Message sets a short status line; it is emitted immediately.
 func (p *Progress) Message(format string, args ...any) {
@@ -140,7 +163,7 @@ func (m *Manager) Start(kind, title string, fn Func) Job {
 	m.mu.Lock()
 	m.jobs[e.job.ID] = e
 	m.pruneLocked()
-	snap := e.job
+	snap := e.job.clone()
 	emit := m.emit
 	m.mu.Unlock()
 	emit(snap)
@@ -231,7 +254,7 @@ func (m *Manager) update(id string, force bool, f func(*Job)) {
 		return
 	}
 	e.lastEmit = now
-	snap := e.job
+	snap := e.job.clone()
 	emit := m.emit
 	m.mu.Unlock()
 	emit(snap)
@@ -257,7 +280,7 @@ func (m *Manager) Get(id string) (Job, bool) {
 	if !ok {
 		return Job{}, false
 	}
-	return e.job, true
+	return e.job.clone(), true
 }
 
 // List returns all known jobs, newest first.
@@ -266,7 +289,7 @@ func (m *Manager) List() []Job {
 	defer m.mu.Unlock()
 	out := make([]Job, 0, len(m.jobs))
 	for _, e := range m.jobs {
-		out = append(out, e.job)
+		out = append(out, e.job.clone())
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out

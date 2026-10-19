@@ -6,6 +6,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,7 +69,8 @@ func exe(name string) string {
 	return name
 }
 
-func commonDirs() []string {
+// commonDirs lists install locations searched after PATH (replaceable in tests).
+var commonDirs = func() []string {
 	switch runtime.GOOS {
 	case "darwin":
 		return []string{"/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"}
@@ -199,4 +201,18 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// Locate finds a tool to run it. A missing tool's error says how to install it.
+func Locate(cfg config.ToolsConfig, name string) (string, error) {
+	path, _, problem := locate(cfg, name)
+	switch {
+	case problem != "":
+		return "", errors.New(name + ": " + problem)
+	case path == "" && name == "mongosh":
+		return "", errors.New("mongosh was not found. Install it from https://www.mongodb.com/try/download/shell, or set its path in the connection's MongoDB Tools tab.")
+	case path == "":
+		return "", errors.New(name + " was not found. Install the MongoDB Database Tools from https://www.mongodb.com/try/download/database-tools (macOS: brew tap mongodb/brew && brew install mongodb-database-tools), or set the tools folder in the connection's MongoDB Tools tab.")
+	}
+	return path, nil
 }

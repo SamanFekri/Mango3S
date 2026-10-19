@@ -40,10 +40,14 @@ security model, scheduler policies, MCP setup and unsupported capabilities.
 | **SQL migration** *(P2)* | PostgreSQL, MySQL/MariaDB and SQLite with a `SELECT`-only user. Table → collection mapping with type suggestions, primary key or ObjectId `_id`, and child rows embedded as arrays. Runs in a consistent read-only snapshot, then checks counts and sampled rows. Every run can be rolled back |
 | **Reschema** *(P2)* | Rename, remove, set, copy, convert type, flatten and nest fields. Dry-run with before/after samples, then copy to a new collection or apply in place (backed up, confirmed), then validate |
 | **Data masking** *(P2)* | Redact, partial, keyed hash, email, randomize, date shift, numeric noise, null/remove/constant. Reusable rule sets; masked copies for test environments; the masked output is checked to contain none of the original values |
-| **Scheduled tasks** *(P2)* | Exports, comparisons, syncs and masked copies on cron or interval schedules. They run only after you approve them, and editing a task revokes approval. Includes retries with backoff, overlap protection, a misfire policy and run history |
+| **Scheduled tasks** *(P2)* | Exports, comparisons, syncs, masked copies, backups and **multi-step tasks** on cron or interval schedules. Task definitions can be exported and imported; imported tasks start unapproved. They run only after you approve them, and editing a task revokes approval. Includes retries with backoff, overlap protection, a misfire policy and run history |
 | **AI assistant** *(P2)* | "Ask AI" in the query and aggregation editors (Anthropic Claude, off by default). Only field names and types are sent, never credentials. Proposals are validated by the server before you see them; writes need typed confirmation and are backed up |
 | **MCP server** *(P2)* | `mango3s mcp` exposes approved, read-mostly database tools to MCP clients. Access is deny-by-default: connection, database, tool and size allowlists; results can be masked; every call can be audited |
-| **Backups & restore** *(P2)* | Every P2 write first saves the affected documents to `backups/`. Library → Backups restores them |
+| **Before-images** *(P2)* | Every P2 write first saves the affected documents to `backups/`. Library → Backups restores them |
+| **Backup & restore** | Full logical backups of databases, collections and views in the mongodump folder layout (raw BSON, gzip, indexes, options, validators), streamed and working through SSH and proxies. Restore with keep / replace-by-`_id` / drop modes, renaming and count checks. `.archive` files, users and roles, and the oplog through mongodump/mongorestore (credentials never on the command line). Live job log. See [docs/FEATURES.md](docs/FEATURES.md) |
+| **Database administration** | Create collections with options (capped, time series, clustered, collation, validator) and views; rename collections and databases; clear; copy collections or databases within or across connections; validation rules with a check against existing documents; index manager (create, hide, TTL, drop, size and usage); statistics; query profiler |
+| **Connection import/export** | Export connections with folders, without secrets unless you opt in (then passphrase-encrypted). Import from Mango3S files, MongoDB Compass exports and lists of connection strings, with conflict handling. Copy a connection string without its password |
+| **MongoDB → SQL** | Export a collection as a PostgreSQL, MySQL or SQLite script: typed `CREATE TABLE` and batched `INSERT`s; data that doesn't fit the columns is kept in an `_extra` JSON column |
 
 ### Value syntax
 
@@ -199,6 +203,8 @@ make sql-up && make test-integration-sql   # adds the PostgreSQL and MySQL migra
 | `internal/library` | Saved items and history persist across restarts; validation; de-duplicated re-runs; search, limit, clear |
 | `internal/integration` (tag `integration`) | Real-server CRUD with type fidelity, duplicate key → CONFLICT, paging with skip/limit, aggregation incl. stage preview and `$out`, shell scripts, read-only enforcement, cancel/timeout, the full API facade, authentication (set `MONGO_AUTH_URI`). **P1:** 2,500-document export→import round trips (canonical array, canonical NDJSON, relaxed), filtered CSV export of nested fields → re-import, insert/upsert/stop-on-error/drop-first, canceled export leaves no file, schema accuracy on known data, explain before/after creating an index, `$out` not executed by explain, SQL find + GROUP BY/HAVING, code from SQL, history and library after restart |
 | **P2** `internal/{plans,backup,compare,syncer,docpath,reschema,masking,transform,migrate,scheduler,ai,mcpserver}` | Single-use plans; backup/restore round trips; order-independent fingerprints; drift-safe sync; every reschema op and type conversion; every masking method, determinism and leak checks; SQL type mapping per dialect; cron parsing, approval, retries, interrupted and missed runs; AI proposal validation and prompt contents; MCP deny-by-default, operator refusal, caps and audit logging |
+| `internal/{dump,manage,connio,sqlexport}` | Backup/restore round trips with byte-identical documents, indexes, options and views (plain and gzip); compatibility with mongodump and mongorestore in both directions; truncated files detected; copy across databases; collection options, validation, indexes, renames, clear, profiler against a real server; connection files with sealed secrets, Compass and URI-list parsing; SQL scripts loaded into real SQLite, PostgreSQL and MySQL |
+| `internal/integration/advanced_test.go` | Multi-step task (export + backup) through the API; task import resets approval; mongodump/mongorestore with authentication, password absent from the job log |
 | **P2** `internal/integration/p2_test.go` | Repeatable compare; sync preview == apply, then restore; reschema/masking integrity; migrations from SQLite, PostgreSQL and MySQL with read-only users; scheduled export through the API; AI proposals gated (fake provider); MCP tools against a real server. Acceptance criteria are mapped to tests in [docs/P2.md](docs/P2.md#tests) |
 | `frontend/src/**/*.test.ts(x)` | Query builder, pipeline and tab reducers, Extended JSON cell rendering, error parsing, results view (paging, selection, read-only), builder UI, full-app connect → browse → query flow. **P1:** shell completion rules, history recall, library → tab mapping, job progress and cancel in the status bar, library tab |
 
@@ -291,6 +297,7 @@ internal/
   apperr/ config/ logging/ secrets/ model/ mql/ mongox/
   explorer/ documents/ query/ aggregate/ shell/
   jobs/ transfer/ schema/ sqlq/ codegen/ explain/ library/     P1 features
+  dump/ manage/ connio/ sqlexport/                             backup/restore/copy, administration, connection files, SQL export
   integration/               end-to-end tests (build tag: integration)
 frontend/
   src/{lib,components,views,state}/   React app (+ *.test.ts[x])
@@ -395,8 +402,9 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
 
 - **Shell:** this is a MongoDB command interpreter, not a JavaScript engine. No variables, loops,
   functions, `it` paging, `load()`, or `print`. `help` lists what's supported.
-- **Import/export:** BSON/mongodump archives, SQL dumps, Excel, exporting aggregation results
-  (export runs a find query), and multi-collection exports. Scheduled exports are a P2 task type.
+- **Import/export:** Excel, and exporting aggregation results (export runs a find query).
+  Multi-collection and BSON exports are covered by backups; see [docs/FEATURES.md](docs/FEATURES.md#limits)
+  for the limits of backup, restore, copy and SQL export.
 - **SQL:** joins, subqueries, expressions and functions beyond `COUNT/SUM/AVG/MIN/MAX`, and
   `INSERT/UPDATE/DELETE` (see [SQL subset](#sql-subset)).
 - **Code generation:** languages beyond the six listed; generated snippets contain the query
@@ -406,7 +414,7 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
 - **Connection, editing and shortcut limits:** see [Unsupported and limitations](docs/UI.md#unsupported-and-limitations)
   (Kerberos, interactive OIDC, SSH keyboard-interactive 2FA, SOCKS4, socket timeout and wtimeout
   in Go driver v2, keymap customization, …).
-- Index management UI (use the shell), user/role management, connection import from other tools,
+- User and role management UI (use the shell, or include users and roles in an archive backup),
   and multiple windows.
 - Code signing and notarization of release builds.
 

@@ -2,7 +2,6 @@ import { Component, useEffect } from 'react'
 import { GearIcon } from './components/icons'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
 import { onMenu } from './lib/backend'
-import { recentProfiles } from './lib/tabs'
 import { shortcutHint } from './lib/shortcuts'
 import { TabActiveContext, runShortcut, useShortcut, useShortcutDispatcher } from './state/shortcuts'
 import { ConnectionView } from './views/ConnectionView'
@@ -152,7 +151,7 @@ function GlobalShortcuts() {
   useShortcut('conn.manager', () => openConnectionManager(true))
   useShortcut('conn.new', () => openConnectionManager(true, 'new'))
   useShortcut('conn.quick', ({ index }) => {
-    const p = recentProfiles(profiles)[index]
+    const p = profiles[index]
     if (!p) return false
     const live = sessions.find((s) => s.id === p.id)
     if (live) dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: live.id, connName: live.name } })

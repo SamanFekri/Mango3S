@@ -4,11 +4,14 @@ import { backend } from '../lib/backend'
 import { formatBytes } from '../lib/format'
 import type { CollectionInfo, DatabaseInfo, SessionInfo } from '../lib/types'
 import { useApp } from '../state/AppContext'
-import { shortcutHint } from '../lib/shortcuts'
+import { SHORTCUT_BY_ID, formatBinding, keysFor, shortcutHint } from '../lib/shortcuts'
 import { moveId } from '../lib/tabs'
-import { useShortcut } from '../state/shortcuts'
-import { Modal, Spinner } from './common'
+import { getShortcutPlatform, useShortcut } from '../state/shortcuts'
+import { Spinner } from './common'
 import { CollectionIcon, DatabaseIcon, FolderIcon, ServerIcon } from './icons'
+import { BackupDialog, RestoreDialog } from './BackupDialogs'
+import { ProfilerDialog, SqlExportDialog } from './WorkflowDialogs'
+import { CollectionInfoDialog, CopyDialog, CreateCollectionDialog, DatabaseInfoDialog, RenameCollectionDialog, RenameDatabaseDialog } from './ManageDialogs'
 import { ExportWizard } from './ExportWizard'
 import { ImportWizard } from './ImportWizard'
 
@@ -46,6 +49,14 @@ export function Sidebar() {
   const [filter, setFilter] = useState('')
   const [createFor, setCreateFor] = useState<{ conn: SessionInfo; db?: string } | null>(null)
   const [transfer, setTransfer] = useState<{ kind: 'import' | 'export'; conn: SessionInfo; db: string; coll?: string } | null>(null)
+  const [manage, setManage] = useState<{
+    kind: 'info' | 'copy' | 'rename' | 'profiler' | 'sql'
+    conn: SessionInfo
+    db: string
+    coll?: string
+    tab?: 'overview' | 'indexes' | 'validation'
+  } | null>(null)
+  const [backupFor, setBackupFor] = useState<{ kind: 'backup' | 'restore'; conn: SessionInfo; db?: string; coll?: string } | null>(null)
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set())
   const [focused, setFocused] = useState<string | null>(null)
   const navRef = useRef<HTMLElement | null>(null)
@@ -147,6 +158,29 @@ export function Sidebar() {
     }
   }
 
+  const clearColl = async (s: SessionInfo, db: string, coll: string) => {
+    const ns = `${db}.${coll}`
+    const ok = await confirm({
+      title: 'Clear collection',
+      message: (
+        <>
+          Delete every document in <code>{ns}</code> on <strong>{s.name}</strong>? The collection, its indexes and validation rules are kept. This cannot be undone; back the
+          collection up first if you may need the data.
+        </>
+      ),
+      confirmLabel: 'Delete all documents',
+      danger: true,
+      typeToConfirm: ns,
+    })
+    if (!ok) return
+    try {
+      const n = await backend.clearCollection(s.id, db, coll, ns)
+      toast({ kind: 'success', title: `Deleted ${n} document${n === 1 ? '' : 's'} from ${ns}` })
+    } catch (err) {
+      toastError(err, 'Clear failed')
+    }
+  }
+
   const dropColl = async (s: SessionInfo, db: string, coll: string) => {
     const ok = await confirm({
       title: 'Drop collection',
@@ -179,6 +213,12 @@ export function Sidebar() {
     return i < 0 ? Number.MAX_SAFE_INTEGER : i
   }
   const orderedSessions = [...sessions].sort((a, b) => orderOf(a.id) - orderOf(b.id))
+  // Alt+1–9 connects to the Nth connection in this order.
+  const quickKey = (id: string) => {
+    const platform = getShortcutPlatform()
+    const k = keysFor(SHORTCUT_BY_ID['conn.quick'], platform)[orderOf(id)]
+    return k ? ` (${formatBinding(k, platform)})` : ''
+  }
   const disconnected = profiles.filter((p) => !sessions.some((s) => s.id === p.id))
   const [drag, setDrag] = useState<{ id: string; over?: string; before?: boolean } | null>(null)
   const dragProps = (id: string) => ({
@@ -222,15 +262,34 @@ export function Sidebar() {
     { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
     { label: 'Migrate from SQL…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: '' } }), disabled: s.readOnly },
     { label: 'Compare / sync…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name } }) },
+    { label: 'Back up…', action: () => setBackupFor({ kind: 'backup', conn: s }) },
+    { label: 'Restore…', action: () => setBackupFor({ kind: 'restore', conn: s }), disabled: s.readOnly },
     { label: 'Edit connection…', action: () => openConnectionManager(true, s.id) },
+    {
+      label: 'Copy connection string',
+      action: async () => {
+        try {
+          await navigator.clipboard.writeText(await backend.connectionURI(s.id, false))
+          toast({ kind: 'success', title: 'Connection string copied', message: 'The password is not included.' })
+        } catch (err) {
+          toastError(err, 'Copy failed')
+        }
+      },
+    },
     { label: 'Disconnect', action: () => disconnect(s.id), shortcut: 'conn.disconnect' },
   ]
   const dbMenu = (s: SessionInfo, db: string): MenuItem[] => [
     { label: 'Refresh', action: () => loadColls(s.id, db), shortcut: 'view.refresh' },
-    { label: 'Create collection…', action: () => setCreateFor({ conn: s, db }), disabled: s.readOnly },
+    { label: 'Create collection or view…', action: () => setCreateFor({ conn: s, db }), disabled: s.readOnly },
+    { label: 'Database statistics…', action: () => setManage({ kind: 'info', conn: s, db }) },
+    { label: 'Query profiler…', action: () => setManage({ kind: 'profiler', conn: s, db }) },
+    { label: 'Copy database…', action: () => setManage({ kind: 'copy', conn: s, db }) },
+    { label: 'Rename database…', action: () => setManage({ kind: 'rename', conn: s, db }), disabled: s.readOnly },
     { label: 'Open shell here', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db } }), shortcut: 'tab.shell' },
     { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db } }), shortcut: 'tab.sql' },
     { label: 'Import into new collection…', action: () => setTransfer({ kind: 'import', conn: s, db }), disabled: s.readOnly },
+    { label: 'Back up database…', action: () => setBackupFor({ kind: 'backup', conn: s, db }) },
+    { label: 'Restore into database…', action: () => setBackupFor({ kind: 'restore', conn: s, db }), disabled: s.readOnly },
     { label: 'Compare database…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', connId: s.id, connName: s.name, db } }) },
     { label: 'Migrate from SQL into…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db } }), disabled: s.readOnly },
     { label: 'Drop database…', action: () => dropDb(s, db), danger: true, disabled: s.readOnly, shortcut: 'explorer.drop' },
@@ -244,10 +303,18 @@ export function Sidebar() {
       { label: 'Aggregation editor', action: () => dispatchTabs({ type: 'open', tab: { kind: 'aggregation', ...t } }) },
       { label: 'Schema', action: () => dispatchTabs({ type: 'open', tab: { kind: 'schema', ...t }, reuse: true }) },
       { label: 'Export…', action: () => setTransfer({ kind: 'export', conn: s, db, coll: coll.name }) },
+      { label: 'Export to SQL…', action: () => setManage({ kind: 'sql', conn: s, db, coll: coll.name }) },
+      { label: 'Back up collection…', action: () => setBackupFor({ kind: 'backup', conn: s, db, coll: coll.name }) },
       { label: 'Compare / sync…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'compare', ...t } }) },
       { label: 'Reschema…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'reschema', ...t } }), disabled: view },
       { label: 'Mask data…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'mask', ...t } }), disabled: view },
       { label: 'Import…', action: () => setTransfer({ kind: 'import', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
+      { label: 'Collection info…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name }) },
+      { label: 'Indexes…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name, tab: 'indexes' }), disabled: view },
+      { label: 'Validation rules…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name, tab: 'validation' }), disabled: view },
+      { label: 'Copy collection…', action: () => setManage({ kind: 'copy', conn: s, db, coll: coll.name }), disabled: view },
+      { label: 'Rename…', action: () => setManage({ kind: 'rename', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
+      { label: 'Clear (delete all documents)…', action: () => clearColl(s, db, coll.name), danger: true, disabled: s.readOnly || view },
       { label: 'Drop collection…', action: () => dropColl(s, db, coll.name), danger: true, disabled: s.readOnly, shortcut: 'explorer.drop' },
     ]
   }
@@ -501,7 +568,7 @@ export function Sidebar() {
                 onClick={() => activate(r)}
                 onDoubleClick={() => dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: s.id, connName: s.name } })}
                 onContextMenu={(e) => openMenu(e, connMenu(s))}
-                title={`MongoDB ${s.serverVersion} · ${s.topology} — double-click for the workspace`}
+                title={`MongoDB ${s.serverVersion} · ${s.topology}${quickKey(s.id)} — double-click for the workspace`}
               >
                 <span className={open ? 'caret open' : 'caret'} />
                 <ServerIcon live />
@@ -569,7 +636,7 @@ export function Sidebar() {
                 key={p.id}
                 className={'tree-row level-0 saved' + dropClass(p.id)}
                 onDoubleClick={() => connect(p.id)}
-                title={`${p.folder ? `${p.folder} / ${p.name}` : p.name} — drag to reorder`}
+                title={`${p.folder ? `${p.folder} / ${p.name}` : p.name}${quickKey(p.id)} — drag to reorder`}
                 {...dragProps(p.id)}
               >
                 <ServerIcon />
@@ -619,6 +686,8 @@ export function Sidebar() {
         </ul>
       )}
 
+      {backupFor?.kind === 'backup' && <BackupDialog conn={backupFor.conn} db={backupFor.db} coll={backupFor.coll} onClose={() => setBackupFor(null)} />}
+      {backupFor?.kind === 'restore' && <RestoreDialog conn={backupFor.conn} db={backupFor.db} onClose={() => setBackupFor(null)} />}
       {transfer?.kind === 'import' && (
         <ImportWizard
           connId={transfer.conn.id}
@@ -639,10 +708,10 @@ export function Sidebar() {
 
       {createFor && (
         <CreateCollectionDialog
+          conn={createFor.conn}
           db={createFor.db}
           onClose={() => setCreateFor(null)}
-          onCreate={async (db, coll) => {
-            await backend.createCollection(createFor.conn.id, db, coll)
+          onCreated={async (db, coll) => {
             toast({ kind: 'success', title: `Created ${db}.${coll}` })
             setCreateFor(null)
             await loadDbs(createFor.conn.id)
@@ -651,66 +720,26 @@ export function Sidebar() {
           }}
         />
       )}
-    </nav>
-  )
-}
-
-function CreateCollectionDialog({
-  db: fixedDb,
-  onClose,
-  onCreate,
-}: {
-  db?: string
-  onClose: () => void
-  onCreate: (db: string, coll: string) => Promise<void>
-}) {
-  const [db, setDb] = useState(fixedDb ?? '')
-  const [coll, setColl] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const submit = async () => {
-    setBusy(true)
-    setError('')
-    try {
-      await onCreate(db.trim(), coll.trim())
-    } catch (err) {
-      setError((err as { message?: string }).message ?? String(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <Modal
-      title={fixedDb ? 'Create collection' : 'Create database'}
-      onClose={onClose}
-      footer={
-        <>
-          <button onClick={onClose}>Cancel</button>
-          <button className="primary" disabled={busy || !db.trim() || !coll.trim()} onClick={submit}>
-            {busy && <Spinner small />} Create
-          </button>
-        </>
-      }
-    >
-      {!fixedDb && (
-        <>
-          <p className="muted small">MongoDB creates a database together with its first collection.</p>
-          <label className="field">
-            <span>Database name</span>
-            <input value={db} onChange={(e) => setDb(e.target.value)} autoFocus />
-          </label>
-        </>
-      )}
-      <label className="field">
-        <span>Collection name</span>
-        <input
-          value={coll}
-          onChange={(e) => setColl(e.target.value)}
-          autoFocus={!!fixedDb}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
+      {manage?.kind === 'info' && manage.coll && <CollectionInfoDialog conn={manage.conn} db={manage.db} coll={manage.coll} tab={manage.tab} onClose={() => setManage(null)} />}
+      {manage?.kind === 'info' && !manage.coll && <DatabaseInfoDialog conn={manage.conn} db={manage.db} onClose={() => setManage(null)} />}
+      {manage?.kind === 'profiler' && <ProfilerDialog conn={manage.conn} db={manage.db} onClose={() => setManage(null)} />}
+      {manage?.kind === 'sql' && manage.coll && <SqlExportDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
+      {manage?.kind === 'copy' && <CopyDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
+      {manage?.kind === 'rename' && manage.coll && (
+        <RenameCollectionDialog
+          conn={manage.conn}
+          db={manage.db}
+          coll={manage.coll}
+          onClose={() => setManage(null)}
+          onDone={() => {
+            toast({ kind: 'success', title: `Renamed ${manage.db}.${manage.coll}` })
+            loadDbs(manage.conn.id)
+            loadColls(manage.conn.id, manage.db)
+            setManage(null)
+          }}
         />
-      </label>
-      {error && <div className="error-text">{error}</div>}
-    </Modal>
+      )}
+      {manage?.kind === 'rename' && !manage.coll && <RenameDatabaseDialog conn={manage.conn} db={manage.db} onClose={() => (setManage(null), loadDbs(manage.conn.id))} />}
+    </nav>
   )
 }

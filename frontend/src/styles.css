@@ -2963,3 +2963,83 @@ tr.clickable {
 .conn-tree {
   min-height: 60px;
 }
+
+/* ---- backup & restore ---------------------------------------------------- */
+.warning-text {
+  color: var(--warning, #b7791f);
+  margin: 6px 0;
+}
+.field-group {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px 4px;
+  margin: 0 0 12px;
+}
+.field-group > legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0 12px;
+  max-height: 140px;
+  overflow: auto;
+}
+.check-grid .check {
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.check-row {
+  flex-wrap: wrap;
+}
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.backup-entries {
+  max-height: 220px;
+  overflow: auto;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.job-log {
+  max-height: 220px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-sunken, rgba(127, 127, 127, 0.08));
+  border-radius: 4px;
+  user-select: text;
+}
+.job-log-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* Bottom pager: range on the left, page size and pager on the right. */
+.results-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.results-footer > .muted {
+  margin-right: auto;
+}

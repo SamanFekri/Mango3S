@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -242,12 +243,16 @@ func TestRestartPolicies(t *testing.T) {
 	for _, r := range skipRuns {
 		states[r.State] = true
 	}
-	if !states[RunInterrupted] || !states[RunMissed] || g.calls.Load() != 1 {
-		t.Fatalf("skip policy: %+v calls=%d", skipRuns, g.calls.Load())
+	if !states[RunInterrupted] || !states[RunMissed] {
+		t.Fatalf("skip policy: %+v", skipRuns)
 	}
 	onceRuns := waitRuns(t, g.s, once.ID, 1)
 	if onceRuns[0].Trigger != "misfire" || onceRuns[0].State != RunSucceeded {
 		t.Fatalf("runOnce policy: %+v", onceRuns)
+	}
+	// Only the run-once task ran (counted after its run has finished).
+	if g.calls.Load() != 1 {
+		t.Fatalf("calls=%d", g.calls.Load())
 	}
 	for _, id := range []string{skip.ID, once.ID} {
 		tk, _ := g.s.Get(id)
@@ -280,5 +285,43 @@ func TestNoOverlap(t *testing.T) {
 	}
 	if states[RunSkipped] != 1 || states[RunSucceeded] != 1 {
 		t.Fatalf("states: %+v", states)
+	}
+}
+
+func TestExportImportDefinitionsResetApproval(t *testing.T) {
+	s := newFixture(t, t.TempDir()).s
+	task, err := s.Save(Task{Name: "nightly", Type: "noop", Schedule: Schedule{Kind: KindInterval, EveryMinutes: 60}, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Approve(task.ID); err != nil {
+		t.Fatal(err)
+	}
+	b, n, err := s.ExportDefinitions(nil)
+	if err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	if strings.Contains(string(b), "approved") || strings.Contains(string(b), task.ID) {
+		t.Fatalf("approval or ID exported:\n%s", b)
+	}
+	res, err := s.ImportDefinitions(b)
+	if err != nil || len(res.Imported) != 1 {
+		t.Fatalf("%+v %v", res, err)
+	}
+	ts, _ := s.List()
+	if len(ts) != 2 {
+		t.Fatalf("%d tasks", len(ts))
+	}
+	for _, x := range ts {
+		if x.ID != task.ID && (x.Approved() || x.ApprovedAt != nil) {
+			t.Fatalf("imported task is approved: %+v", x)
+		}
+	}
+	bad := strings.Replace(string(b), `"noop"`, `"rm-rf"`, 1)
+	if res, _ := s.ImportDefinitions([]byte(bad)); len(res.Errors) != 1 {
+		t.Fatalf("unknown type imported: %+v", res)
+	}
+	if _, err := s.ImportDefinitions([]byte(`{"tasks":[]}`)); err == nil {
+		t.Fatal("foreign file accepted")
 	}
 }

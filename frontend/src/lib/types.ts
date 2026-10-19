@@ -384,6 +384,8 @@ export interface Job {
   createdAt: string
   startedAt: string
   finishedAt: string
+  /** Timestamped log lines (long jobs such as backups); the oldest are dropped past 400. */
+  log?: string[]
 }
 
 export type TransferFormat = 'json' | 'csv'
@@ -1077,4 +1079,305 @@ export interface ConnectionStep {
   error?: string
   code?: string
   durationMs: number
+}
+
+// ---- backup & restore -----------------------------------------------------------
+
+export type BackupEngine = 'builtin' | 'tools'
+
+export interface NamespaceSelection {
+  databases: string[]
+  include: string[]
+  exclude: string[]
+  includeSystem: boolean
+  views: boolean
+}
+
+export interface BuiltinBackupOptions {
+  dir: string
+  gzip: boolean
+  selection: NamespaceSelection
+  query: string
+  source?: string
+}
+
+export interface ToolDumpOptions {
+  archive: string
+  out: string
+  gzip: boolean
+  db: string
+  collection: string
+  excludeCollections: string[]
+  query: string
+  usersAndRoles: boolean
+  oplog: boolean
+  viewsAsCollections: boolean
+}
+
+export interface BackupRequest {
+  connId: string
+  engine: BackupEngine
+  builtin: BuiltinBackupOptions
+  tool: ToolDumpOptions
+}
+
+export type RestoreMode = 'insert' | 'upsert' | 'drop'
+
+export interface BuiltinRestoreOptions {
+  dir: string
+  mode: RestoreMode
+  selection: NamespaceSelection
+  renames: { from: string; to: string }[]
+  skipIndexes: boolean
+  skipOptions: boolean
+  stopOnError: boolean
+  bypassValidate: boolean
+}
+
+export interface ToolRestoreOptions {
+  archive: string
+  dir: string
+  gzip: boolean
+  nsInclude: string[]
+  nsExclude: string[]
+  nsFrom: string[]
+  nsTo: string[]
+  drop: boolean
+  noIndexRestore: boolean
+  noOptionsRestore: boolean
+  stopOnError: boolean
+  bypassValidation: boolean
+  usersAndRoles: boolean
+  oplogReplay: boolean
+  dryRun: boolean
+}
+
+export interface RestoreRequest {
+  connId: string
+  engine: BackupEngine
+  builtin: BuiltinRestoreOptions
+  tool: ToolRestoreOptions
+}
+
+export interface BackupNamespace {
+  db: string
+  coll: string
+  type: string
+  count: number
+  bytes: number
+  indexes: number
+  gzip: boolean
+  error?: string
+  expected?: number
+}
+
+export interface BackupManifest {
+  format: string
+  version: number
+  created: string
+  tool: string
+  serverVersion?: string
+  source?: string
+  gzip: boolean
+  namespaces: BackupNamespace[]
+  notes?: string[]
+}
+
+export interface BackupInspection {
+  dir: string
+  manifest?: BackupManifest
+  entries: BackupNamespace[]
+  warnings: string[]
+}
+
+export interface BackupTools {
+  dump: ToolInfo
+  restore: ToolInfo
+  blocked: string
+}
+
+// ---- connection import / export ------------------------------------------------
+
+export interface ConnectionExportResult {
+  path: string
+  count: number
+  secretsIncluded: boolean
+}
+
+export interface ConnectionImportItem {
+  index: number
+  name: string
+  folder: string
+  hosts: string
+  via: string
+  secretKinds: string[]
+  conflict: '' | 'id' | 'name'
+  existingId: string
+  notes: string[]
+  error: string
+}
+
+export interface ConnectionImportPreview {
+  path: string
+  format: 'mango3s' | 'compass' | 'uris'
+  hasSecrets: boolean
+  secretsUnlocked: boolean
+  items: ConnectionImportItem[]
+  warnings: string[]
+}
+
+export interface ImportChoice {
+  index: number
+  action: 'add' | 'replace' | 'skip'
+  name: string
+  folder: string
+}
+
+export interface ConnectionImportOutcome {
+  added: number
+  replaced: number
+  skipped: number
+  errors: string[]
+}
+
+// ---- database & collection management --------------------------------------
+
+export interface CreateCollectionOptions {
+  name: string
+  capped: boolean
+  sizeBytes: number
+  maxDocs: number
+  collation: string
+  validator: string
+  validationLevel: string
+  validationAction: string
+  timeField: string
+  metaField: string
+  granularity: string
+  expireAfterSeconds: number
+  clustered: boolean
+  storageEngine: string
+}
+
+export interface Validation {
+  validator: string
+  level: 'off' | 'strict' | 'moderate'
+  action: 'error' | 'warn' | 'errorAndLog'
+}
+
+export interface ValidationReport {
+  checked: number
+  failing: number
+  sample: string[]
+}
+
+export interface IndexDetail {
+  name: string
+  keys: string
+  spec: string
+  unique: boolean
+  sparse: boolean
+  hidden: boolean
+  ttl?: number
+  partial?: string
+  collation?: string
+  size: number
+  accesses: number
+  accessSince?: string
+}
+
+export interface IndexOptions {
+  keys: string
+  name: string
+  unique: boolean
+  sparse: boolean
+  hidden: boolean
+  expireAfterSeconds: number | null
+  partialFilterExpression: string
+  collation: string
+  wildcardProjection: string
+  extra: string
+}
+
+export interface CollectionDetails {
+  type: string
+  options: string
+  uuid?: string
+  readOnly: boolean
+  stats: Record<string, string>
+  count: number
+  size: number
+  storageSize: number
+  totalIndexSize: number
+  avgObjSize: number
+  capped: boolean
+  sharded: boolean
+  shell: string
+}
+
+export interface DatabaseDetails {
+  collections: number
+  views: number
+  objects: number
+  dataSize: number
+  storageSize: number
+  indexes: number
+  indexSize: number
+  avgObjSize: number
+  fsUsedSize: number
+  fsTotalSize: number
+}
+
+export interface CopyOptions {
+  srcDb: string
+  collections: string[]
+  dstDb: string
+  dstColl: string
+  mode: RestoreMode
+  filter: string
+  skipIndexes: boolean
+  skipOptions: boolean
+  views: boolean
+}
+
+// ---- profiler & SQL export ------------------------------------------------------
+
+export interface Profiling {
+  level: 0 | 1 | 2
+  slowms: number
+  sampleRate: number
+}
+
+export interface ProfileQuery {
+  coll: string
+  op: string
+  minMillis: number
+  limit: number
+}
+
+export interface ProfileEntry {
+  ts: string
+  op: string
+  ns: string
+  millis: number
+  planSummary: string
+  keysExamined: number
+  docsExamined: number
+  nreturned: number
+  command: string
+  client: string
+  user: string
+  appName: string
+}
+
+export type SQLDialect = 'postgres' | 'mysql' | 'sqlite'
+
+export interface SQLExportOptions {
+  dialect: SQLDialect
+  table: string
+  filter: string
+  sampleSize: number
+  batchRows: number
+  flatten: boolean
+  dropTable: boolean
 }

@@ -256,7 +256,7 @@ describe('Welcome tab', () => {
     for (const name of ['New connection', 'Open saved connections…', 'Keyboard shortcuts']) {
       expect(screen.getAllByRole('button', { name }).length).toBeGreaterThan(0)
     }
-    expect(await screen.findByRole('list', { name: 'Recent connections' })).toHaveTextContent('Local dev')
+    expect(await screen.findByRole('list', { name: 'Connections' })).toHaveTextContent('Local dev')
     fireEvent.click(screen.getAllByRole('button', { name: 'Keyboard shortcuts' })[0])
     const dialog = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })
     expect(within(dialog).getByText('Open the connection manager')).toBeInTheDocument()
@@ -611,6 +611,25 @@ describe('reordering connections', () => {
       const names = [...sidebar.querySelectorAll('.saved .tree-label')].map((e) => e.textContent?.replace('Clients / ', ''))
       expect(names).toEqual(['Staging', 'Prod', 'Local dev'])
     })
+  })
+
+  it('Alt+1–9 follow the connection order, not last use', async () => {
+    const used = { ...p3, lastConnectedAt: new Date().toISOString() }
+    backend.listProfiles.mockResolvedValue([profile, p2, used])
+    backend.reorderProfiles.mockImplementation(async (ids: string[]) => ids.map((id) => [profile, p2, used].find((p) => p.id === id)))
+    render(<App />)
+    const sidebar = screen.getByRole('navigation', { name: 'Database explorer' })
+    const row = async (name: string) => (await within(sidebar).findByText(name)).closest('.tree-row') as HTMLElement
+    expect(await row('Staging')).toHaveAttribute('title', expect.stringContaining('(Alt+2)'))
+    key({ key: '1', code: 'Digit1', altKey: true })
+    await waitFor(() => expect(backend.connect).toHaveBeenCalledWith('p1'))
+    // Move Local dev to the end: Staging becomes connection 1.
+    dragOnto(await row('Local dev'), await row('Prod'), false)
+    await waitFor(() => expect(backend.reorderProfiles).toHaveBeenCalledWith(['p2', 'p3', 'p1']))
+    await dismissConnectLog()
+    await waitFor(async () => expect(await row('Staging')).toHaveAttribute('title', expect.stringContaining('(Alt+1)')))
+    key({ key: '1', code: 'Digit1', altKey: true })
+    await waitFor(() => expect(backend.connect).toHaveBeenCalledWith('p2'))
   })
 
   it('Alt+↓ moves the focused connection down', async () => {

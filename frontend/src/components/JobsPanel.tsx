@@ -19,6 +19,35 @@ function elapsed(j: Job): string {
   return formatDuration(Math.max(0, end.getTime() - new Date(j.startedAt).getTime()))
 }
 
+/** A job's log: collapsed by default, follows new lines while open. */
+function JobLog({ job }: { job: Job }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLPreElement>(null)
+  const lines = job.log ?? []
+  useEffect(() => {
+    if (open && ref.current) ref.current.scrollTop = ref.current.scrollHeight
+  }, [open, lines.length])
+  return (
+    <div>
+      <div className="job-log-actions">
+        <button className="small ghost" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {open ? 'Hide log' : `Show log (${lines.length})`}
+        </button>
+        {open && (
+          <button className="small ghost" onClick={() => void navigator.clipboard?.writeText(lines.join('\n'))}>
+            Copy log
+          </button>
+        )}
+      </div>
+      {open && (
+        <pre className="job-log" ref={ref} aria-label={`Log of ${job.title}`}>
+          {lines.join('\n')}
+        </pre>
+      )}
+    </div>
+  )
+}
+
 export function JobRow({ job }: { job: Job }) {
   const { percent, label } = jobProgress(job)
   const active = job.state === 'running' || job.state === 'queued'
@@ -44,6 +73,7 @@ export function JobRow({ job }: { job: Job }) {
         {[label, elapsed(job), active ? job.message : job.result].filter(Boolean).join(' · ')}
       </div>
       {job.error && job.state !== 'canceled' && <div className="error-text">{job.error}</div>}
+      {!!job.log?.length && <JobLog job={job} />}
     </li>
   )
 }

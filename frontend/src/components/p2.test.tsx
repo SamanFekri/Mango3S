@@ -13,6 +13,10 @@ const backend = vi.hoisted(() => ({
   listTaskTypes: vi.fn(),
   approveTask: vi.fn(),
   runTaskNow: vi.fn(),
+  exportTasks: vi.fn(),
+  importTasks: vi.fn(),
+  exportTextFile: vi.fn(),
+  importTextFile: vi.fn(),
 }))
 const app = vi.hoisted(() => ({
   toast: vi.fn(),
@@ -155,6 +159,20 @@ describe('TasksView', () => {
     app.confirm.mockResolvedValueOnce(true)
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
     await waitFor(() => expect(backend.approveTask).toHaveBeenCalledWith('t1'))
+  })
+
+  it('exports definitions and imports them unapproved', async () => {
+    backend.exportTasks.mockResolvedValue('{"format":"mango3s-tasks"}')
+    backend.exportTextFile.mockResolvedValue('/x/tasks.json')
+    backend.importTextFile.mockResolvedValue('{"format":"mango3s-tasks","tasks":[]}')
+    backend.importTasks.mockResolvedValue({ imported: ['Nightly export'], errors: [] })
+    render(<TasksView />)
+    await screen.findByText('needs approval')
+    fireEvent.click(screen.getByRole('button', { name: 'Export…' }))
+    await waitFor(() => expect(backend.exportTextFile).toHaveBeenCalledWith('Export task definitions', 'mango3s-tasks.json', '{"format":"mango3s-tasks"}'))
+    fireEvent.click(screen.getByRole('button', { name: 'Import…' }))
+    await waitFor(() => expect(backend.importTasks).toHaveBeenCalledWith('{"format":"mango3s-tasks","tasks":[]}'))
+    await waitFor(() => expect(app.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Imported 1 task', message: 'Review and approve them before they run.' })))
   })
 
   it('offers Run now once approved', async () => {

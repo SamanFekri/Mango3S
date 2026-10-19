@@ -6,8 +6,16 @@ export function AnalyzeSchema(arg1, arg2) {
   return window['go']['api']['App']['AnalyzeSchema'](arg1, arg2);
 }
 
+export function ApplyConnectionImport(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ApplyConnectionImport'](arg1, arg2, arg3);
+}
+
 export function ApproveTask(arg1) {
   return window['go']['api']['App']['ApproveTask'](arg1);
+}
+
+export function BackupToolsStatus(arg1) {
+  return window['go']['api']['App']['BackupToolsStatus'](arg1);
 }
 
 export function BuildConnectionString(arg1) {
@@ -22,6 +30,14 @@ export function CancelOperation(arg1) {
   return window['go']['api']['App']['CancelOperation'](arg1);
 }
 
+export function CheckValidator(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['CheckValidator'](arg1, arg2, arg3, arg4);
+}
+
+export function ChooseConnectionsFile() {
+  return window['go']['api']['App']['ChooseConnectionsFile']();
+}
+
 export function ChooseExportFile(arg1) {
   return window['go']['api']['App']['ChooseExportFile'](arg1);
 }
@@ -34,8 +50,16 @@ export function ChooseImportFile() {
   return window['go']['api']['App']['ChooseImportFile']();
 }
 
+export function ChooseSaveFile(arg1, arg2) {
+  return window['go']['api']['App']['ChooseSaveFile'](arg1, arg2);
+}
+
 export function ClearAIKey() {
   return window['go']['api']['App']['ClearAIKey']();
+}
+
+export function ClearCollection(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['ClearCollection'](arg1, arg2, arg3, arg4);
 }
 
 export function ClearCollectionHistory(arg1) {
@@ -54,8 +78,16 @@ export function ClearLocalAIKey() {
   return window['go']['api']['App']['ClearLocalAIKey']();
 }
 
+export function ClearProfile(arg1, arg2) {
+  return window['go']['api']['App']['ClearProfile'](arg1, arg2);
+}
+
 export function CodeLanguages() {
   return window['go']['api']['App']['CodeLanguages']();
+}
+
+export function CollectionDetails(arg1, arg2, arg3) {
+  return window['go']['api']['App']['CollectionDetails'](arg1, arg2, arg3);
 }
 
 export function CollectionStats(arg1, arg2, arg3) {
@@ -74,12 +106,32 @@ export function ConnectionCapabilities() {
   return window['go']['api']['App']['ConnectionCapabilities']();
 }
 
+export function ConnectionURI(arg1, arg2) {
+  return window['go']['api']['App']['ConnectionURI'](arg1, arg2);
+}
+
 export function CountQuery(arg1, arg2) {
   return window['go']['api']['App']['CountQuery'](arg1, arg2);
 }
 
 export function CreateCollection(arg1, arg2, arg3) {
   return window['go']['api']['App']['CreateCollection'](arg1, arg2, arg3);
+}
+
+export function CreateCollectionWithOptions(arg1, arg2, arg3) {
+  return window['go']['api']['App']['CreateCollectionWithOptions'](arg1, arg2, arg3);
+}
+
+export function CreateIndex(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['App']['CreateIndex'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function CreateView(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['api']['App']['CreateView'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function DatabaseDetails(arg1, arg2) {
+  return window['go']['api']['App']['DatabaseDetails'](arg1, arg2);
 }
 
 export function DeleteDocuments(arg1, arg2, arg3, arg4) {
@@ -122,6 +174,10 @@ export function DropDatabase(arg1, arg2) {
   return window['go']['api']['App']['DropDatabase'](arg1, arg2);
 }
 
+export function DropIndex(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['DropIndex'](arg1, arg2, arg3, arg4);
+}
+
 export function DuplicateProfile(arg1) {
   return window['go']['api']['App']['DuplicateProfile'](arg1);
 }
@@ -136,6 +192,14 @@ export function ExecuteBulkWrite(arg1, arg2, arg3) {
 
 export function Explain(arg1, arg2) {
   return window['go']['api']['App']['Explain'](arg1, arg2);
+}
+
+export function ExportConnections(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ExportConnections'](arg1, arg2, arg3);
+}
+
+export function ExportTasks(arg1) {
+  return window['go']['api']['App']['ExportTasks'](arg1);
 }
 
 export function ExportTextFile(arg1, arg2, arg3) {
@@ -182,6 +246,10 @@ export function GetMCPInfo() {
   return window['go']['api']['App']['GetMCPInfo']();
 }
 
+export function GetProfiling(arg1, arg2) {
+  return window['go']['api']['App']['GetProfiling'](arg1, arg2);
+}
+
 export function GetSettings() {
   return window['go']['api']['App']['GetSettings']();
 }
@@ -194,12 +262,24 @@ export function GetTransformReport(arg1) {
   return window['go']['api']['App']['GetTransformReport'](arg1);
 }
 
+export function GetValidation(arg1, arg2, arg3) {
+  return window['go']['api']['App']['GetValidation'](arg1, arg2, arg3);
+}
+
+export function ImportTasks(arg1) {
+  return window['go']['api']['App']['ImportTasks'](arg1);
+}
+
 export function ImportTextFile(arg1) {
   return window['go']['api']['App']['ImportTextFile'](arg1);
 }
 
 export function InsertDocuments(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['InsertDocuments'](arg1, arg2, arg3, arg4);
+}
+
+export function InspectBackup(arg1) {
+  return window['go']['api']['App']['InspectBackup'](arg1);
 }
 
 export function IntrospectSQL(arg1) {
@@ -230,6 +310,10 @@ export function ListHistory(arg1, arg2, arg3) {
   return window['go']['api']['App']['ListHistory'](arg1, arg2, arg3);
 }
 
+export function ListIndexDetails(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ListIndexDetails'](arg1, arg2, arg3);
+}
+
 export function ListJobs() {
   return window['go']['api']['App']['ListJobs']();
 }
@@ -244,6 +328,10 @@ export function ListMaskRuleSets() {
 
 export function ListMigrations() {
   return window['go']['api']['App']['ListMigrations']();
+}
+
+export function ListProfile(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ListProfile'](arg1, arg2, arg3);
 }
 
 export function ListProfiles() {
@@ -274,6 +362,10 @@ export function MigrationTypes() {
   return window['go']['api']['App']['MigrationTypes']();
 }
 
+export function ModifyIndex(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['App']['ModifyIndex'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function ParseCollectionQuery(arg1, arg2) {
   return window['go']['api']['App']['ParseCollectionQuery'](arg1, arg2);
 }
@@ -302,6 +394,10 @@ export function PreviewBulkWrite(arg1) {
   return window['go']['api']['App']['PreviewBulkWrite'](arg1);
 }
 
+export function PreviewConnectionImport(arg1, arg2) {
+  return window['go']['api']['App']['PreviewConnectionImport'](arg1, arg2);
+}
+
 export function PreviewImport(arg1) {
   return window['go']['api']['App']['PreviewImport'](arg1);
 }
@@ -324,6 +420,10 @@ export function QueryToShell(arg1) {
 
 export function RecordCollectionOpened(arg1, arg2, arg3) {
   return window['go']['api']['App']['RecordCollectionOpened'](arg1, arg2, arg3);
+}
+
+export function RenameCollection(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['api']['App']['RenameCollection'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function ReorderProfiles(arg1) {
@@ -410,6 +510,10 @@ export function SetProfileFolder(arg1, arg2) {
   return window['go']['api']['App']['SetProfileFolder'](arg1, arg2);
 }
 
+export function SetProfiling(arg1, arg2, arg3) {
+  return window['go']['api']['App']['SetProfiling'](arg1, arg2, arg3);
+}
+
 export function SetTaskEnabled(arg1, arg2) {
   return window['go']['api']['App']['SetTaskEnabled'](arg1, arg2);
 }
@@ -418,12 +522,24 @@ export function SetUnsavedWork(arg1) {
   return window['go']['api']['App']['SetUnsavedWork'](arg1);
 }
 
+export function SetValidation(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['SetValidation'](arg1, arg2, arg3, arg4);
+}
+
+export function StartBackup(arg1) {
+  return window['go']['api']['App']['StartBackup'](arg1);
+}
+
 export function StartCompare(arg1) {
   return window['go']['api']['App']['StartCompare'](arg1);
 }
 
 export function StartCompareDatabases(arg1) {
   return window['go']['api']['App']['StartCompareDatabases'](arg1);
+}
+
+export function StartCopy(arg1, arg2) {
+  return window['go']['api']['App']['StartCopy'](arg1, arg2);
 }
 
 export function StartExport(arg1) {
@@ -438,8 +554,20 @@ export function StartMigration(arg1) {
   return window['go']['api']['App']['StartMigration'](arg1);
 }
 
+export function StartRenameDatabase(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['StartRenameDatabase'](arg1, arg2, arg3, arg4);
+}
+
 export function StartRestore(arg1, arg2, arg3) {
   return window['go']['api']['App']['StartRestore'](arg1, arg2, arg3);
+}
+
+export function StartRestoreBackup(arg1, arg2) {
+  return window['go']['api']['App']['StartRestoreBackup'](arg1, arg2);
+}
+
+export function StartSQLExport(arg1) {
+  return window['go']['api']['App']['StartSQLExport'](arg1);
 }
 
 export function StartSync(arg1, arg2) {

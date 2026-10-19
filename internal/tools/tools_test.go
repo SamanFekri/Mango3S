@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"mango3s/internal/config"
@@ -21,9 +22,10 @@ func TestDetect(t *testing.T) {
 	touch("mongoexport")
 	legacy := filepath.Join(t.TempDir(), "mongoimport")
 	_ = os.WriteFile(legacy, nil, 0o755)
-	oldRun, oldLook := Runner, LookPath
-	defer func() { Runner, LookPath = oldRun, oldLook }()
+	oldRun, oldLook, oldDirs := Runner, LookPath, commonDirs
+	defer func() { Runner, LookPath, commonDirs = oldRun, oldLook, oldDirs }()
 	LookPath = func(string) (string, error) { return "", errors.New("not found") }
+	commonDirs = func() []string { return nil } // independent of what this machine has installed
 	Runner = func(_ context.Context, path string) (string, error) {
 		switch filepath.Base(path) {
 		case exe("mongodump"):
@@ -67,5 +69,24 @@ func TestMongoshServerCompatibility(t *testing.T) {
 	info = detectOne(context.Background(), config.ToolsConfig{}, "mongosh", "shell", "", "8.0.1")
 	if info.Status != StatusOK {
 		t.Fatalf("mongosh 2.x vs MongoDB 8: %+v", info)
+	}
+}
+
+func TestLocateExplainsMissingTools(t *testing.T) {
+	oldLook, oldDirs := LookPath, commonDirs
+	defer func() { LookPath, commonDirs = oldLook, oldDirs }()
+	LookPath = func(string) (string, error) { return "", errors.New("not found") }
+	commonDirs = func() []string { return nil }
+	if _, err := Locate(config.ToolsConfig{}, "mongodump"); err == nil || !strings.Contains(err.Error(), "database-tools") {
+		t.Fatalf("missing mongodump: %v", err)
+	}
+	if _, err := Locate(config.ToolsConfig{Paths: map[string]string{"mongorestore": "/nope"}}, "mongorestore"); err == nil {
+		t.Fatal("bad override accepted")
+	}
+	dir := t.TempDir()
+	p := filepath.Join(dir, exe("mongodump"))
+	_ = os.WriteFile(p, nil, 0o755)
+	if got, err := Locate(config.ToolsConfig{Dir: dir}, "mongodump"); err != nil || got != p {
+		t.Fatal(got, err)
 	}
 }

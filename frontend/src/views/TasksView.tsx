@@ -15,6 +15,17 @@ const TEMPLATES: Record<string, object> = {
     sync: { insert: true, replace: true, delete: false },
   },
   maskCopy: { spec: { connId: '', db: '', coll: '', filter: '', mode: 'copy', targetColl: '', onError: 'fail' }, ruleSetId: '', replaceTarget: true },
+  backup: {
+    connId: '',
+    backup: { dir: '/path/to/backups/nightly-{date}-{time}', gzip: true, selection: { databases: [], include: [], exclude: [], includeSystem: false, views: true }, query: '' },
+  },
+  chain: {
+    steps: [
+      { name: 'Export', type: 'export', params: { connId: '', db: '', coll: '', filter: '{}', path: '/path/to/exports/data-{date}.json', format: 'json', jsonMode: 'lines', canonical: true } },
+      { name: 'Back up', type: 'backup', params: { connId: '', backup: { dir: '/path/to/backups/nightly-{date}-{time}', gzip: true, selection: { databases: [] } } } },
+    ],
+    continueOnError: false,
+  },
 }
 
 interface Draft {
@@ -115,12 +126,40 @@ export function TasksView() {
     if (ok) act(() => backend.approveTask(t.id), 'Task approved')
   }
 
+  const exportTasks = async () => {
+    try {
+      const json = await backend.exportTasks([])
+      const path = await backend.exportTextFile('Export task definitions', 'mango3s-tasks.json', json)
+      if (path) toast({ kind: 'success', title: `Exported ${tasks.length} task definition${tasks.length === 1 ? '' : 's'}`, message: 'Approvals are not included.' })
+    } catch (err) {
+      toastError(err, 'Export failed')
+    }
+  }
+  const importTasks = async () => {
+    try {
+      const content = await backend.importTextFile('Import task definitions')
+      if (!content) return
+      const r = await backend.importTasks(content)
+      await load()
+      if (r.errors.length) toastError({ code: 'INVALID_INPUT', message: r.errors.join('\n') }, `Imported ${r.imported.length}; ${r.errors.length} failed`)
+      else toast({ kind: 'success', title: `Imported ${r.imported.length} task${r.imported.length === 1 ? '' : 's'}`, message: 'Review and approve them before they run.' })
+    } catch (err) {
+      toastError(err, 'Import failed')
+    }
+  }
+
   return (
     <div className="view tasks-view">
       <div className="view-header">
         <h1>Scheduled tasks</h1>
         <span className="spacer" />
         {!settings?.schedulerEnabled && <span className="badge">scheduler off in Settings</span>}
+        <button onClick={importTasks} title="Imported tasks start unapproved">
+          Import…
+        </button>
+        <button onClick={exportTasks} disabled={tasks.length === 0}>
+          Export…
+        </button>
         <button className="primary" onClick={() => setDraft(toDraft())}>
           + New task
         </button>

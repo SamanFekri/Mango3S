@@ -3,8 +3,10 @@ package jobs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -173,5 +175,32 @@ func TestThrottle(t *testing.T) {
 	defer mu.Unlock()
 	if n > 5 {
 		t.Fatalf("throttle let %d events through", n)
+	}
+}
+
+func TestJobLog(t *testing.T) {
+	m := NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), 1)
+	m.SetThrottle(0)
+	j := m.Start("t", "log", func(ctx context.Context, p *Progress) (string, error) {
+		for i := 0; i < MaxLogLines+10; i++ {
+			p.Log("line %d", i)
+		}
+		return "ok", nil
+	})
+	var got Job
+	for i := 0; i < 200; i++ {
+		got, _ = m.Get(j.ID)
+		if got.State.Finished() {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(got.Log) != MaxLogLines || got.Log[0] != "…" || !strings.HasSuffix(got.Log[len(got.Log)-1], fmt.Sprintf("line %d", MaxLogLines+9)) {
+		t.Fatalf("log: %d lines, first %q, last %q", len(got.Log), got.Log[0], got.Log[len(got.Log)-1])
+	}
+	got.Log[1] = "changed"
+	again, _ := m.Get(j.ID)
+	if again.Log[1] == "changed" {
+		t.Fatal("snapshots must not share the log")
 	}
 }

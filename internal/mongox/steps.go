@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -297,6 +300,11 @@ func open(ctx context.Context, p config.Profile, c Credentials, rep Reporter) (*
 			defer conn.Close()
 			tc := tls.Client(conn, cfg)
 			if err := tc.HandshakeContext(cctx); err != nil {
+				// A server without TLS (MongoDB 8 and later) closes the connection
+				// on the TLS hello instead of answering in plain text.
+				if errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET) {
+					return "", false, apperr.Wrap(apperr.CodeTLS, err, "TLS: the server closed the connection during the TLS handshake. It probably does not use TLS: turn TLS off on the SSL / TLS tab. If it does use TLS, it may require a client certificate.")
+				}
 				return "", false, err
 			}
 			cs := tc.ConnectionState()

@@ -148,15 +148,6 @@ export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
   }
 }
 
-/** Profiles ordered for "Recent connections": last connected first, then never-used ones by name. */
-export function recentProfiles<T extends { name: string; lastConnectedAt?: string }>(profiles: T[]): T[] {
-  return [...profiles].sort((a, b) => {
-    const ta = a.lastConnectedAt ? Date.parse(a.lastConnectedAt) : 0
-    const tb = b.lastConnectedAt ? Date.parse(b.lastConnectedAt) : 0
-    return tb - ta || a.name.localeCompare(b.name)
-  })
-}
-
 /**
  * Moves id next to target (before or after it) in an ordered list of ids.
  * Returns the list unchanged when id is target or either is missing.

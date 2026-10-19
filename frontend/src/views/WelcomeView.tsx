@@ -1,7 +1,6 @@
 import { ServerIcon } from '../components/icons'
 import { timeAgo } from '../lib/library'
 import { SHORTCUT_BY_ID, formatBinding, formatShortcut, keysFor } from '../lib/shortcuts'
-import { recentProfiles } from '../lib/tabs'
 import { useApp } from '../state/AppContext'
 import { getShortcutPlatform } from '../state/shortcuts'
 
@@ -10,7 +9,8 @@ const TIPS = ['conn.manager', 'query.run', 'tab.close', 'tab.next', 'results.tre
 export function WelcomeView() {
   const { openConnectionManager, profiles, sessions, connect, connecting, dispatchTabs, setShortcutsOpen } = useApp()
   const platform = getShortcutPlatform()
-  const recent = recentProfiles(profiles).slice(0, 9)
+  // Same order as the explorer, so Alt+1–9 always matches what the user arranged.
+  const recent = profiles.slice(0, 9)
   const quick = SHORTCUT_BY_ID['conn.quick']
   return (
     <div className="view welcome-view">
@@ -32,7 +32,7 @@ export function WelcomeView() {
           </button>
         </div>
 
-        <h2>Recent connections</h2>
+        <h2>Connections</h2>
         {recent.length === 0 ? (
           <p className="muted">
             No saved connections yet.{' '}
@@ -42,7 +42,7 @@ export function WelcomeView() {
             to get started.
           </p>
         ) : (
-          <ul className="welcome-list" aria-label="Recent connections">
+          <ul className="welcome-list" aria-label="Connections">
             {recent.map((p, i) => {
               const live = sessions.find((s) => s.id === p.id)
               return (
