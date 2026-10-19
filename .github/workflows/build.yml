@@ -1,0 +1,136 @@
+name: Build executables
+
+# Manual only: Actions › "Build executables" › Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Platform to build"
+        type: choice
+        default: all
+        options:
+          - all
+          - macos-arm64
+          - macos-amd64
+          - windows-amd64
+          - windows-386
+          - linux-amd64
+      version:
+        description: "Version embedded in the binary (empty = productVersion from wails.json)"
+        required: false
+        default: ""
+      platform_base_url:
+        description: "Web platform the build checks in with for updates"
+        required: false
+        default: "https://mango3s.com"
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.16.0
+  NODE_VERSION: "22"
+
+jobs:
+  # Narrows the build matrix to the platform picked in the "target" input.
+  targets:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - id: select
+        env:
+          TARGET: ${{ inputs.target }}
+          # Ubuntu 24.04 ships WebKitGTK 4.1 only (same tag as the Dockerfile).
+          ALL: |
+            [
+              {"name": "macos-arm64",   "os": "macos-latest",   "platform": "darwin/arm64"},
+              {"name": "macos-amd64",   "os": "macos-latest",   "platform": "darwin/amd64"},
+              {"name": "windows-amd64", "os": "windows-latest", "platform": "windows/amd64"},
+              {"name": "windows-386",   "os": "windows-latest", "platform": "windows/386"},
+              {"name": "linux-amd64",   "os": "ubuntu-24.04",   "platform": "linux/amd64", "tags": "webkit2_41"}
+            ]
+        run: |
+          matrix=$(jq -c --arg t "$TARGET" '{include: [.[] | select($t == "all" or .name == $t)]}' <<< "$ALL")
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.name }}
+    needs: targets
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+
+      - name: Resolve version
+        id: version
+        run: |
+          version="${{ inputs.version }}"
+          if [ -z "$version" ]; then
+            version=$(node -pe "require('./wails.json').info.productVersion")
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          LDFLAGS: >-
+            -X mango3s/internal/api.Version=${{ steps.version.outputs.version }}
+            -X mango3s/internal/api.PlatformBaseURL=${{ inputs.platform_base_url }}
+        run: |
+          args=(build -clean -platform "${{ matrix.platform }}" -ldflags "$LDFLAGS")
+          if [ -n "${{ matrix.tags }}" ]; then
+            args+=(-tags "${{ matrix.tags }}")
+          fi
+          wails "${args[@]}"
+
+      - name: Package
+        id: package
+        run: |
+          name="mango3s-${{ steps.version.outputs.version }}-${{ matrix.name }}"
+          mkdir -p dist
+          case "${{ runner.os }}" in
+            macOS)
+              # ditto keeps the .app bundle's symlinks and permissions intact.
+              ditto -c -k --keepParent build/bin/Mango3S.app "dist/$name.zip"
+              ;;
+            Windows)
+              7z a "dist/$name.zip" ./build/bin/mango3s.exe
+              ;;
+            Linux)
+              # tar keeps the executable bit, which upload-artifact would drop.
+              tar -czf "dist/$name.tar.gz" -C build/bin mango3s
+              ;;
+          esac
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/*
+          if-no-files-found: error

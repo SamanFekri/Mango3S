@@ -38,7 +38,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend /src/frontend/dist ./frontend/dist
-ARG VERSION=0.1.0
+ARG VERSION=0.9.0
 # Unit tests must not depend on an OS keyring inside the container.
 ENV MANGO3S_SECRET_BACKEND=memory
 RUN go vet ./... && go test -count=1 ./...
