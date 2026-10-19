@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Spinner } from '../components/common'
 import { KeymapSettings } from '../components/KeymapSettings'
 import { AISettings, MCPSettings } from '../components/P2Settings'
+import { PlatformSettings } from '../components/PlatformSettings'
 import type { Tab } from '../lib/tabs'
 import type { Settings } from '../lib/types'
 import { useApp } from '../state/AppContext'
@@ -15,6 +16,7 @@ export function SettingsView({ tab }: { tab?: Tab }) {
   // App menu → Keymap… opens Settings at the Keymap section.
   useEffect(() => {
     if (tab?.init?.settingsSection === 'keymap') document.getElementById('settings-keymap')?.scrollIntoView?.({ block: 'start' })
+    if (tab?.init?.settingsSection === 'platform') document.getElementById('settings-platform')?.scrollIntoView?.({ block: 'start' })
   }, [tab?.init, form === null])
   if (!form) return <Spinner />
 
@@ -109,6 +111,7 @@ export function SettingsView({ tab }: { tab?: Tab }) {
         )}
       </section>
       <AISettings form={form} set={set} />
+      <PlatformSettings form={form} set={set} />
       <div className="form-actions">
         <button onClick={() => setForm(settings)} disabled={!dirty || busy}>
           Revert

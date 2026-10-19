@@ -3,13 +3,20 @@ MONGO_URI ?= mongodb://localhost:27017
 PG_DSN ?= postgres://mango_reader:reader@localhost:5433/shop?sslmode=disable
 MYSQL_DSN ?= mango_reader:reader@tcp(localhost:3307)/shop
 
+# Version embedded in the binary (internal/api.Version) and the web admin
+# platform this build checks in with for updates/notifications
+# (internal/api.PlatformBaseURL) — see web/docs/API_CONTRACT.md.
+VERSION ?= $(shell node -pe "require('./wails.json').info.productVersion" 2>/dev/null || echo 0.1.0-dev)
+PLATFORM_BASE_URL ?= https://mango3s.com
+LDFLAGS := -X mango3s/internal/api.Version=$(VERSION) -X mango3s/internal/api.PlatformBaseURL=$(PLATFORM_BASE_URL)
+
 .PHONY: notices dev build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down docker-build docker-test bindings mcp
 
 dev: ## Run the app with hot reload
-	$(WAILS) dev
+	$(WAILS) dev -ldflags "$(LDFLAGS)"
 
 build: ## Build the desktop app for this OS into build/bin
-	$(WAILS) build -clean
+	$(WAILS) build -clean -ldflags "$(LDFLAGS)"
 
 notices: ## Regenerate the third-party license list shown in About › License
 	scripts/third-party-notices.sh

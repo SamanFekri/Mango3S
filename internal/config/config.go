@@ -71,6 +71,14 @@ type Settings struct {
 	LocalModel       string `json:"localModel"`
 	SchedulerEnabled bool   `json:"schedulerEnabled"` // run approved scheduled tasks while the app is open
 
+	// Platform check-in (the web admin platform this build was distributed from): automatic
+	// update checks/downloads and in-app notifications. DeviceFingerprint and
+	// UpdateInstallationId are non-secret identifiers; the client key and installation token
+	// themselves live in the OS credential store (see package secrets), never here.
+	AutoUpdateEnabled    bool   `json:"autoUpdateEnabled"`
+	DeviceFingerprint    string `json:"deviceFingerprint,omitempty"`
+	UpdateInstallationID string `json:"updateInstallationId,omitempty"`
+
 	// Keymap holds customized shortcuts (Preferences → Keymap) per platform
 	// ("mac" | "other") and action id. An entry replaces that action's
 	// default bindings; an empty list removes all of them.
@@ -101,6 +109,7 @@ func DefaultSettings() Settings {
 		LocalURL:            "http://localhost:11434",
 		LocalAPI:            "ollama",
 		SchedulerEnabled:    true,
+		AutoUpdateEnabled:   true,
 	}
 }
 
@@ -148,7 +157,10 @@ func (s Settings) Normalize() Settings {
 	if s.LocalAPI != "openai" {
 		s.LocalAPI = "ollama"
 	}
-	for _, f := range []*string{&s.ClaudeCodePath, &s.ClaudeCodeModel, &s.CodexPath, &s.CodexModel, &s.LocalModel} {
+	for _, f := range []*string{
+		&s.ClaudeCodePath, &s.ClaudeCodeModel, &s.CodexPath, &s.CodexModel, &s.LocalModel,
+		&s.DeviceFingerprint, &s.UpdateInstallationID,
+	} {
 		*f = strings.TrimSpace(*f)
 	}
 	switch s.LogLevel {

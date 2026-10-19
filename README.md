@@ -48,6 +48,7 @@ security model, scheduler policies, MCP setup and unsupported capabilities.
 | **Database administration** | Create collections with options (capped, time series, clustered, collation, validator) and views; rename collections and databases; clear; copy collections or databases within or across connections; validation rules with a check against existing documents; index manager (create, hide, TTL, drop, size and usage); statistics; query profiler; **index advisor** (suggests indexes for slow queries, finds unused and redundant indexes) |
 | **Connection import/export** | Export connections with folders, without secrets unless you opt in (then passphrase-encrypted). Import from Mango3S files, MongoDB Compass exports and lists of connection strings, with conflict handling. Copy a connection string without its password |
 | **MongoDB → SQL** | Export a collection as a PostgreSQL, MySQL or SQLite script: typed `CREATE TABLE` and batched `INSERT`s; data that doesn't fit the columns is kept in an `_extra` JSON column |
+| **Updates** | Mango3S checks in with its update server by itself (no account or key — it's free): every 10 minutes while open it looks for updates, downloads and checksum-verifies them, and asks before installing (Settings → Updates; automatic checks on by default), shows announcements, and sends an activity heartbeat. Entirely best-effort: if the server is unreachable, requests are retried in the background and nothing in the app is affected. If an admin pauses updates for an installation, the status bar says so once and everything else keeps working |
 
 ### Value syntax
 
@@ -339,7 +340,14 @@ samples contain none.
 | `MANGO3S_CONFIG_DIR` | Config directory override |
 | `MANGO3S_SECRET_BACKEND` | `keyring` (OS store), `file` (encrypted file), `memory` (tests). Default: keyring if available, else file |
 | `ANTHROPIC_API_KEY` | AI assistant key when none is stored in Settings → AI |
+| `MANGO3S_PLATFORM_URL` | Update server to use instead of the built-in one, e.g. `http://localhost:4000` for a local web platform |
 | `MONGO_URI`, `MONGO_AUTH_URI`, `PG_DSN`, `MYSQL_DSN` | Integration tests only |
+
+The update server's address is `PlatformBaseURL` in `internal/api/update.go`
+(`https://mango3s.com`). `make build`/`make dev` embed it and the app version at build time
+(`PLATFORM_BASE_URL` and `VERSION` Makefile variables, defaulting to that URL and `wails.json`'s
+`productVersion`) — override with `make build VERSION=1.2.3 PLATFORM_BASE_URL=https://...`, or at
+runtime with `MANGO3S_PLATFORM_URL`.
 
 ### Credential handling
 
@@ -354,6 +362,8 @@ samples contain none.
   the password.
 - Logs pass through a redacting handler that masks URI user info and
   `password=`/`"password":` values, so neither driver errors nor URIs can leak credentials.
+- The installation token the app receives when it registers with the update server goes through
+  the same credential store as connection passwords.
 
 ---
 

@@ -57,11 +57,19 @@ const backend = vi.hoisted(() => ({
   testAI: vi.fn(),
   chooseFile: vi.fn(),
   runShellPage: vi.fn(),
+  getUpdateStatus: vi.fn(),
+  checkForUpdatesNow: vi.fn(),
+  applyPendingUpdate: vi.fn(),
+  fetchNotifications: vi.fn(),
+  ackNotification: vi.fn(),
 }))
 
 const jobListeners = vi.hoisted(() => [] as ((j: unknown) => void)[])
 const stepListeners = vi.hoisted(() => [] as ((e: unknown) => void)[])
 const menuListeners = vi.hoisted(() => ({}) as Record<string, (() => void)[]>)
+const updateStatusListeners = vi.hoisted(() => [] as ((s: unknown) => void)[])
+const notificationListeners = vi.hoisted(() => [] as ((n: unknown) => void)[])
+const quitAppMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./lib/backend', () => ({
   backend,
@@ -78,6 +86,15 @@ vi.mock('./lib/backend', () => ({
     jobListeners.push(cb)
     return () => undefined
   },
+  onUpdateStatus: (cb: (s: unknown) => void) => {
+    updateStatusListeners.push(cb)
+    return () => undefined
+  },
+  onNewNotification: (cb: (n: unknown) => void) => {
+    notificationListeners.push(cb)
+    return () => undefined
+  },
+  quitApp: quitAppMock,
 }))
 
 import App from './App'
@@ -99,7 +116,13 @@ beforeEach(() => {
     theme: 'dark', pageSize: 50, queryTimeoutSeconds: 60, confirmDeletes: true, defaultView: 'tree', editorFontSize: 13, logLevel: 'info',
     aiEnabled: true, aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiTimeoutSeconds: 180, claudeCodePath: '', claudeCodeModel: '', codexPath: '', codexModel: '',
     localUrl: 'http://localhost:11434', localApi: 'ollama', localModel: '', aiAllowSamples: false, schedulerEnabled: true,
+    autoUpdateEnabled: true,
   })
+  backend.getUpdateStatus.mockResolvedValue({ connected: false, revoked: false, state: 'idle', currentVersion: '1.2.3' })
+  backend.fetchNotifications.mockResolvedValue([])
+  backend.ackNotification.mockResolvedValue(undefined)
+  backend.checkForUpdatesNow.mockResolvedValue({ connected: true, revoked: false, state: 'up_to_date', currentVersion: '1.2.3' })
+  backend.applyPendingUpdate.mockResolvedValue(false)
   backend.listProfiles.mockResolvedValue([profile])
   backend.listConnections.mockResolvedValue([])
   backend.connect.mockResolvedValue(session)
@@ -153,6 +176,8 @@ beforeEach(() => {
   })
   setShortcutPlatform('other')
   jobListeners.length = 0
+  updateStatusListeners.length = 0
+  notificationListeners.length = 0
   // Connect goes through the logging variant; keep the connect mock as the source of truth.
   backend.connectWithLog.mockImplementation((_op: string, id: string) => backend.connect(id))
   backend.testConnectionWithLog.mockImplementation((_op: string, p: unknown) => backend.testConnection(p))
@@ -221,6 +246,81 @@ describe('App', () => {
     fireEvent.click(await screen.findByTitle(/Saved queries and history/))
     expect(await screen.findByText('Big orders')).toBeInTheDocument()
     expect(backend.listSaved).toHaveBeenCalled()
+  })
+})
+
+describe('platform updates', () => {
+  it('auto-opens the restart dialog once an update is ready, and installs it', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+
+    act(() =>
+      updateStatusListeners.forEach((l) =>
+        l({ connected: true, revoked: false, state: 'ready_to_install', currentVersion: '1.0.0', latestVersion: '1.1.0' }),
+      ),
+    )
+    const dialog = await screen.findByRole('dialog', { name: 'Update ready to install' })
+    expect(within(dialog).getByText('1.1.0')).toBeInTheDocument()
+
+    backend.applyPendingUpdate.mockResolvedValue(true)
+    fireEvent.click(screen.getByRole('button', { name: /Restart & install/ }))
+    await waitFor(() => expect(backend.applyPendingUpdate).toHaveBeenCalled())
+    await waitFor(() => expect(quitAppMock).toHaveBeenCalled())
+  })
+
+  it('shows the status-bar indicator when revoked, with an explanatory dialog', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+    act(() => updateStatusListeners.forEach((l) => l({ connected: true, revoked: true, state: 'error', currentVersion: '1.0.0' })))
+
+    const indicator = await screen.findByRole('button', { name: 'Updates paused' })
+    fireEvent.click(indicator)
+    expect(await screen.findByRole('dialog', { name: 'Updates paused' })).toBeInTheDocument()
+  })
+
+  it('queues and dismisses platform notifications one at a time, acknowledging each', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+
+    act(() => notificationListeners.forEach((l) => l({ id: 'n1', title: 'Maintenance', body: 'Server work tonight' })))
+    expect(await screen.findByRole('dialog', { name: 'Maintenance' })).toBeInTheDocument()
+
+    act(() => notificationListeners.forEach((l) => l({ id: 'n2', title: 'New release', body: 'Check it out' })))
+    // The second one queues behind the first rather than replacing it.
+    expect(screen.getByRole('dialog', { name: 'Maintenance' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }))
+    expect(backend.ackNotification).toHaveBeenCalledWith('n1')
+    expect(await screen.findByRole('dialog', { name: 'New release' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }))
+    expect(backend.ackNotification).toHaveBeenCalledWith('n2')
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New release' })).toBeNull())
+  })
+
+  it('has no activation step: Settings offers only the auto-update toggle and Check now', async () => {
+    render(<App />)
+    fireEvent.click(within(screen.getByRole('tablist', { name: '' })).getByRole('button', { name: 'Settings' }))
+    await screen.findByRole('heading', { name: 'Settings' })
+
+    const section = document.getElementById('settings-platform')!
+    expect(within(section).queryByRole('textbox')).toBeNull()
+    expect(within(section).queryByLabelText(/activation key/i)).toBeNull()
+    expect(within(section).getByRole('checkbox', { name: /Automatically check for and download updates/ })).toBeChecked()
+
+    fireEvent.click(within(section).getByRole('button', { name: /Check for updates now/ }))
+    await waitFor(() => expect(backend.checkForUpdatesNow).toHaveBeenCalled())
+    expect(await screen.findByText('You are up to date')).toBeInTheDocument()
+  })
+
+  it('stays fully usable when the update server is unreachable', async () => {
+    backend.getUpdateStatus.mockRejectedValue(new Error('offline'))
+    backend.fetchNotifications.mockRejectedValue(new Error('offline'))
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: 'Welcome to Mango3S' })).toBeInTheDocument()
+    // Nothing about the outage is pushed at the user.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Update/ })).toBeNull()
   })
 })
 

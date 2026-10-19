@@ -1,7 +1,7 @@
 // Typed wrapper around the Wails-generated bindings. All UI code calls the
 // backend through this module so errors are normalized in one place.
 import * as App from '../../wailsjs/go/api/App'
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { EventsOn, Quit } from '../../wailsjs/runtime/runtime'
 import { toAppError } from './errors'
 import type {
   AggregateRequest,
@@ -99,6 +99,8 @@ import type {
   ShellResult,
   Stage,
   TestResult,
+  UpdateStatus,
+  PlatformNotification,
 } from './types'
 
 async function wrap<T>(p: Promise<unknown>): Promise<T> {
@@ -292,6 +294,14 @@ export const backend = {
   executeAIWrite: (id: string, confirm: string) => wrap<AIWriteResult>(a.ExecuteAIWrite(id, confirm)),
   getMCPInfo: () => wrap<MCPInfo>(a.GetMCPInfo()),
   saveMCPPolicy: (p: MCPPolicy) => wrap<MCPPolicy>(a.SaveMCPPolicy(p)),
+
+  // Platform check-in: auto-update + notifications. Registration is automatic
+  // (the app is free), and none of these ever block or break the app.
+  getUpdateStatus: () => wrap<UpdateStatus>(a.GetUpdateStatus()),
+  checkForUpdatesNow: () => wrap<UpdateStatus>(a.CheckForUpdatesNow()),
+  applyPendingUpdate: () => wrap<boolean>(a.ApplyPendingUpdate()),
+  fetchNotifications: () => wrap<PlatformNotification[]>(a.FetchNotifications()),
+  ackNotification: (id: string) => wrap<void>(a.AckNotification(id)),
 }
 
 /** Subscribes to backend job updates; returns an unsubscribe function. */
@@ -318,6 +328,33 @@ export function onJobUpdate(cb: (j: Job) => void): () => void {
     return EventsOn('jobs:update', cb)
   } catch {
     return () => undefined // not running inside Wails (tests, plain browser)
+  }
+}
+
+/** Subscribes to platform update-status changes ("update:status"). */
+export function onUpdateStatus(cb: (s: UpdateStatus) => void): () => void {
+  try {
+    return EventsOn('update:status', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Subscribes to new platform notifications pushed on startup/every 10 minutes. */
+export function onNewNotification(cb: (n: PlatformNotification) => void): () => void {
+  try {
+    return EventsOn('notifications:new', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Quits the app (used after a binary-swap update finishes, so Mango3S relaunches freshly). */
+export function quitApp(): void {
+  try {
+    Quit()
+  } catch {
+    // not running inside Wails (tests, plain browser)
   }
 }
 

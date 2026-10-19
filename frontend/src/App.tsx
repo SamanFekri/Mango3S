@@ -11,7 +11,10 @@ import { AboutDialog } from './components/AboutDialog'
 import { ConnectionLogDialog } from './components/ConnectionLogDialog'
 import { ConnectionManager } from './components/ConnectionManager'
 import { JobsIndicator } from './components/JobsPanel'
+import { NotificationDialog } from './components/NotificationDialog'
 import { Sidebar } from './components/Sidebar'
+import { UpdateDialog } from './components/UpdateDialog'
+import { UpdateIndicator } from './components/UpdateIndicator'
 import type { Tab } from './lib/tabs'
 import { AppProvider, useApp } from './state/AppContext'
 import { AggregationView } from './views/AggregationView'
@@ -216,6 +219,7 @@ function StatusBar() {
       )}
       <span className="spacer" />
       <JobsIndicator />
+      <UpdateIndicator />
       {appInfo && <span>v{appInfo.version}</span>}
     </footer>
   )
@@ -260,6 +264,8 @@ function Shell() {
       {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
       <ConfirmDialog />
       <PromptDialog />
+      <UpdateDialog />
+      <NotificationDialog />
       <Toasts />
     </div>
   )

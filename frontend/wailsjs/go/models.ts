@@ -1781,6 +1781,9 @@ export namespace config {
 	    localApi: string;
 	    localModel: string;
 	    schedulerEnabled: boolean;
+	    autoUpdateEnabled: boolean;
+	    deviceFingerprint?: string;
+	    updateInstallationId?: string;
 	    keymap?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
@@ -1810,6 +1813,9 @@ export namespace config {
 	        this.localApi = source["localApi"];
 	        this.localModel = source["localModel"];
 	        this.schedulerEnabled = source["schedulerEnabled"];
+	        this.autoUpdateEnabled = source["autoUpdateEnabled"];
+	        this.deviceFingerprint = source["deviceFingerprint"];
+	        this.updateInstallationId = source["updateInstallationId"];
 	        this.keymap = source["keymap"];
 	    }
 	}
@@ -4883,6 +4889,57 @@ export namespace transform {
 	        this.mode = source["mode"];
 	        this.targetColl = source["targetColl"];
 	        this.onError = source["onError"];
+	    }
+	}
+
+}
+
+export namespace update {
+	
+	export class Notification {
+	    id: string;
+	    title: string;
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Notification(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.title = source["title"];
+	        this.body = source["body"];
+	    }
+	}
+	export class Status {
+	    connected: boolean;
+	    revoked: boolean;
+	    state: string;
+	    currentVersion: string;
+	    latestVersion?: string;
+	    releaseNotes?: string;
+	    downloadDone?: number;
+	    downloadTotal?: number;
+	    error?: string;
+	    lastCheckedAt?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connected = source["connected"];
+	        this.revoked = source["revoked"];
+	        this.state = source["state"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.releaseNotes = source["releaseNotes"];
+	        this.downloadDone = source["downloadDone"];
+	        this.downloadTotal = source["downloadTotal"];
+	        this.error = source["error"];
+	        this.lastCheckedAt = source["lastCheckedAt"];
 	    }
 	}
 

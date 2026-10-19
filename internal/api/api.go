@@ -82,8 +82,11 @@ type App struct {
 	unsavedWork atomic.Bool          // set by the UI; the window asks before quitting
 	emitStep    func(ConnectionStep) // connection log events (nil until the UI starts)
 
-	settingsMu sync.RWMutex
-	settings   config.Settings
+	update *updateState // platform check-in: auto-update + notifications (see update.go)
+
+	settingsMu    sync.RWMutex
+	settings      config.Settings
+	settingsWrite sync.Mutex // serializes read-modify-write saves (see mutateSettings)
 
 	// P2
 	p2         *p2
@@ -116,6 +119,7 @@ func New(d Deps) *App {
 		library:  library.NewStore(d.Store.Dir()),
 		history:  library.NewHistory(d.Store.Dir(), 500),
 		recent:   recent.New(d.Store.Dir()),
+		update:   newUpdateState(),
 	}
 	a.transfer = transfer.New(d.Conns, a.jobs)
 	a.p2 = newP2(a)
@@ -150,6 +154,7 @@ func (l Lifecycle) Startup(ctx context.Context) {
 			l.app.log.Warn("scheduler did not start", "err", err)
 		}
 	}
+	l.app.startUpdateTicker(ctx)
 	l.app.log.Info("Mango3S started", "version", Version)
 }
 
@@ -347,6 +352,28 @@ func (a *App) GetSettings() config.Settings { return a.currentSettings() }
 
 // SaveSettings validates, persists and applies settings.
 func (a *App) SaveSettings(s config.Settings) (config.Settings, error) {
+	a.settingsWrite.Lock()
+	defer a.settingsWrite.Unlock()
+	// The platform identity is owned by the backend: a Settings form loaded
+	// before the app registered would otherwise send stale (empty) values and
+	// make the next registration look like a brand-new installation.
+	cur := a.currentSettings()
+	s.DeviceFingerprint, s.UpdateInstallationID = cur.DeviceFingerprint, cur.UpdateInstallationID
+	return a.applySettings(s)
+}
+
+// mutateSettings is the backend's own read-modify-write of settings,
+// serialized with SaveSettings so neither overwrites the other's change.
+func (a *App) mutateSettings(fn func(*config.Settings)) error {
+	a.settingsWrite.Lock()
+	defer a.settingsWrite.Unlock()
+	s := a.currentSettings()
+	fn(&s)
+	_, err := a.applySettings(s)
+	return err
+}
+
+func (a *App) applySettings(s config.Settings) (config.Settings, error) {
 	saved, err := a.store.SaveSettings(s)
 	if err != nil {
 		return config.Settings{}, a.encode("SaveSettings", err)

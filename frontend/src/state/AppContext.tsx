@@ -1,10 +1,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { backend, newOpId, onConnectionStep, onJobUpdate } from '../lib/backend'
+import { backend, newOpId, onConnectionStep, onJobUpdate, onNewNotification, onUpdateStatus } from '../lib/backend'
 import { errorTitle, toAppError, type AppError } from '../lib/errors'
 import { setKeymapOverrides } from '../lib/shortcuts'
 import { tabsReducer, type TabsAction, type TabsState } from '../lib/tabs'
-import type { AppInfo, ConnectionStep, Job, Profile, ProfileInput, SessionInfo, Settings, TestResult } from '../lib/types'
+import type {
+  AppInfo,
+  ConnectionStep,
+  Job,
+  PlatformNotification,
+  Profile,
+  ProfileInput,
+  SessionInfo,
+  Settings,
+  TestResult,
+  UpdateStatus,
+} from '../lib/types'
 
 export interface Toast {
   id: number
@@ -106,6 +117,13 @@ interface AppState {
   prompt: (o: PromptOptions) => Promise<string | null>
   promptRequest: PromptRequest | null
   resolvePrompt: (value: string | null) => void
+
+  /** Platform check-in: auto-update + notifications. */
+  updateStatus: UpdateStatus | null
+  updateDialogOpen: boolean
+  setUpdateDialogOpen: (open: boolean) => void
+  notificationQueue: PlatformNotification[]
+  dismissNotification: (id: string) => void
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -233,6 +251,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     backend.listConnections().then(setSessions).catch(() => undefined)
     reloadProfiles()
   }, [reloadProfiles, toastError])
+
+  // Platform check-in: current status, then live updates as the backend
+  // checks for updates / sends notifications (initial check ~5s after the
+  // backend starts, then every 10 minutes while the app is open).
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
+  const wasReadyToInstall = useRef(false)
+  const [notificationQueue, setNotificationQueue] = useState<PlatformNotification[]>([])
+  const seenNotificationIds = useRef<Set<string>>(new Set())
+  const queueNotification = useCallback((n: PlatformNotification) => {
+    if (seenNotificationIds.current.has(n.id)) return
+    seenNotificationIds.current.add(n.id)
+    setNotificationQueue((q) => [...q, n])
+  }, [])
+
+  useEffect(() => {
+    backend.getUpdateStatus().then(setUpdateStatus).catch(() => undefined)
+    backend.fetchNotifications().then((list) => list.forEach(queueNotification)).catch(() => undefined)
+    return onUpdateStatus(setUpdateStatus)
+  }, [queueNotification])
+  useEffect(() => onNewNotification(queueNotification), [queueNotification])
+
+  // Auto-open the dialog the moment a download finishes, so the user doesn't
+  // have to notice a status-bar badge to know an update is ready.
+  useEffect(() => {
+    const isReady = updateStatus?.state === 'ready_to_install'
+    if (isReady && !wasReadyToInstall.current) setUpdateDialogOpen(true)
+    wasReadyToInstall.current = isReady
+  }, [updateStatus])
+
+  const dismissNotification = useCallback((id: string) => {
+    setNotificationQueue((q) => q.filter((n) => n.id !== id))
+    backend.ackNotification(id).catch(() => undefined)
+  }, [])
 
   // Background jobs: initial list plus live updates pushed by the backend.
   const refreshJobs = useCallback(() => {
@@ -445,6 +497,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       prompt,
       promptRequest,
       resolvePrompt,
+      updateStatus,
+      updateDialogOpen,
+      setUpdateDialogOpen,
+      notificationQueue,
+      dismissNotification,
     }),
     [
       settings, saveSettings, appInfo, profiles, reloadProfiles, reorderProfiles, sessions, connect, disconnect, connecting,
@@ -452,6 +509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openConnectionManager, connectionManagerSelect, dirtyTabs, setTabDirty, closeTab, closeOtherTabs, shortcutsOpen, aboutOpen,
       connectionLog, closeConnectionLog, testConnection,
       jobs, refreshJobs, prompt, promptRequest, resolvePrompt,
+      updateStatus, updateDialogOpen, notificationQueue, dismissNotification,
     ],
   )
 

@@ -26,6 +26,40 @@ export interface Settings {
   schedulerEnabled: boolean
   /** Customized shortcuts: platform → action id → bindings (Preferences → Keymap). */
   keymap?: Partial<Record<'mac' | 'other', Record<string, string[]>>>
+
+  /** Platform check-in (the web admin platform this build was distributed from). */
+  autoUpdateEnabled: boolean
+  deviceFingerprint?: string
+  updateInstallationId?: string
+}
+
+export type UpdateState =
+  | 'idle'
+  | 'checking'
+  | 'up_to_date'
+  | 'update_available'
+  | 'downloading'
+  | 'ready_to_install'
+  | 'installing'
+  | 'error'
+
+export interface UpdateStatus {
+  connected: boolean
+  revoked: boolean
+  state: UpdateState
+  currentVersion: string
+  latestVersion?: string
+  releaseNotes?: string
+  downloadDone?: number
+  downloadTotal?: number
+  error?: string
+  lastCheckedAt?: string
+}
+
+export interface PlatformNotification {
+  id: string
+  title: string
+  body: string
 }
 
 export type ServerMode = 'uri' | 'manual'

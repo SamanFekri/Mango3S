@@ -14,7 +14,7 @@ export interface TabInit {
   /** Library tab: which section to show. */
   section?: 'saved' | 'history' | 'backups'
   /** Settings tab: section to scroll to. */
-  settingsSection?: 'keymap'
+  settingsSection?: 'keymap' | 'platform'
 }
 
 export interface Tab {

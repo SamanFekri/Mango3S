@@ -5,6 +5,7 @@ import {schema} from '../models';
 import {api} from '../models';
 import {scheduler} from '../models';
 import {config} from '../models';
+import {update} from '../models';
 import {codegen} from '../models';
 import {explorer} from '../models';
 import {mongox} from '../models';
@@ -29,11 +30,15 @@ import {aggregate} from '../models';
 import {transfer} from '../models';
 import {mcpserver} from '../models';
 
+export function AckNotification(arg1:string):Promise<void>;
+
 export function AnalyzeIndexes(arg1:string,arg2:string,arg3:string,arg4:manage.AdviceOptions):Promise<manage.Advice>;
 
 export function AnalyzeSchema(arg1:string,arg2:schema.Request):Promise<schema.Report>;
 
 export function ApplyConnectionImport(arg1:string,arg2:string,arg3:Array<api.ImportChoice>):Promise<api.ImportOutcome>;
+
+export function ApplyPendingUpdate():Promise<boolean>;
 
 export function ApproveTask(arg1:string):Promise<scheduler.Task>;
 
@@ -44,6 +49,8 @@ export function BuildConnectionString(arg1:config.ServerConfig):Promise<string>;
 export function CancelJob(arg1:string):Promise<boolean>;
 
 export function CancelOperation(arg1:string):Promise<boolean>;
+
+export function CheckForUpdatesNow():Promise<update.Status>;
 
 export function CheckValidator(arg1:string,arg2:string,arg3:string,arg4:string):Promise<manage.ValidationReport>;
 
@@ -133,6 +140,8 @@ export function ExportTasks(arg1:Array<string>):Promise<string>;
 
 export function ExportTextFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function FetchNotifications():Promise<Array<update.Notification>>;
+
 export function FormatDocument(arg1:string):Promise<string>;
 
 export function GenerateAI(arg1:string,arg2:ai.Request):Promise<ai.Proposal>;
@@ -160,6 +169,8 @@ export function GetSettings():Promise<config.Settings>;
 export function GetSyncOutcome(arg1:string):Promise<syncer.Outcome>;
 
 export function GetTransformReport(arg1:string):Promise<transform.Report>;
+
+export function GetUpdateStatus():Promise<update.Status>;
 
 export function GetValidation(arg1:string,arg2:string,arg3:string):Promise<manage.Validation>;
 
