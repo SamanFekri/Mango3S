@@ -171,7 +171,7 @@ describe('format', () => {
 import { buildQueryText } from './queryText'
 
 describe('buildQueryText', () => {
-  it('renders the Studio 3T-style statement', () => {
+  it('renders the query as one statement', () => {
     expect(buildQueryText('agent_definitions', { filter: '{}', projection: '', sort: '', skip: 0, limit: 0 })).toBe('db.getCollection("agent_definitions").find({})')
     expect(buildQueryText('o', { filter: '{ a: 1 }', projection: '{ b: 1 }', sort: '{ c: -1 }', skip: 5, limit: 10 })).toBe(
       'db.getCollection("o").find({ a: 1 }, { b: 1 })\n  .sort({ c: -1 })\n  .skip(5)\n  .limit(10)',

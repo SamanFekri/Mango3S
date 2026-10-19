@@ -31,8 +31,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
       <div className="shortcuts-head">
         <input autoFocus placeholder="Search shortcuts" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search shortcuts" />
         <span className="muted small">
-          {platform === 'mac' ? 'macOS bindings' : 'Windows / Linux bindings'}. <span className="source-badge studio3t">Studio 3T</span> matches Studio 3T’s
-          documented default; <span className="source-badge default">Mango3S</span> is a Mango3S default where Studio 3T has none (or it would clash).
+          {platform === 'mac' ? 'macOS' : 'Windows / Linux'} shortcuts. Change them in Settings → Keymap.
         </span>
       </div>
       <div className="shortcuts-grid">
@@ -51,9 +50,6 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
                       {s.id === 'cell.edit' ? <kbd>Double-click</kbd> : <kbd>{formatShortcut(s, platform)}</kbd>}
                     </td>
                     <td className="muted small">{SCOPE_LABEL[s.scope]}</td>
-                    <td>
-                      <span className={`source-badge ${s.source}`}>{s.source === 'studio3t' ? 'Studio 3T' : 'Mango3S'}</span>
-                    </td>
                   </tr>
                 ))}
               </tbody>

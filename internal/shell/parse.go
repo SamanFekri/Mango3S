@@ -1,4 +1,4 @@
-// Package shell implements a basic IntelliShell-style command runner. It is
+// Package shell implements a basic command runner. It is
 // NOT a JavaScript engine: it understands the mongosh command forms people use
 // day to day (show/use/help, db.<coll>.<method>(...) with cursor modifiers,
 // db.<method>(...)) with arguments in shell literal syntax.

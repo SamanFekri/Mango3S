@@ -34,8 +34,7 @@ beforeEach(() => {
   })
 })
 
-describe('Studio 3T document and field shortcuts', () => {
-  // https://studio3t.com/knowledge-base/3t-build/desktop-ide/hotkeys/ (Collection Tab › Documents / Fields)
+describe('document and field shortcuts', () => {
   const documented: [string, string, string][] = [
     ['doc.copy', 'Ctrl+Shift+C', 'Shift+Meta+C'],
     ['doc.view', 'F3', 'F3'],
@@ -60,7 +59,7 @@ describe('Studio 3T document and field shortcuts', () => {
   })
   it.each(documented)('%s is %s (Windows/Linux) and %s (macOS)', (id, other, mac) => {
     const def = SHORTCUT_BY_ID[id]
-    expect(def.source).toBe('studio3t')
+    expect(def.source).toBe('standard')
     expect(keysFor(def, 'other').map((k) => normalizeBinding(k, 'other'))).toEqual([other])
     expect(keysFor(def, 'mac').map((k) => normalizeBinding(k, 'mac'))).toEqual([mac])
   })

@@ -1,5 +1,5 @@
 // The collection tab's query editor shows the query as one mongosh
-// statement, as Studio 3T does: db.getCollection("orders").find({ … }).sort({ … })
+// statement: db.getCollection("orders").find({ … }).sort({ … })
 
 export interface QueryParts {
   filter: string

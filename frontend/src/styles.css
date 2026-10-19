@@ -2493,10 +2493,6 @@ kbd {
   padding: 1px 4px;
   white-space: nowrap;
 }
-.source-badge.studio3t {
-  color: var(--success);
-  background: var(--success-soft);
-}
 .source-badge.default {
   color: var(--text-muted);
   background: var(--surface-2);

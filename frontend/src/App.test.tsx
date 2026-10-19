@@ -260,7 +260,6 @@ describe('Welcome tab', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Keyboard shortcuts' })[0])
     const dialog = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })
     expect(within(dialog).getByText('Open the connection manager')).toBeInTheDocument()
-    expect(within(dialog).getAllByText('Studio 3T').length).toBeGreaterThan(5)
   })
 
   it('comes back first when reopened after closing', async () => {
@@ -286,7 +285,7 @@ describe('keyboard shortcuts', () => {
     expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
     key({ key: 'Escape' })
 
-    key({ key: 'p', code: 'KeyP', ctrlKey: true }) // settings (Studio 3T: Preferences)
+    key({ key: 'p', code: 'KeyP', ctrlKey: true }) // settings
     expect(await screen.findByRole('tab', { name: /Settings/ })).toHaveAttribute('aria-selected', 'true')
     key({ key: 'PageUp', ctrlKey: true })
     expect(screen.getByRole('tab', { name: /Welcome/ })).toHaveAttribute('aria-selected', 'true')
@@ -320,7 +319,7 @@ describe('keyboard shortcuts', () => {
     key({ key: 'ArrowDown' }, tree) // → shop
     key({ key: 'ArrowRight' }, tree) // expand shop
     await within(sidebar).findByText('orders')
-    expect(within(sidebar).getByText('Collections')).toBeInTheDocument() // grouped like Studio 3T
+    expect(within(sidebar).getByText('Collections')).toBeInTheDocument() // grouped into folders
     key({ key: 'ArrowDown' }, tree) // Collections folder
     key({ key: 'ArrowDown' }, tree) // orders
     key({ key: 'Enter' }, tree)
@@ -362,7 +361,7 @@ describe('connection manager', () => {
     const dlg = await screen.findByRole('dialog', { name: 'Connection Manager' })
     const tabs = within(within(dlg).getByRole('tablist', { name: 'Connection settings' })).getAllByRole('tab')
     expect(tabs.map((t) => t.textContent)).toEqual([
-      'Server', 'Authentication', 'SSL / TLS', 'SSH', 'Proxy', 'IntelliShell', 'MongoDB Tools', 'Advanced', 'Collection History',
+      'Server', 'Authentication', 'SSL / TLS', 'SSH', 'Proxy', 'Shell', 'MongoDB Tools', 'Advanced', 'Collection History',
     ])
     fireEvent.change(within(dlg).getByLabelText('Connection name'), { target: { value: 'Prod via bastion' } })
     fireEvent.change(within(dlg).getByLabelText('Host 1'), { target: { value: 'db.internal' } })

@@ -27,7 +27,7 @@ const STARTER = `// Cmd/Ctrl+Enter runs everything, or just the selected text.
 show collections
 `
 
-/** The block of non-blank lines around the cursor (Studio 3T's "statement at cursor"). */
+/** The block of non-blank lines around the cursor (the "statement at cursor"). */
 export function statementAt(text: string, pos: number): string {
   const lines = text.split('\n')
   let offset = 0
@@ -50,7 +50,7 @@ export function ShellView({ tab }: { tab: Tab }) {
   const { sessions, profiles, prompt, toast, toastError } = useApp()
   const connId = tab.connId!
   const session = sessions.find((s) => s.id === connId)
-  // IntelliShell settings from the connection (Connection Manager → IntelliShell).
+  // Shell settings from the connection (Connection Manager → Shell).
   const shellCfg = profiles.find((p) => p.id === connId)?.shell
   const [db, setDb] = useState(tab.db || shellCfg?.defaultDb || 'test')
   const initial = tab.init?.text ?? (shellCfg?.initScript && !shellCfg.runInitScript ? `${shellCfg.initScript.trim()}\n` : STARTER)

@@ -1,4 +1,4 @@
-// Context-aware completion for the IntelliShell editor. Pure functions so the
+// Context-aware completion for the shell editor. Pure functions so the
 // rules can be unit-tested without an editor.
 
 export interface ShellOption {

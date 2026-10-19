@@ -83,7 +83,7 @@ type ProxyConfig struct {
 	Username string `json:"username"`
 }
 
-// ShellConfig is the IntelliShell tab.
+// ShellConfig is the Shell tab.
 type ShellConfig struct {
 	DefaultDB     string `json:"defaultDb"`
 	InitScript    string `json:"initScript"`    // shell commands run when a shell tab opens

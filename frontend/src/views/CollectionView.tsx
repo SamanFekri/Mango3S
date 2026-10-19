@@ -58,7 +58,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
   const [cellDirty, setCellDirty] = useState<string | null>(null)
   const filterEditor = useRef<EditorView | null>(null)
   const queryEditor = useRef<EditorView | null>(null)
-  // Query editor (one mongosh statement, as in Studio 3T) or the separate fields.
+  // Query editor (one mongosh statement) or the separate fields.
   const [queryMode, setQueryModeState] = useState<'editor' | 'fields'>(() => {
     try {
       return localStorage.getItem('mango3s.queryMode') === 'fields' ? 'fields' : 'editor'

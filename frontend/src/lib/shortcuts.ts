@@ -29,8 +29,8 @@ export type ShortcutScope =
  */
 export type Handler = 'app' | 'component' | 'editor'
 
-/** studio3t: same as Studio 3T's documented default; default: chosen by Mango3S. */
-export type Source = 'studio3t' | 'default'
+/** standard: the conventional binding for this action in database IDEs; default: chosen for Mango3S. */
+export type Source = 'standard' | 'default'
 
 export interface ShortcutDef {
   id: string
@@ -70,62 +70,62 @@ const digits = (prefix: string) => Array.from({ length: 9 }, (_, i) => `${prefix
 
 export const SHORTCUTS: ShortcutDef[] = [
   // Connections
-  S('conn.manager', 'Open the connection manager', 'Connections', ['Mod+N'], 'global', 'studio3t', { allowInInputs: true }),
+  S('conn.manager', 'Open the connection manager', 'Connections', ['Mod+N'], 'global', 'standard', { allowInInputs: true }),
   S('conn.new', 'New connection', 'Connections', ['Mod+Alt+N'], 'global', 'default', { allowInInputs: true }),
-  S('conn.quick', 'Connect to recent connection 1–9', 'Connections', digits('Alt+'), 'global', 'studio3t', {
+  S('conn.quick', 'Connect to recent connection 1–9', 'Connections', digits('Alt+'), 'global', 'standard', {
     note: 'In the order shown under Recent connections on the Welcome tab.',
   }),
-  S('conn.disconnect', 'Disconnect the current connection', 'Connections', { mac: ['Ctrl+Alt+D'], other: ['Ctrl+Alt+D'] }, 'global', 'studio3t', {
+  S('conn.disconnect', 'Disconnect the current connection', 'Connections', { mac: ['Ctrl+Alt+D'], other: ['Ctrl+Alt+D'] }, 'global', 'standard', {
     allowInInputs: true,
   }),
 
   // Tabs
-  S('tab.close', 'Close tab', 'Tabs', { mac: ['Mod+W'], other: ['Ctrl+W', 'Ctrl+F4'] }, 'global', 'studio3t', { allowInInputs: true }),
-  S('tab.closeNoPrompt', 'Close tab without asking (discards unsaved changes)', 'Tabs', { mac: ['Mod+Shift+W'], other: ['Ctrl+Shift+F4'] }, 'global', 'studio3t', {
+  S('tab.close', 'Close tab', 'Tabs', { mac: ['Mod+W'], other: ['Ctrl+W', 'Ctrl+F4'] }, 'global', 'standard', { allowInInputs: true }),
+  S('tab.closeNoPrompt', 'Close tab without asking (discards unsaved changes)', 'Tabs', { mac: ['Mod+Shift+W'], other: ['Ctrl+Shift+F4'] }, 'global', 'standard', {
     allowInInputs: true,
   }),
-  S('tab.next', 'Next tab', 'Tabs', ['Ctrl+PageDown', 'Ctrl+Tab'], 'global', 'studio3t', { allowInInputs: true }),
-  S('tab.prev', 'Previous tab', 'Tabs', ['Ctrl+PageUp', 'Ctrl+Shift+Tab'], 'global', 'studio3t', { allowInInputs: true }),
+  S('tab.next', 'Next tab', 'Tabs', ['Ctrl+PageDown', 'Ctrl+Tab'], 'global', 'standard', { allowInInputs: true }),
+  S('tab.prev', 'Previous tab', 'Tabs', ['Ctrl+PageUp', 'Ctrl+Shift+Tab'], 'global', 'standard', { allowInInputs: true }),
   S('tab.goto', 'Go to tab 1–9', 'Tabs', digits('Mod+'), 'global', 'default', { allowInInputs: true }),
   S('tab.welcome', 'Open the Welcome tab', 'Tabs', ['Shift+F1'], 'global', 'default', { allowInInputs: true }),
-  S('tab.shell', 'Open IntelliShell for this connection', 'Tabs', ['Mod+L'], 'global', 'studio3t', { allowInInputs: true }),
-  S('tab.sql', 'Open SQL query', 'Tabs', ['Mod+Shift+L'], 'global', 'studio3t', { allowInInputs: true }),
-  S('tab.aggregate', 'Open the aggregation editor for this collection', 'Tabs', ['F4'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('app.settings', 'Open settings', 'Tabs', { mac: ['Mod+P', 'Mod+Comma'], other: ['Ctrl+P'] }, 'global', 'studio3t', { allowInInputs: true }),
+  S('tab.shell', 'Open the shell for this connection', 'Tabs', ['Mod+L'], 'global', 'standard', { allowInInputs: true }),
+  S('tab.sql', 'Open SQL query', 'Tabs', ['Mod+Shift+L'], 'global', 'standard', { allowInInputs: true }),
+  S('tab.aggregate', 'Open the aggregation editor for this collection', 'Tabs', ['F4'], 'tab', 'standard', { allowInInputs: true }),
+  S('app.settings', 'Open settings', 'Tabs', { mac: ['Mod+P', 'Mod+Comma'], other: ['Ctrl+P'] }, 'global', 'standard', { allowInInputs: true }),
   S('app.library', 'Open query history', 'Tabs', ['Mod+Shift+H'], 'global', 'default', { allowInInputs: true }),
 
   // Help
   S('help.shortcuts', 'Show keyboard shortcuts', 'Help', ['F1', 'Mod+Shift+Slash'], 'global', 'default', { allowInInputs: true }),
 
   // Queries and scripts (active tab)
-  S('query.run', 'Run the query, pipeline, script or SQL', 'Queries', ['Mod+Enter', 'F5'], 'tab', 'studio3t', {
+  S('query.run', 'Run the query, pipeline, script or SQL', 'Queries', ['Mod+Enter', 'F5'], 'tab', 'standard', {
     allowInInputs: true,
-    note: 'F5 is Studio 3T’s “Execute”; Mod+Enter also works inside every editor.',
+    note: 'Mod+Enter also works inside every editor.',
   }),
-  S('query.runSelection', 'Run the selected text (shell)', 'Queries', ['F9', 'Mod+Shift+Enter'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('query.runStatement', 'Run the statement at the cursor (shell)', 'Queries', ['F6'], 'tab', 'studio3t', {
+  S('query.runSelection', 'Run the selected text (shell)', 'Queries', ['F9', 'Mod+Shift+Enter'], 'tab', 'standard', { allowInInputs: true }),
+  S('query.runStatement', 'Run the statement at the cursor (shell)', 'Queries', ['F6'], 'tab', 'standard', {
     allowInInputs: true,
     note: 'A statement is the block of lines around the cursor, up to blank lines.',
   }),
-  S('query.format', 'Format the query or pipeline', 'Queries', { mac: ['Mod+Alt+L'], other: ['Ctrl+Alt+L', 'Alt+L'] }, 'tab', 'studio3t', {
+  S('query.format', 'Format the query or pipeline', 'Queries', { mac: ['Mod+Alt+L'], other: ['Ctrl+Alt+L', 'Alt+L'] }, 'tab', 'standard', {
     allowInInputs: true,
     note: 'Collection (filter, projection, sort) and aggregation tabs.',
   }),
-  S('query.save', 'Save to the library', 'Queries', ['Mod+S'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('query.saveAs', 'Save as a new library item', 'Queries', ['Mod+Shift+S'], 'tab', 'studio3t', { allowInInputs: true }),
+  S('query.save', 'Save to the library', 'Queries', ['Mod+S'], 'tab', 'standard', { allowInInputs: true }),
+  S('query.saveAs', 'Save as a new library item', 'Queries', ['Mod+Shift+S'], 'tab', 'standard', { allowInInputs: true }),
   S('op.cancel', 'Cancel the running operation', 'Queries', ['Mod+Period'], 'tab', 'default', { allowInInputs: true }),
-  S('view.refresh', 'Refresh results (or the selected explorer item)', 'Queries', ['Mod+R'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('query.builder', 'Show or hide the visual query builder', 'Queries', ['Mod+B'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('query.code', 'Query code', 'Queries', ['Mod+G'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('query.explain', 'Explain', 'Queries', ['F8'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('agg.addStage', 'Add a pipeline stage', 'Queries', ['Mod+Shift+N'], 'tab', 'studio3t', { allowInInputs: true }),
+  S('view.refresh', 'Refresh results (or the selected explorer item)', 'Queries', ['Mod+R'], 'tab', 'standard', { allowInInputs: true }),
+  S('query.builder', 'Show or hide the visual query builder', 'Queries', ['Mod+B'], 'tab', 'standard', { allowInInputs: true }),
+  S('query.code', 'Query code', 'Queries', ['Mod+G'], 'tab', 'standard', { allowInInputs: true }),
+  S('query.explain', 'Explain', 'Queries', ['F8'], 'tab', 'standard', { allowInInputs: true }),
+  S('agg.addStage', 'Add a pipeline stage', 'Queries', ['Mod+Shift+N'], 'tab', 'standard', { allowInInputs: true }),
 
   // Results
-  S('results.tree', 'Tree view', 'Results', ['Mod+Alt+1'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('results.table', 'Table view', 'Results', ['Mod+Alt+2'], 'tab', 'studio3t', { allowInInputs: true }),
-  S('results.json', 'JSON view', 'Results', ['Mod+Alt+3'], 'tab', 'studio3t', { allowInInputs: true }),
+  S('results.tree', 'Tree view', 'Results', ['Mod+Alt+1'], 'tab', 'standard', { allowInInputs: true }),
+  S('results.table', 'Table view', 'Results', ['Mod+Alt+2'], 'tab', 'standard', { allowInInputs: true }),
+  S('results.json', 'JSON view', 'Results', ['Mod+Alt+3'], 'tab', 'standard', { allowInInputs: true }),
   S('cell.move', 'Select the next / previous cell', 'Results', ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'], 'results', 'default', { handler: 'component' }),
-  S('cell.edit', 'Edit the field with the mouse', 'Results', [], 'results', 'studio3t', {
+  S('cell.edit', 'Edit the field with the mouse', 'Results', [], 'results', 'standard', {
     handler: 'component',
     note: 'Double-click — a single click only selects. In the table and tree views.',
   }),
@@ -137,15 +137,15 @@ export const SHORTCUTS: ShortcutDef[] = [
   S('edit.undo', 'Undo the last field edit', 'Results', ['Mod+Z'], 'results', 'default'),
   S('edit.redo', 'Redo the field edit', 'Results', { mac: ['Mod+Shift+Z'], other: ['Ctrl+Y', 'Ctrl+Shift+Z'] }, 'results', 'default'),
 
-  // Documents (Studio 3T: Collection Tab › Documents). On macOS Studio 3T's
-  // "Fn+Del" is the forward-delete key, which browsers report as Delete.
-  S('doc.copy', 'Copy document', 'Documents', ['Mod+Shift+C'], 'results', 'studio3t'),
-  S('doc.view', 'View document (JSON)', 'Documents', ['F3'], 'results', 'studio3t'),
-  S('doc.insert', 'Insert document', 'Documents', ['Mod+D'], 'tab', 'studio3t', { note: 'Not while typing in an editor (Mod+D selects the next match there).' }),
-  S('doc.editJson', 'Edit document (JSON)', 'Documents', ['Mod+J'], 'results', 'studio3t'),
-  S('doc.delete', 'Remove document (asks first)', 'Documents', ['Shift+Delete'], 'results', 'studio3t', { note: 'macOS: Shift+Fn+Delete.' }),
-  S('doc.refresh', 'Refresh document', 'Documents', ['Mod+Shift+R'], 'results', 'studio3t'),
-  S('doc.followRef', 'Follow reference', 'Documents', ['Shift+F7'], 'results', 'studio3t', {
+  // Documents. On macOS "Fn+Delete" is the forward-delete key, which
+  // browsers report as Delete.
+  S('doc.copy', 'Copy document', 'Documents', ['Mod+Shift+C'], 'results', 'standard'),
+  S('doc.view', 'View document (JSON)', 'Documents', ['F3'], 'results', 'standard'),
+  S('doc.insert', 'Insert document', 'Documents', ['Mod+D'], 'tab', 'standard', { note: 'Not while typing in an editor (Mod+D selects the next match there).' }),
+  S('doc.editJson', 'Edit document (JSON)', 'Documents', ['Mod+J'], 'results', 'standard'),
+  S('doc.delete', 'Remove document (asks first)', 'Documents', ['Shift+Delete'], 'results', 'standard', { note: 'macOS: Shift+Fn+Delete.' }),
+  S('doc.refresh', 'Refresh document', 'Documents', ['Mod+Shift+R'], 'results', 'standard'),
+  S('doc.followRef', 'Follow reference', 'Documents', ['Shift+F7'], 'results', 'standard', {
     note: 'Opens the document a DBRef points to; for other values, asks which collection to look in.',
   }),
   S('docs.paste', 'Paste documents', 'Documents', ['Mod+V'], 'results', 'default', {
@@ -153,21 +153,21 @@ export const SHORTCUTS: ShortcutDef[] = [
     note: 'Opens Insert document with the clipboard’s JSON.',
   }),
 
-  // Fields (Studio 3T: Collection Tab › Fields)
-  S('cell.copy', 'Copy value as text', 'Fields', ['Mod+C'], 'results', 'studio3t'),
-  S('cell.copyValue', 'Copy value (exact shell syntax)', 'Fields', ['Alt+Shift+C'], 'results', 'studio3t'),
-  S('field.add', 'Add field / value', 'Fields', ['Mod+K'], 'results', 'studio3t', { note: 'Adds a field to the selected document, or a value to the selected array.' }),
-  S('field.edit', 'Edit field', 'Fields', ['Mod+E'], 'results', 'studio3t', { note: 'Keyboard alternative to double-clicking the value.' }),
-  S('field.rename', 'Rename field', 'Fields', ['Shift+F2'], 'results', 'studio3t'),
-  S('field.remove', 'Remove field (asks first)', 'Fields', ['Delete'], 'results', 'studio3t', { note: 'macOS: Fn+Delete.' }),
-  S('dialog.update', 'Update dialog (updateMany)', 'Fields', ['Mod+U'], 'results', 'studio3t'),
-  S('dialog.remove', 'Remove dialog (deleteMany)', 'Fields', ['F8'], 'results', 'studio3t'),
+  // Fields
+  S('cell.copy', 'Copy value as text', 'Fields', ['Mod+C'], 'results', 'standard'),
+  S('cell.copyValue', 'Copy value (exact shell syntax)', 'Fields', ['Alt+Shift+C'], 'results', 'standard'),
+  S('field.add', 'Add field / value', 'Fields', ['Mod+K'], 'results', 'standard', { note: 'Adds a field to the selected document, or a value to the selected array.' }),
+  S('field.edit', 'Edit field', 'Fields', ['Mod+E'], 'results', 'standard', { note: 'Keyboard alternative to double-clicking the value.' }),
+  S('field.rename', 'Rename field', 'Fields', ['Shift+F2'], 'results', 'standard'),
+  S('field.remove', 'Remove field (asks first)', 'Fields', ['Delete'], 'results', 'standard', { note: 'macOS: Fn+Delete.' }),
+  S('dialog.update', 'Update dialog (updateMany)', 'Fields', ['Mod+U'], 'results', 'standard'),
+  S('dialog.remove', 'Remove dialog (deleteMany)', 'Fields', ['F8'], 'results', 'standard'),
 
   // Explorer
   S('explorer.move', 'Move between items', 'Explorer', ['ArrowUp', 'ArrowDown', 'Home', 'End'], 'explorer', 'default', { handler: 'component' }),
-  S('explorer.expand', 'Expand / collapse', 'Explorer', ['ArrowRight', 'ArrowLeft'], 'explorer', 'studio3t', { handler: 'component' }),
-  S('explorer.open', 'Open the collection / connect', 'Explorer', ['Enter'], 'explorer', 'studio3t', { handler: 'component' }),
-  S('explorer.drop', 'Drop the selected collection or database (asks first)', 'Explorer', ['Delete'], 'explorer', 'studio3t', {
+  S('explorer.expand', 'Expand / collapse', 'Explorer', ['ArrowRight', 'ArrowLeft'], 'explorer', 'standard', { handler: 'component' }),
+  S('explorer.open', 'Open the collection / connect', 'Explorer', ['Enter'], 'explorer', 'standard', { handler: 'component' }),
+  S('explorer.drop', 'Drop the selected collection or database (asks first)', 'Explorer', ['Delete'], 'explorer', 'standard', {
     handler: 'component',
     note: 'macOS: Fn+Delete.',
   }),
@@ -175,7 +175,7 @@ export const SHORTCUTS: ShortcutDef[] = [
     handler: 'component',
     note: 'Or drag it.',
   }),
-  S('explorer.refreshAll', 'Refresh all connections', 'Explorer', ['Mod+Shift+R'], 'explorer', 'studio3t'),
+  S('explorer.refreshAll', 'Refresh all connections', 'Explorer', ['Mod+Shift+R'], 'explorer', 'standard'),
   S('explorer.filter', 'Filter collections', 'Explorer', ['Mod+Shift+F'], 'global', 'default', { allowInInputs: true }),
 
   // Focus
@@ -184,12 +184,12 @@ export const SHORTCUTS: ShortcutDef[] = [
   S('focus.results', 'Focus the results', 'Focus', ['Ctrl+Shift+3'], 'global', 'default', { allowInInputs: true }),
 
   // Text editing (inside editors and text fields)
-  S('text.undo', 'Undo / redo typing', 'Text editing', { mac: ['Mod+Z', 'Mod+Shift+Z'], other: ['Ctrl+Z', 'Ctrl+Y'] }, 'editor', 'studio3t', { handler: 'editor' }),
-  S('text.clipboard', 'Cut / copy / paste', 'Text editing', ['Mod+X', 'Mod+C', 'Mod+V'], 'editor', 'studio3t', { handler: 'editor' }),
+  S('text.undo', 'Undo / redo typing', 'Text editing', { mac: ['Mod+Z', 'Mod+Shift+Z'], other: ['Ctrl+Z', 'Ctrl+Y'] }, 'editor', 'standard', { handler: 'editor' }),
+  S('text.clipboard', 'Cut / copy / paste', 'Text editing', ['Mod+X', 'Mod+C', 'Mod+V'], 'editor', 'standard', { handler: 'editor' }),
   S('text.selectAll', 'Select all', 'Text editing', ['Mod+A'], 'editor', 'default', { handler: 'editor' }),
-  S('text.find', 'Find in the editor', 'Text editing', ['Mod+F'], 'editor', 'studio3t', { handler: 'editor', note: 'Script, pipeline and SQL editors.' }),
-  S('text.comment', 'Toggle line comment', 'Text editing', ['Mod+Slash'], 'editor', 'studio3t', { handler: 'editor' }),
-  S('text.complete', 'Autocomplete', 'Text editing', ['Ctrl+Space'], 'editor', 'studio3t', { handler: 'editor' }),
+  S('text.find', 'Find in the editor', 'Text editing', ['Mod+F'], 'editor', 'standard', { handler: 'editor', note: 'Script, pipeline and SQL editors.' }),
+  S('text.comment', 'Toggle line comment', 'Text editing', ['Mod+Slash'], 'editor', 'standard', { handler: 'editor' }),
+  S('text.complete', 'Autocomplete', 'Text editing', ['Ctrl+Space'], 'editor', 'standard', { handler: 'editor' }),
   S('shell.history', 'Previous / next script from history (shell)', 'Text editing', ['Alt+ArrowUp', 'Alt+ArrowDown'], 'editor', 'default', { handler: 'component' }),
 ]
 

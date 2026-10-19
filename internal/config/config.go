@@ -159,7 +159,7 @@ func (s Settings) Normalize() Settings {
 	return s
 }
 
-// MaxBindings is how many shortcuts one action can have (as in Studio 3T).
+// MaxBindings is how many shortcuts one action can have.
 const MaxBindings = 3
 
 func normalizeKeymap(k map[string]map[string][]string) map[string]map[string][]string {
@@ -211,10 +211,10 @@ type Profile struct {
 
 	// Connection manager tabs (see profile.go). Zero values keep the
 	// behavior of profiles saved before these existed.
-	Folder          string         `json:"folder,omitempty"`
+	Folder string `json:"folder,omitempty"`
 	// Position is the user's order (drag to reorder); 0 = not placed yet,
 	// listed after placed profiles, by name.
-	Position int `json:"position,omitempty"`
+	Position        int            `json:"position,omitempty"`
 	Server          ServerConfig   `json:"server"`
 	AuthProperties  string         `json:"authProperties,omitempty"` // authMechanismProperties, e.g. ENVIRONMENT:azure
 	TLS             TLSConfig      `json:"tls"`

@@ -50,7 +50,7 @@ type FieldUpdate struct {
 	Expected        string `json:"expected"`
 	ExpectedMissing bool   `json:"expectedMissing"`
 	Unset           bool   `json:"unset"`
-	// RenameTo renames the field (Studio 3T "Rename field") with $rename;
+	// RenameTo renames the field ("Rename field") with $rename;
 	// fields inside arrays can't be renamed this way.
 	RenameTo string `json:"renameTo,omitempty"`
 	// Append adds the value to the end of the array at Path ($push);

@@ -7,7 +7,7 @@ import { ErrorBanner, Modal, Spinner } from './common'
 import { ConfirmInput } from './p2common'
 
 /**
- * Studio 3T's Update dialog (Ctrl+U, updateMany) and Remove dialog (F8,
+ * The Update dialog (Ctrl+U, updateMany) and Remove dialog (F8,
  * deleteMany). Preview first; running needs the target typed and stops if
  * the number of matching documents changed. Everything touched is backed up.
  */

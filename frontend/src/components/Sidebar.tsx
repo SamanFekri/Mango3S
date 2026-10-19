@@ -29,7 +29,7 @@ interface MenuState {
 type Loadable<T> = { loading: boolean; error?: string; data?: T }
 
 type GroupKind = 'collections' | 'views' | 'system'
-/** Folders under each database, as in Studio 3T. */
+/** Folders under each database. */
 const GROUPS: { kind: GroupKind; label: string; match: (c: CollectionInfo) => boolean }[] = [
   { kind: 'collections', label: 'Collections', match: (c) => !c.system && c.type !== 'view' },
   { kind: 'views', label: 'Views', match: (c) => !c.system && c.type === 'view' },
@@ -217,7 +217,7 @@ export function Sidebar() {
   const connMenu = (s: SessionInfo): MenuItem[] => [
     { label: 'Open workspace', action: () => dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: s.id, connName: s.name } }) },
     { label: 'Refresh', action: () => loadDbs(s.id), shortcut: 'view.refresh' },
-    { label: 'Open IntelliShell', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name } }), shortcut: 'tab.shell' },
+    { label: 'Open shell', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name } }), shortcut: 'tab.shell' },
     { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }), shortcut: 'tab.sql' },
     { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
     { label: 'Migrate from SQL…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: '' } }), disabled: s.readOnly },
@@ -288,7 +288,7 @@ export function Sidebar() {
   }
 
   function isGroupOpen(gk: string, kind: GroupKind) {
-    // Collections start open; Views and System start closed (as in Studio 3T).
+    // Collections start open; Views and System start closed.
     return kind === 'collections' ? !closedGroups.has(gk) : expanded.has(gk)
   }
   const toggleGroup = (gk: string, kind: GroupKind, open?: boolean) => {
@@ -397,7 +397,7 @@ export function Sidebar() {
         e.preventDefault()
         activate(cur)
         break
-      case 'Delete': // Studio 3T: Del (macOS: Fn+Delete)
+      case 'Delete': // Del (macOS: Fn+Delete)
         if (!cur || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
         e.preventDefault()
         if (cur.kind === 'coll' && !cur.s.readOnly) void dropColl(cur.s, cur.db, cur.coll.name)

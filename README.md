@@ -1,9 +1,7 @@
 # Mango3S
 
-A desktop IDE for MongoDB, built with Go, [Wails](https://wails.io) and React. The core workflow
-(connection manager, explorer, query editor, visual query builder, aggregation editor and
-command shell) is inspired by Studio 3T. Mango3S is an independent, original implementation and
-shares no code, branding or assets with that product.
+A desktop IDE for MongoDB, built with Go, [Wails](https://wails.io) and React: connection
+manager, explorer, query editor, visual query builder, aggregation editor and command shell.
 
 This release covers **P0** (browsing data, querying, editing documents, running pipelines and
 shell commands) and **P1**: import/export, schema analysis, SQL, code generation, explain plans,
@@ -19,15 +17,15 @@ security model, scheduler policies, MCP setup and unsupported capabilities.
 
 | Area | What you get |
 |---|---|
-| **Shell** | Desktop window with explorer sidebar, draggable tabs (state kept when you switch tabs), status bar, light/dark/system theme, settings page. A **Welcome** tab opens first; each connection gets its own **workspace tab**; closing a tab (or quitting) with unsaved work asks first |
-| **Connections** | Studio 3T-style Connection Manager with nine tabs: Server (standalone / replica set / sharded / SRV, or a connection string), Authentication (SCRAM, X.509, LDAP, AWS IAM, OIDC workload identity), SSL / TLS (CA and client certificates, validated up front), **SSH tunnel** (password, key, agent; host-key pinning), **Proxy** (SOCKS5, HTTP CONNECT), IntelliShell (default database, init commands), MongoDB Tools (detects mongosh and the Database Tools), Advanced (timeouts, read preference, write concern, pool, compression) and Collection History. Folders, duplicate, delete; every secret in the OS credential store. See [docs/UI.md](docs/UI.md) |
-| **Explorer** | Connections → databases → **Collections / Views / System** folders (system.* collections are listed, as in Studio 3T), with distinct icons, keyboard navigation (arrows, Enter, Delete), filter and context menus |
-| **Keyboard** | Central shortcut manager with a searchable reference (Help → Keyboard Shortcuts, F1). Bindings follow Studio 3T's documented defaults where they exist and are labeled; platform-specific on macOS vs Windows/Linux |
+| **App window** | Desktop window with explorer sidebar, draggable tabs (state kept when you switch tabs), status bar, light/dark/system theme, settings page. A **Welcome** tab opens first; each connection gets its own **workspace tab**; closing a tab (or quitting) with unsaved work asks first |
+| **Connections** | Connection Manager with nine tabs: Server (standalone / replica set / sharded / SRV, or a connection string), Authentication (SCRAM, X.509, LDAP, AWS IAM, OIDC workload identity), SSL / TLS (CA and client certificates, validated up front), **SSH tunnel** (password, key, agent; host-key pinning), **Proxy** (SOCKS5, HTTP CONNECT), Shell (default database, init commands), MongoDB Tools (detects mongosh and the Database Tools), Advanced (timeouts, read preference, write concern, pool, compression) and Collection History. Folders, duplicate, delete; every secret in the OS credential store. See [docs/UI.md](docs/UI.md) |
+| **Explorer** | Connections → databases → **Collections / Views / System** folders (system.* collections are listed too), with distinct icons, keyboard navigation (arrows, Enter, Delete), filter and context menus |
+| **Keyboard** | Central shortcut manager with a searchable reference (Help → Keyboard Shortcuts, F1). Conventional database-IDE bindings; platform-specific on macOS vs Windows/Linux |
 | **Documents** | **Tree** (default), Table and JSON views with exact BSON types. **Double-click a value to edit just that field** (`$set` / `$unset` on its path, type kept, concurrent changes detected; Enter saves, Esc cancels, Tab moves); undo/redo of field edits; "Edit document (JSON)" for whole documents. Insert one document or an array; delete one or many, with confirmation |
 | **Query editor** | Filter, projection, sort, skip and limit in mongosh syntax. Autocomplete for operators and sampled field names. Server-side paging, on-demand count, cancel, "Copy as shell" |
 | **Visual query builder** | Conditions with AND/OR, 11 operators, typed values (auto, string, number, boolean, null, ObjectId, date), sort and projection. Writes into the query editor |
 | **Aggregation editor** | Stages built from 19 operator templates. Edit, enable/disable, reorder, duplicate and delete stages; preview the output of any stage; run the full pipeline with paging and `allowDiskUse`; edit the whole pipeline as text |
-| **Shell (IntelliShell-style)** | `show dbs/collections`, `use`, `db.<coll>.<method>(…)` with cursor modifiers, `db.runCommand`, … Run all or just the selection, with per-statement output |
+| **Shell** | `show dbs/collections`, `use`, `db.<coll>.<method>(…)` with cursor modifiers, `db.runCommand`, … Run all or just the selection, with per-statement output |
 | **Robustness** | Typed errors with friendly messages, per-operation timeout and cancel, cursors always closed, credentials redacted from logs, loading states everywhere |
 | **Import wizard** *(P1)* | JSON array, NDJSON/mongoexport and CSV/TSV. Preview the first 20 documents; per-column CSV types (auto, string, int, long, double, decimal, bool, date, ObjectId, JSON) or skip; insert or upsert by `_id`; optional drop-first and stop-on-error; batched writes |
 | **Export wizard** *(P1)* | Filter, sort, skip and limit; pick fields from a sampled list; JSON array or NDJSON, canonical or relaxed Extended JSON, pretty-print; CSV with delimiter and header options. Written to a temp file and renamed on success, so failed or canceled exports leave nothing behind |
@@ -37,7 +35,7 @@ security model, scheduler policies, MCP setup and unsupported capabilities.
 | **Query → code** *(P1)* | Generates runnable code for mongosh, Node.js, Python (PyMongo), Java (sync driver), C# (.NET driver) and Go (driver v2) from a query, pipeline or SQL, with each driver's native BSON types |
 | **Explain plans** *(P1)* | Runs `explain` with `executionStats` (pipelines with `$out`/`$merge` are only planned). Shows summary metrics, a stage tree with per-stage stats, aggregation stages, and diagnostics such as collection scans, in-memory sorts, low selectivity, unanchored regexes and covered queries, with ESR index suggestions |
 | **Library & history** *(P1)* | Save queries, pipelines, shell scripts and SQL by name; rename, delete and reopen them in the right tab. Every run is recorded in a searchable history (500 entries) with duration and errors. Both persist across restarts |
-| **IntelliShell assist** *(P1)* | Context-aware completion: collections after `db.`, collection methods with signatures, cursor methods after `).`, `show` targets, operators, BSON helpers, and the referenced collection's field names. Alt+↑/↓ recalls history; a side panel lists past scripts; scripts can be saved |
+| **Shell assist** *(P1)* | Context-aware completion: collections after `db.`, collection methods with signatures, cursor methods after `).`, `show` targets, operators, BSON helpers, and the referenced collection's field names. Alt+↑/↓ recalls history; a side panel lists past scripts; scripts can be saved |
 | **Compare & sync** *(P2)* | Compare collections or whole databases across connections. Optional filter and ignored fields; field-level diffs; repeatable fingerprint. Sync previews inserts, replacements and deletes. Applying needs explicit confirmation, skips documents that changed since the preview, backs up before-images, and verifies the result |
 | **SQL migration** *(P2)* | PostgreSQL, MySQL/MariaDB and SQLite with a `SELECT`-only user. Table → collection mapping with type suggestions, primary key or ObjectId `_id`, and child rows embedded as arrays. Runs in a consistent read-only snapshot, then checks counts and sampled rows. Every run can be rolled back |
 | **Reschema** *(P2)* | Rename, remove, set, copy, convert type, flatten and nest fields. Dry-run with before/after samples, then copy to a new collection or apply in place (backed up, confirmed), then validate |

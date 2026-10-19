@@ -82,8 +82,8 @@ export function ConnectionView({ tab }: { tab: Tab }) {
           {session.readOnly && <span className="badge">read-only</span>}
         </div>
         <span className="spacer" />
-        <button className="small ghost" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId, connName: session.name } })} title={`IntelliShell (${shortcutHint('tab.shell')})`}>
-          IntelliShell
+        <button className="small ghost" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId, connName: session.name } })} title={`Shell (${shortcutHint('tab.shell')})`}>
+          Shell
         </button>
         <button className="small ghost" onClick={() => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId, connName: session.name, db: 'test' } })} title={`SQL (${shortcutHint('tab.sql')})`}>
           SQL

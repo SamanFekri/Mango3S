@@ -38,11 +38,11 @@ func ParseQuery(script, db string) (QuerySpec, error) {
 		return QuerySpec{}, apperr.Invalid(`Enter a query, e.g. db.getCollection("orders").find({}).`)
 	}
 	if len(stmts) > 1 {
-		return QuerySpec{}, apperr.Invalid("Enter one query at a time here; use IntelliShell to run scripts.")
+		return QuerySpec{}, apperr.Invalid("Enter one query at a time here; use the Shell tab to run scripts.")
 	}
 	st := stmts[0]
 	if st.kind != "db" {
-		return QuerySpec{}, apperr.Invalid("Only find() and aggregate() queries run here; use IntelliShell for %q.", st.text)
+		return QuerySpec{}, apperr.Invalid("Only find() and aggregate() queries run here; use the Shell tab for %q.", st.text)
 	}
 	segs := st.segs
 	for len(segs) > 0 && segs[0].call && segs[0].name == "getSiblingDB" {
@@ -113,7 +113,7 @@ func ParseQuery(script, db string) (QuerySpec, error) {
 			case "pretty", "toArray", "batchSize", "maxTimeMS", "allowDiskUse", "noCursorTimeout", "comment", "hint":
 				// Accepted for copy-paste compatibility; results are always paged.
 			case "count", "size", "itcount", "explain":
-				return QuerySpec{}, apperr.Invalid(".%s() isn't a query to page through: use Count or Explain in this tab, or IntelliShell.", s.name)
+				return QuerySpec{}, apperr.Invalid(".%s() isn't a query to page through: use Count or Explain in this tab, or the Shell tab.", s.name)
 			default:
 				return QuerySpec{}, apperr.New(apperr.CodeUnsupported, "Cursor method .%s() is not supported.", s.name)
 			}
@@ -139,7 +139,7 @@ func ParseQuery(script, db string) (QuerySpec, error) {
 			return QuerySpec{}, apperr.Invalid("Add stages such as $sort and $limit inside the pipeline instead of .%s().", chain[0].name)
 		}
 	default:
-		return QuerySpec{}, apperr.Invalid("Only find() and aggregate() run in the collection tab; use IntelliShell for %s().", m.name)
+		return QuerySpec{}, apperr.Invalid("Only find() and aggregate() run in the collection tab; use the Shell tab for %s().", m.name)
 	}
 	return spec, nil
 }

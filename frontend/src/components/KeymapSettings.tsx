@@ -18,7 +18,7 @@ import type { Settings } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { getShortcutPlatform } from '../state/shortcuts'
 
-const MAX = 3 // shortcuts per action, as in Studio 3T
+const MAX = 3 // shortcuts per action
 const TEXT_EDITING = ['Mod+C', 'Mod+V', 'Mod+X', 'Mod+Z', 'Mod+A', 'Mod+Y', 'Mod+Shift+Z']
 
 type Keymap = NonNullable<Settings['keymap']>
@@ -118,7 +118,7 @@ export function KeymapSettings() {
     <section className="settings-group keymap">
       <h2>Keymap</h2>
       <p className="muted small">
-        {platform === 'mac' ? 'macOS' : 'Windows / Linux'} shortcuts. Defaults follow Studio 3T’s documented keymap where it has one. Each action can have up to {MAX}{' '}
+        {platform === 'mac' ? 'macOS' : 'Windows / Linux'} shortcuts. Each action can have up to {MAX}{' '}
         shortcuts. Changes apply immediately.
       </p>
       <div className="keymap-toolbar">
@@ -207,9 +207,6 @@ export function KeymapSettings() {
                           Reset
                         </button>
                       )}
-                    </td>
-                    <td>
-                      <span className={`source-badge ${s.source}`}>{s.source === 'studio3t' ? 'Studio 3T' : 'Mango3S'}</span>
                     </td>
                   </tr>
                 )

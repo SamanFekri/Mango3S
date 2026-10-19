@@ -14,7 +14,7 @@ export const CONNECTION_TABS = [
   { id: 'tls', label: 'SSL / TLS' },
   { id: 'ssh', label: 'SSH' },
   { id: 'proxy', label: 'Proxy' },
-  { id: 'shell', label: 'IntelliShell' },
+  { id: 'shell', label: 'Shell' },
   { id: 'tools', label: 'MongoDB Tools' },
   { id: 'advanced', label: 'Advanced' },
   { id: 'history', label: 'Collection History' },

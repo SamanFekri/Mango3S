@@ -36,7 +36,7 @@ func TestParseQueryForms(t *testing.T) {
 func TestParseQueryRejectsWithGuidance(t *testing.T) {
 	cases := map[string]string{
 		``:                                  "Enter a query",
-		`show dbs`:                          "IntelliShell",
+		`show dbs`:                          "Shell",
 		`db.orders.find(); db.x.find()`:     "one query at a time",
 		`db.orders.deleteMany({})`:          "Only find() and aggregate()",
 		`db.orders.find().count()`:          "Count or Explain",

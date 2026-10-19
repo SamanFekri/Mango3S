@@ -63,7 +63,7 @@ beforeEach(() => {
 })
 
 describe('document and field context menu', () => {
-  it('lists the Studio 3T actions with their shortcuts', () => {
+  it('lists the document and field actions with their shortcuts', () => {
     render(<Harness fieldApi={api()} onEdit={vi.fn()} onDelete={vi.fn()} onInsert={vi.fn()} onRefreshDocument={vi.fn()} onBulkDialog={vi.fn()} onFollowReference={vi.fn()} />)
     fireEvent.contextMenu(cell('name'))
     const expected: [RegExp, string][] = [

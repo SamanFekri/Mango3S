@@ -464,7 +464,7 @@ export function ProxyTab({ form, set, patch, stored, caps }: TabProps) {
   )
 }
 
-// ---- 6. IntelliShell -----------------------------------------------------------
+// ---- 6. Shell -----------------------------------------------------------
 
 export function ShellTab({ form, patch }: TabProps) {
   const s = form.shell

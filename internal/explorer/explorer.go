@@ -111,7 +111,7 @@ func (s *service) ListCollections(ctx context.Context, connID, db string) ([]Col
 		}
 		// System collections (system.views, system.profile, system.js,
 		// system.buckets.*, admin's system.users, …) are listed separately
-		// in the explorer, as in Studio 3T.
+		// in the explorer.
 		out = append(out, CollectionInfo{Name: c.Name, Type: t, ReadOnly: c.Info.ReadOnly, System: strings.HasPrefix(c.Name, "system.")})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

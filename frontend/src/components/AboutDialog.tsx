@@ -67,7 +67,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                   See the license.
                 </button>
               </p>
-              <p className="muted small">An independent tool inspired by Studio 3T. MongoDB is a trademark of MongoDB, Inc.</p>
+              <p className="muted small">MongoDB is a trademark of MongoDB, Inc.</p>
             </div>
           ) : (
             <div className="about-license">

@@ -14,7 +14,7 @@ import (
 	"mango3s/internal/mql"
 )
 
-// BulkWriteRequest is Studio 3T's Update dialog (Ctrl+U) and Remove dialog
+// BulkWriteRequest is the Update dialog (Ctrl+U) and Remove dialog
 // (F8): change or delete either the selected documents or every document
 // matching a query.
 type BulkWriteRequest struct {
