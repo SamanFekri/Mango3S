@@ -10,7 +10,7 @@ import { getShortcutPlatform, useShortcut } from '../state/shortcuts'
 import { Spinner } from './common'
 import { CollectionIcon, DatabaseIcon, FolderIcon, ServerIcon } from './icons'
 import { BackupDialog, RestoreDialog } from './BackupDialogs'
-import { ProfilerDialog, SqlExportDialog } from './WorkflowDialogs'
+import { IndexAdvisorDialog, ProfilerDialog, SqlExportDialog } from './WorkflowDialogs'
 import { CollectionInfoDialog, CopyDialog, CreateCollectionDialog, DatabaseInfoDialog, RenameCollectionDialog, RenameDatabaseDialog } from './ManageDialogs'
 import { ExportWizard } from './ExportWizard'
 import { ImportWizard } from './ImportWizard'
@@ -50,7 +50,7 @@ export function Sidebar() {
   const [createFor, setCreateFor] = useState<{ conn: SessionInfo; db?: string } | null>(null)
   const [transfer, setTransfer] = useState<{ kind: 'import' | 'export'; conn: SessionInfo; db: string; coll?: string } | null>(null)
   const [manage, setManage] = useState<{
-    kind: 'info' | 'copy' | 'rename' | 'profiler' | 'sql'
+    kind: 'info' | 'copy' | 'rename' | 'profiler' | 'sql' | 'advisor'
     conn: SessionInfo
     db: string
     coll?: string
@@ -283,6 +283,7 @@ export function Sidebar() {
     { label: 'Create collection or view…', action: () => setCreateFor({ conn: s, db }), disabled: s.readOnly },
     { label: 'Database statistics…', action: () => setManage({ kind: 'info', conn: s, db }) },
     { label: 'Query profiler…', action: () => setManage({ kind: 'profiler', conn: s, db }) },
+    { label: 'Index advisor…', action: () => setManage({ kind: 'advisor', conn: s, db }) },
     { label: 'Copy database…', action: () => setManage({ kind: 'copy', conn: s, db }) },
     { label: 'Rename database…', action: () => setManage({ kind: 'rename', conn: s, db }), disabled: s.readOnly },
     { label: 'Open shell here', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db } }), shortcut: 'tab.shell' },
@@ -311,6 +312,7 @@ export function Sidebar() {
       { label: 'Import…', action: () => setTransfer({ kind: 'import', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
       { label: 'Collection info…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name }) },
       { label: 'Indexes…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name, tab: 'indexes' }), disabled: view },
+      { label: 'Index advisor…', action: () => setManage({ kind: 'advisor', conn: s, db, coll: coll.name }), disabled: view },
       { label: 'Validation rules…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name, tab: 'validation' }), disabled: view },
       { label: 'Copy collection…', action: () => setManage({ kind: 'copy', conn: s, db, coll: coll.name }), disabled: view },
       { label: 'Rename…', action: () => setManage({ kind: 'rename', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
@@ -722,6 +724,7 @@ export function Sidebar() {
       )}
       {manage?.kind === 'info' && manage.coll && <CollectionInfoDialog conn={manage.conn} db={manage.db} coll={manage.coll} tab={manage.tab} onClose={() => setManage(null)} />}
       {manage?.kind === 'info' && !manage.coll && <DatabaseInfoDialog conn={manage.conn} db={manage.db} onClose={() => setManage(null)} />}
+      {manage?.kind === 'advisor' && <IndexAdvisorDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
       {manage?.kind === 'profiler' && <ProfilerDialog conn={manage.conn} db={manage.db} onClose={() => setManage(null)} />}
       {manage?.kind === 'sql' && manage.coll && <SqlExportDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
       {manage?.kind === 'copy' && <CopyDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}

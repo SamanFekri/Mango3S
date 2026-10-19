@@ -310,7 +310,7 @@ function Overview({ d }: { d: CollectionDetails }) {
   )
 }
 
-const emptyIndex = (): IndexOptions => ({
+export const emptyIndex = (): IndexOptions => ({
   keys: '{ field: 1 }',
   name: '',
   unique: false,

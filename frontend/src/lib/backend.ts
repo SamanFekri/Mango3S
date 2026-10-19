@@ -32,6 +32,7 @@ import type {
   DBCompareOptions,
   DBCompareResult,
   ImportChoice,
+  IndexAdvice,
   ProfileEntry,
   ProfileQuery,
   Profiling,
@@ -223,6 +224,8 @@ export const backend = {
   setProfiling: (conn: string, db: string, p: Profiling) => wrap<void>(a.SetProfiling(conn, db, p)),
   listProfile: (conn: string, db: string, q: ProfileQuery) => wrap<ProfileEntry[]>(a.ListProfile(conn, db, q)),
   clearProfile: (conn: string, db: string) => wrap<void>(a.ClearProfile(conn, db)),
+  analyzeIndexes: (opId: string, conn: string, db: string, o: { coll: string; minMillis: number; limit: number }) =>
+    wrap<IndexAdvice>(a.AnalyzeIndexes(opId, conn, db, o)),
   startSQLExport: (r: { connId: string; db: string; coll: string; path: string; options: SQLExportOptions }) => wrap<Job>(a.StartSQLExport(r)),
   analyzeSchema: (opId: string, req: { connId: string; db: string; coll: string; sampleSize: number; filter: string }) =>
     wrap<SchemaReport>(a.AnalyzeSchema(opId, req)),

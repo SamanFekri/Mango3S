@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { backend } from '../lib/backend'
-import { formatCount } from '../lib/format'
+import { backend, newOpId } from '../lib/backend'
+import { formatBytes, formatCount } from '../lib/format'
 import { toAppError, type AppError } from '../lib/errors'
-import type { ProfileEntry, Profiling, SessionInfo, SQLDialect } from '../lib/types'
+import type { IndexAdvice, IndexFinding, ProfileEntry, Profiling, QueryShape, SessionInfo, SQLDialect } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { ErrorBanner, Modal, Segmented, Spinner } from './common'
+import { emptyIndex } from './ManageDialogs'
 import { JobStatus } from './p2common'
 
 const LEVELS: { value: '0' | '1' | '2'; label: string; title: string }[] = [
@@ -249,6 +250,243 @@ export function SqlExportDialog({ conn, db, coll, onClose }: { conn: SessionInfo
         include, and values that don't fit their column, are kept as JSON in an <code>_extra</code> column, so nothing is dropped. Indexes and validation rules are not converted.
       </p>
       {jobId && <JobStatus jobId={jobId} />}
+    </Modal>
+  )
+}
+
+const STATUS_LABEL: Record<QueryShape['status'], string> = {
+  missing: 'no index',
+  partial: 'partly indexed',
+  covered: 'indexed',
+  hidden: 'index hidden',
+  none: 'no suggestion',
+}
+
+/**
+ * The index advisor: slow query shapes from the profiler with a suggested
+ * index for each, plus indexes that look unused or redundant.
+ */
+export function IndexAdvisorDialog({ conn, db, coll, onClose }: { conn: SessionInfo; db: string; coll?: string; onClose: () => void }) {
+  const { confirm, toast } = useApp()
+  const [filterColl, setFilterColl] = useState(coll ?? '')
+  const [minMillis, setMinMillis] = useState(0)
+  const [advice, setAdvice] = useState<IndexAdvice | null>(null)
+  const [open, setOpen] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<AppError | null>(null)
+
+  const analyze = useCallback(async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      setAdvice(await backend.analyzeIndexes(newOpId('advisor'), conn.id, db, { coll: filterColl.trim(), minMillis, limit: 5000 }))
+    } catch (err) {
+      setError(toAppError(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [conn.id, db, filterColl, minMillis])
+  useEffect(() => {
+    void analyze()
+    // Analyze once on open; later runs are explicit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn()
+      toast({ kind: 'success', title: done })
+      await analyze()
+    } catch (err) {
+      setError(toAppError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const create = async (s: QueryShape) => {
+    if (!s.suggested) return
+    const ok = await confirm({
+      title: 'Create suggested index',
+      message: (
+        <>
+          <code>
+            db.getCollection({JSON.stringify(s.coll)}).createIndex({s.suggested})
+          </code>
+          <p className="muted small">Building an index reads the whole collection and adds work to every write. On a large collection, create it at a quiet time.</p>
+        </>
+      ),
+      confirmLabel: 'Create index',
+    })
+    if (ok) await act(() => backend.createIndex(newOpId('index'), conn.id, db, s.coll, { ...emptyIndex(), keys: s.suggested! }), `Created index ${s.name}`)
+  }
+  const drop = async (f: IndexFinding) => {
+    const ok = await confirm({
+      title: 'Drop index',
+      message: (
+        <>
+          Drop <code>{f.name}</code> on {db}.{f.coll}? {f.reason} Hiding it first is safer: queries stop using it, and you can unhide it instantly if something slows down.
+        </>
+      ),
+      confirmLabel: 'Drop index',
+      danger: true,
+      typeToConfirm: f.name,
+    })
+    if (ok) await act(() => backend.dropIndex(conn.id, db, f.coll, f.name), `Dropped ${f.name}`)
+  }
+  const findings = (title: string, list: IndexFinding[], empty: string) => (
+    <>
+      <h4>{title}</h4>
+      {list.length === 0 ? (
+        <p className="muted small">{empty}</p>
+      ) : (
+        <table className="grid compact">
+          <tbody>
+            {list.map((f) => (
+              <tr key={`${f.coll}.${f.name}`}>
+                <td className="mono">
+                  {f.coll}.{f.name}
+                  {f.hidden && <span className="muted small"> (hidden)</span>}
+                </td>
+                <td className="mono small">{f.keys}</td>
+                <td className="small">{f.reason}</td>
+                <td>{formatBytes(f.size)}</td>
+                <td className="row-buttons">
+                  {!conn.readOnly && (
+                    <>
+                      <button
+                        className="small ghost"
+                        disabled={busy}
+                        onClick={() => act(() => backend.modifyIndex(conn.id, db, f.coll, f.name, { hidden: !f.hidden }), `${f.hidden ? 'Unhid' : 'Hid'} ${f.name}`)}
+                      >
+                        {f.hidden ? 'Unhide' : 'Hide'}
+                      </button>
+                      <button className="small ghost danger-text" disabled={busy} onClick={() => drop(f)} aria-label={`Drop ${f.coll}.${f.name}`}>
+                        Drop
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  )
+  return (
+    <Modal title={`Index advisor: ${db}`} onClose={onClose} wide footer={<button onClick={onClose}>Close</button>}>
+      <ErrorBanner error={error} onDismiss={() => setError(null)} />
+      <div className="field-row">
+        <label className="field">
+          <span>Collection</span>
+          <input value={filterColl} onChange={(e) => setFilterColl(e.target.value)} placeholder="all collections" aria-label="Collection" />
+        </label>
+        <label className="field narrow">
+          <span>Slower than (ms)</span>
+          <input type="number" min={0} value={minMillis} onChange={(e) => setMinMillis(Number(e.target.value))} aria-label="Slower than" />
+        </label>
+        <button onClick={() => void analyze()} disabled={busy}>
+          {busy ? <Spinner small /> : 'Analyze'}
+        </button>
+      </div>
+      {advice && (
+        <>
+          <p className="muted small">
+            {advice.analyzed > 0
+              ? `${formatCount(advice.analyzed)} profiled operations${advice.since ? ` since ${new Date(advice.since).toLocaleString()}` : ''}. `
+              : ''}
+            Suggestions put fields matched exactly first, then the sort, then ranges. They are based on recorded queries only: check them against your application.
+          </p>
+          {advice.notes.map((n) => (
+            <p key={n} className="warning-text small">
+              {n}
+            </p>
+          ))}
+          {advice.profilingLevel === 0 && !conn.readOnly && (
+            <button disabled={busy} onClick={() => act(() => backend.setProfiling(conn.id, db, { level: 1, slowms: 0, sampleRate: 0 }), 'Profiler on (slow operations)')}>
+              Turn on the profiler (slow operations)
+            </button>
+          )}
+          <h4>Query shapes, slowest total first</h4>
+          {advice.shapes.length === 0 ? (
+            <p className="muted small">No profiled queries to analyze.</p>
+          ) : (
+            <div className="backup-entries">
+              <table className="grid compact">
+                <thead>
+                  <tr>
+                    <th>Collection</th>
+                    <th>Shape</th>
+                    <th>Runs</th>
+                    <th>Total / avg ms</th>
+                    <th>Examined / returned</th>
+                    <th>Status</th>
+                    <th>Suggested index</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {advice.shapes.map((s, i) => (
+                    <tr key={i} className={open === i ? 'selected' : ''} onClick={() => setOpen(open === i ? null : i)} title="Show details">
+                      <td className="mono">{s.coll}</td>
+                      <td className="mono small">
+                        {s.op !== 'query' && <span className="muted">{s.op} </span>}
+                        {s.shape}
+                      </td>
+                      <td>{formatCount(s.count)}</td>
+                      <td>
+                        {formatCount(s.totalMillis)} / {formatCount(s.avgMillis)}
+                      </td>
+                      <td>
+                        {formatCount(s.docsExamined)} / {formatCount(s.returned)}
+                      </td>
+                      <td className={s.status === 'missing' || s.status === 'partial' ? 'warning-text' : ''}>{STATUS_LABEL[s.status]}</td>
+                      <td className="mono small">
+                        {s.status === 'missing' || s.status === 'partial' ? s.suggested : s.servedBy}
+                        {!conn.readOnly && (s.status === 'missing' || s.status === 'partial') && (
+                          <button
+                            className="small"
+                            disabled={busy}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void create(s)
+                            }}
+                          >
+                            Create
+                          </button>
+                        )}
+                        {!conn.readOnly && s.status === 'hidden' && s.servedBy && (
+                          <button
+                            className="small"
+                            disabled={busy}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void act(() => backend.modifyIndex(conn.id, db, s.coll, s.servedBy!, { hidden: false }), `Unhid ${s.servedBy}`)
+                            }}
+                          >
+                            Unhide
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {open !== null && advice.shapes[open] && (
+            <div aria-label="Shape details">
+              <p className="small">
+                {advice.shapes[open].reason} Plans seen: {advice.shapes[open].plans.join(', ') || 'unknown'}.
+              </p>
+              <pre className="job-log">{advice.shapes[open].example}</pre>
+            </div>
+          )}
+          {findings('Unused indexes', advice.unused, 'Every index has been used since the server started.')}
+          {findings('Redundant indexes', advice.redundant, 'No index is just the start of another one.')}
+        </>
+      )}
     </Modal>
   )
 }

@@ -227,3 +227,91 @@ func TestProfiler(t *testing.T) {
 		t.Fatalf("not cleared: %d", len(entries))
 	}
 }
+
+func TestIndexAdvisor(t *testing.T) {
+	ctx := context.Background()
+	cl := client(t)
+	dbn := "mango3s_it_advisor"
+	db := cl.Database(dbn)
+	db.Drop(ctx)
+	t.Cleanup(func() {
+		SetProfiling(context.Background(), cl.Database(dbn), Profiling{Level: 0, SlowMS: 100})
+		cl.Database(dbn).Drop(context.Background())
+	})
+	c := db.Collection("orders")
+	docs := []any{}
+	for i := 0; i < 3000; i++ {
+		docs = append(docs, bson.D{{Key: "status", Value: []string{"A", "B", "C"}[i%3]}, {Key: "age", Value: i % 90}, {Key: "created", Value: i}, {Key: "a", Value: i % 7}, {Key: "b", Value: i % 5}, {Key: "c", Value: i}})
+	}
+	if _, err := c.InsertMany(ctx, docs); err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range []IndexOptions{{Keys: `{ a: 1 }`}, {Keys: `{ a: 1, b: 1 }`}, {Keys: `{ c: 1 }`}} {
+		if _, err := CreateIndex(ctx, db, "orders", o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := SetProfiling(ctx, db, Profiling{Level: 2}); err != nil {
+		t.Fatal(err)
+	}
+	run := func() {
+		for i := 0; i < 4; i++ {
+			cur, err := c.Find(ctx, bson.D{{Key: "status", Value: "A"}, {Key: "age", Value: bson.D{{Key: "$gt", Value: 30}}}}, options.Find().SetSort(bson.D{{Key: "created", Value: -1}}).SetLimit(5))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cur.All(ctx, &[]bson.D{})
+		}
+		c.CountDocuments(ctx, bson.D{{Key: "a", Value: 3}, {Key: "b", Value: 1}})
+	}
+	run()
+	adv, err := Analyze(ctx, db, AdviceOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shape *QueryShape
+	for i := range adv.Shapes {
+		if adv.Shapes[i].Coll == "orders" && adv.Shapes[i].Op == "query" {
+			shape = &adv.Shapes[i]
+		}
+	}
+	if shape == nil || shape.Count < 4 || shape.Status != "missing" || shape.Suggested != "{ status: 1, created: -1, age: 1 }" || shape.Plans[0] != "COLLSCAN" {
+		t.Fatalf("query shape: %+v (all: %+v)", shape, adv.Shapes)
+	}
+	unused, redundant := map[string]bool{}, map[string]bool{}
+	for _, f := range adv.Unused {
+		unused[f.Name] = true
+	}
+	for _, f := range adv.Redundant {
+		redundant[f.Name] = true
+	}
+	if !unused["c_1"] || unused["a_1_b_1"] || !redundant["a_1"] || len(adv.Redundant) != 1 {
+		t.Fatalf("unused %v redundant %v", adv.Unused, adv.Redundant)
+	}
+
+	// Create the suggestion; new runs use it and the shape is served.
+	if _, err := CreateIndex(ctx, db, "orders", IndexOptions{Keys: shape.Suggested}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearProfile(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	run()
+	adv, err = Analyze(ctx, db, AdviceOptions{Coll: "orders"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range adv.Shapes {
+		if s.Op == "query" && (s.Status != "covered" || s.ServedBy != "status_1_created_-1_age_1" || s.Plans[0] == "COLLSCAN") {
+			t.Fatalf("after creating: %+v", s)
+		}
+	}
+
+	// Profiler off and no data: the advice says what to do.
+	ClearProfile(ctx, db)
+	SetProfiling(ctx, db, Profiling{Level: 0})
+	adv, _ = Analyze(ctx, db, AdviceOptions{})
+	if len(adv.Shapes) != 0 || len(adv.Notes) == 0 || !strings.Contains(adv.Notes[0], "profiler is off") {
+		t.Fatalf("%+v", adv)
+	}
+}

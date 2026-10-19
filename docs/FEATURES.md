@@ -46,6 +46,7 @@ Legend:
 | SQL → MongoDB migration | ✅ | Existing (see [P2.md](P2.md)) | | Existing tests |
 | Multi-step tasks | ✅ | Tasks → type *Multi-step* (up to 20 steps; stop or continue on error) | Approval covers every step | `TestMultiStepTaskAndTaskImport` |
 | Task definition import and export | ✅ | Tasks → *Import…* / *Export…* | Imported tasks always start unapproved | `TestExportImportDefinitionsResetApproval`, UI test |
+| Index advisor | ✅ | Database or collection → *Index advisor…*. Groups profiled queries by shape (fields matched exactly, ranges, sort) and ranks them by total time. Suggests an index for each (fields matched exactly, then the sort, then ranges) and says whether an existing index already serves it. Lists unused indexes and indexes made redundant by a longer one. Create, unhide, hide and drop from the dialog | Profiler data (it offers to turn the profiler on); `$indexStats` | `TestClassifyAndSuggest`, `TestServes`, `TestRedundant`, `TestDecide`, `TestIndexAdvisor` (suggestion created, then reported as served), UI tests |
 | Query profiler | ✅ | Database → *Query profiler…*: level, slow threshold, sample rate, filter by collection, operation and duration, show the command, clear | mongod (not through mongos) | `TestProfiler`, UI tests |
 | Explain, schema, compare/sync, reschema, masking, AI, MCP | ✅ | Existing (see [P2.md](P2.md) and the README) | | Existing tests |
 | User and role management UI | ✗ | Use the shell (`db.createUser`) or include users and roles in an archive backup | | |
@@ -109,6 +110,12 @@ A backup taken while applications write is not a consistent snapshot across coll
   - Time-series collections block the rename; use *Copy database*, then drop the old database.
 - **External tools:** SSH-tunnelled and proxied connections can't use mongodump or mongorestore (the built-in format works). Neither can AWS authentication with a session token.
 - **Profiler:** the slow threshold applies server-wide. Profiling must be enabled per shard.
+- **Index advisor:**
+  - It only sees queries the profiler recorded.
+  - `$or`, `$text` and geo queries get an explanation instead of a suggestion.
+  - Usage counts behind "unused" restart when the server restarts.
+  - Unique and TTL indexes are never reported as redundant.
+  - Check suggestions against your application before creating them.
 - **SQL export:**
   - Columns come from a sample of the first documents (1,000 by default).
   - Arrays and mixed-type fields are stored as JSON (JSONB in PostgreSQL).

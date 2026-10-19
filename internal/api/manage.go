@@ -395,3 +395,16 @@ func (a *App) StartSQLExport(r SQLExportRequest) (jobs.Job, error) {
 	a.log.Info("sql export started", "job", j.ID, "db", r.DB, "coll", r.Coll, "dialect", r.Options.Dialect)
 	return j, nil
 }
+
+// AnalyzeIndexes runs the index advisor on a database (or one collection):
+// query shapes from the profiler with suggested indexes, and indexes that
+// are unused or redundant. It only reads.
+func (a *App) AnalyzeIndexes(opID, connID, db string, o manage.AdviceOptions) (manage.Advice, error) {
+	return call(a, "AnalyzeIndexes", opID, func(ctx context.Context) (manage.Advice, error) {
+		s, err := a.conns.Session(connID)
+		if err != nil {
+			return manage.Advice{}, err
+		}
+		return manage.Analyze(ctx, s.Client.Database(db), o)
+	})
+}

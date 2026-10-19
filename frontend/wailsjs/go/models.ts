@@ -2757,6 +2757,152 @@ export namespace library {
 
 export namespace manage {
 	
+	export class IndexFinding {
+	    coll: string;
+	    name: string;
+	    keys: string;
+	    reason: string;
+	    size: number;
+	    hidden: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new IndexFinding(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.coll = source["coll"];
+	        this.name = source["name"];
+	        this.keys = source["keys"];
+	        this.reason = source["reason"];
+	        this.size = source["size"];
+	        this.hidden = source["hidden"];
+	    }
+	}
+	export class QueryShape {
+	    coll: string;
+	    op: string;
+	    shape: string;
+	    count: number;
+	    totalMillis: number;
+	    avgMillis: number;
+	    maxMillis: number;
+	    docsExamined: number;
+	    keysExamined: number;
+	    returned: number;
+	    plans: string[];
+	    example: string;
+	    // Go type: time
+	    lastSeen: any;
+	    status: string;
+	    suggested?: string;
+	    name?: string;
+	    servedBy?: string;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QueryShape(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.coll = source["coll"];
+	        this.op = source["op"];
+	        this.shape = source["shape"];
+	        this.count = source["count"];
+	        this.totalMillis = source["totalMillis"];
+	        this.avgMillis = source["avgMillis"];
+	        this.maxMillis = source["maxMillis"];
+	        this.docsExamined = source["docsExamined"];
+	        this.keysExamined = source["keysExamined"];
+	        this.returned = source["returned"];
+	        this.plans = source["plans"];
+	        this.example = source["example"];
+	        this.lastSeen = this.convertValues(source["lastSeen"], null);
+	        this.status = source["status"];
+	        this.suggested = source["suggested"];
+	        this.name = source["name"];
+	        this.servedBy = source["servedBy"];
+	        this.reason = source["reason"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Advice {
+	    profilingLevel: number;
+	    analyzed: number;
+	    // Go type: time
+	    since?: any;
+	    shapes: QueryShape[];
+	    unused: IndexFinding[];
+	    redundant: IndexFinding[];
+	    notes: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Advice(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.profilingLevel = source["profilingLevel"];
+	        this.analyzed = source["analyzed"];
+	        this.since = this.convertValues(source["since"], null);
+	        this.shapes = this.convertValues(source["shapes"], QueryShape);
+	        this.unused = this.convertValues(source["unused"], IndexFinding);
+	        this.redundant = this.convertValues(source["redundant"], IndexFinding);
+	        this.notes = source["notes"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AdviceOptions {
+	    coll: string;
+	    minMillis: number;
+	    limit: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AdviceOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.coll = source["coll"];
+	        this.minMillis = source["minMillis"];
+	        this.limit = source["limit"];
+	    }
+	}
 	export class CollectionDetails {
 	    type: string;
 	    options: string;
@@ -2895,6 +3041,7 @@ export namespace manage {
 	        this.accessSince = source["accessSince"];
 	    }
 	}
+	
 	export class IndexOptions {
 	    keys: string;
 	    name: string;
@@ -3012,6 +3159,7 @@ export namespace manage {
 	        this.sampleRate = source["sampleRate"];
 	    }
 	}
+	
 	export class Validation {
 	    validator: string;
 	    level: string;

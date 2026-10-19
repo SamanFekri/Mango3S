@@ -1381,3 +1381,45 @@ export interface SQLExportOptions {
   flatten: boolean
   dropTable: boolean
 }
+
+// ---- index advisor ----------------------------------------------------------------
+
+export interface QueryShape {
+  coll: string
+  op: string
+  shape: string
+  count: number
+  totalMillis: number
+  avgMillis: number
+  maxMillis: number
+  docsExamined: number
+  keysExamined: number
+  returned: number
+  plans: string[]
+  example: string
+  lastSeen: string
+  status: 'missing' | 'partial' | 'covered' | 'hidden' | 'none'
+  suggested?: string
+  name?: string
+  servedBy?: string
+  reason: string
+}
+
+export interface IndexFinding {
+  coll: string
+  name: string
+  keys: string
+  reason: string
+  size: number
+  hidden: boolean
+}
+
+export interface IndexAdvice {
+  profilingLevel: number
+  analyzed: number
+  since?: string
+  shapes: QueryShape[]
+  unused: IndexFinding[]
+  redundant: IndexFinding[]
+  notes: string[]
+}
