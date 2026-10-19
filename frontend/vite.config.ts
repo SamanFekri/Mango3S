@@ -7,6 +7,10 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1500,
   },
+  // The About dialog imports ../LICENSE (the repository's license text).
+  server: {
+    fs: { allow: ['..'] },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

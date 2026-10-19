@@ -424,3 +424,17 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
 
 Logs are in `<config dir>/logs/mango3s.log`. Set the log level to Debug in Settings for
 per-operation timings.
+
+## License
+
+Mango3S — Copyright © 2026 saman.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; see
+[LICENSE](LICENSE) for details.
+
+Mango3S includes open-source components under their own (GPL-compatible) licenses: MIT, BSD,
+Apache-2.0 and MPL-2.0. The full list is in About Mango3S → License, generated from the actual
+dependencies by `make notices` (`scripts/third-party-notices.sh`); rerun it after changing
+dependencies.

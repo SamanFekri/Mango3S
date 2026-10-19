@@ -325,6 +325,12 @@ label.inline {
   padding: 3px 10px;
   font-size: 12px;
   background: var(--surface);
+  /* Share the control's width, so the active option is filled edge to edge
+     even when the control is stretched (e.g. Query / Fields under Run). */
+  flex: 1 1 0;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
 }
 .segmented button + button {
   border-left: 1px solid var(--border-strong);
@@ -2875,43 +2881,89 @@ tr.clickable {
 
 /* ---------- About ---------- */
 .about {
-  max-width: 560px;
+  width: min(520px, 80vw);
 }
-.about-head {
+.about-tabs {
   display: flex;
-  gap: 16px;
-  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
 }
-.about-head img {
-  border-radius: 16px;
+.about-tabs button {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 6px 12px;
+  color: var(--text-muted);
 }
-.about-head h3 {
-  margin: 0;
-  font-size: 20px;
+.about-tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
 }
-.about-head p {
-  margin: 2px 0;
+.about-main {
+  text-align: center;
 }
-.about h4 {
-  margin: 14px 0 4px;
+.about-main img {
+  border-radius: 18px;
+}
+.about-main h3 {
+  margin: 8px 0 0;
+  font-size: 22px;
+}
+.about-main p {
+  margin: 4px 0;
+}
+.about-version {
+  font-weight: 600;
+}
+.about-notice {
+  margin-top: 12px !important;
+  text-align: left;
+}
+.license-text {
+  max-height: 46vh;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.about-details {
+  margin-top: 10px;
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
 }
-.about-stats dd {
-  font-size: 12px;
+.about-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
 }
-.about-note {
-  margin-top: 14px;
+.third-party {
+  margin-top: 6px;
 }
 
-/* Pagination repeated under the results. */
-.results-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 2px 2px;
-  border-top: 1px solid var(--border);
-  margin-top: 6px;
+/* ---------- Drag to reorder connections ---------- */
+.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.drop-into {
+  background: var(--accent-soft);
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+.dragging {
+  opacity: 0.45;
+}
+.tree-row[draggable='true'],
+.conn-item[draggable='true'] {
+  cursor: grab;
+}
+.conn-tree {
+  min-height: 60px;
 }

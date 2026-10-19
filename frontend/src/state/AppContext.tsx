@@ -59,6 +59,8 @@ interface AppState {
 
   profiles: Profile[]
   reloadProfiles: () => Promise<void>
+  /** Saves a new connection order (drag to reorder). */
+  reorderProfiles: (ids: string[]) => Promise<void>
   sessions: SessionInfo[]
   connect: (profileId: string) => Promise<SessionInfo | null>
   disconnect: (connId: string) => Promise<void>
@@ -212,6 +214,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [toastError])
 
   reloadProfilesRef.current = () => void reloadProfiles()
+  const reorderProfiles = useCallback(
+    async (ids: string[]) => {
+      // Show the new order at once; the server's answer replaces it.
+      setProfiles((list) => [...list].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)))
+      try {
+        setProfiles(await backend.reorderProfiles(ids))
+      } catch (err) {
+        toastError(err, 'Could not save the order')
+        void reloadProfiles()
+      }
+    },
+    [toastError, reloadProfiles],
+  )
   useEffect(() => {
     backend.getSettings().then(setSettings).catch((err) => toastError(err, 'Could not load settings'))
     backend.getAppInfo().then(setAppInfo).catch(() => undefined)
@@ -397,6 +412,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       appInfo,
       profiles,
       reloadProfiles,
+      reorderProfiles,
       sessions,
       connect,
       disconnect,
@@ -431,7 +447,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       resolvePrompt,
     }),
     [
-      settings, saveSettings, appInfo, profiles, reloadProfiles, sessions, connect, disconnect, connecting,
+      settings, saveSettings, appInfo, profiles, reloadProfiles, reorderProfiles, sessions, connect, disconnect, connecting,
       tabs, toast, toastError, toasts, dismissToast, confirm, confirmRequest, resolveConfirm, connectionManagerOpen,
       openConnectionManager, connectionManagerSelect, dirtyTabs, setTabDirty, closeTab, closeOtherTabs, shortcutsOpen, aboutOpen,
       connectionLog, closeConnectionLog, testConnection,

@@ -326,6 +326,10 @@ export function RecordCollectionOpened(arg1, arg2, arg3) {
   return window['go']['api']['App']['RecordCollectionOpened'](arg1, arg2, arg3);
 }
 
+export function ReorderProfiles(arg1) {
+  return window['go']['api']['App']['ReorderProfiles'](arg1);
+}
+
 export function ReplaceDocument(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['api']['App']['ReplaceDocument'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -400,6 +404,10 @@ export function SetAIKey(arg1) {
 
 export function SetLocalAIKey(arg1) {
   return window['go']['api']['App']['SetLocalAIKey'](arg1);
+}
+
+export function SetProfileFolder(arg1, arg2) {
+  return window['go']['api']['App']['SetProfileFolder'](arg1, arg2);
 }
 
 export function SetTaskEnabled(arg1, arg2) {

@@ -117,6 +117,8 @@ export interface Profile {
   createdAt: string
   updatedAt: string
   folder?: string
+  /** The user's order (drag to reorder); 0/absent = not placed yet. */
+  position?: number
   server: ServerConfig
   tls: TLSConfig
   ssh: SSHConfig

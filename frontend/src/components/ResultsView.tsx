@@ -305,23 +305,7 @@ export function ResultsView(props: ResultsViewProps) {
             {props.counting ? <Spinner small /> : 'Count'}
           </button>
         )}
-        {props.onPageSize && (
-          <select
-            className="small"
-            aria-label="Page size"
-            value={pageSize}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              void leaveEdit(() => props.onPageSize?.(n))
-            }}
-          >
-            {PAGE_SIZES.map((n) => (
-              <option key={n} value={n}>
-                {n} / page
-              </option>
-            ))}
-          </select>
-        )}
+        {props.onPageSize && <PageSizeSelect label="Page size" value={pageSize} onChange={(n) => void leaveEdit(() => props.onPageSize?.(n))} />}
         <Pager label="Pagination" page={page} loading={loading} onPage={(n) => void leaveEdit(() => onPage(n))} />
       </div>
 
@@ -380,6 +364,18 @@ export function ResultsView(props: ResultsViewProps) {
             {props.total != null && ` of ${formatCount(props.total)}`}
           </span>
           <span className="spacer" />
+          {props.onPageSize && (
+            <PageSizeSelect
+              label="Page size (bottom)"
+              value={pageSize}
+              onChange={(n) =>
+                void leaveEdit(() => {
+                  props.onPageSize?.(n)
+                  bodyRef.current?.scrollTo?.({ top: 0 })
+                })
+              }
+            />
+          )}
           <Pager
             label="Pagination (bottom)"
             page={page}
@@ -497,5 +493,19 @@ function Pager({ label, page, loading, onPage }: { label: string; page: Page | n
         ›
       </button>
     </nav>
+  )
+}
+
+/** Documents per page; shown above and below the results. */
+function PageSizeSelect({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <select className="small" aria-label={label} value={value} onChange={(e) => onChange(Number(e.target.value))}>
+      {/* Include the current size when it isn't a preset (e.g. 25 from Settings). */}
+      {[...new Set([...PAGE_SIZES, value])].sort((a, b) => a - b).map((n) => (
+        <option key={n} value={n}>
+          {n} / page
+        </option>
+      ))}
+    </select>
   )
 }

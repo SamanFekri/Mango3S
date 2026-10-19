@@ -24,6 +24,8 @@ WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
+# The About dialog shows the license text from the repository root.
+COPY LICENSE /src/LICENSE
 RUN npm test && npm run build
 
 # ---- Go: vet, unit tests, compile ------------------------------------------

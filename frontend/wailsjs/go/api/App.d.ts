@@ -189,6 +189,8 @@ export function QueryToShell(arg1:query.Request):Promise<string>;
 
 export function RecordCollectionOpened(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ReorderProfiles(arg1:Array<string>):Promise<Array<config.Profile>>;
+
 export function ReplaceDocument(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<model.Document>;
 
 export function ReschemaTypes():Promise<Array<string>>;
@@ -226,6 +228,8 @@ export function SaveTask(arg1:scheduler.Task):Promise<scheduler.Task>;
 export function SetAIKey(arg1:string):Promise<void>;
 
 export function SetLocalAIKey(arg1:string):Promise<void>;
+
+export function SetProfileFolder(arg1:string,arg2:string):Promise<config.Profile>;
 
 export function SetTaskEnabled(arg1:string,arg2:boolean):Promise<scheduler.Task>;
 

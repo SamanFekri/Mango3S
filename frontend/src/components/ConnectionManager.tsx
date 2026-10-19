@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { backend } from '../lib/backend'
+import { moveId } from '../lib/tabs'
 import { toAppError, type AppError } from '../lib/errors'
 import type { AdvancedConfig, Capability, CollectionHistoryEntry, Profile, ProfileInput, TestResult } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { ErrorBanner, Modal, Spinner } from './common'
+import { FolderIcon } from './icons'
 import { AdvancedTab, AuthTab, HistoryTab, ProxyTab, ServerTab, ShellTab, SSHTab, TLSTab, ToolsTab, type Patch, type Setter } from './ConnectionTabs'
 
 export const CONNECTION_TABS = [
@@ -104,7 +106,7 @@ function folderTree(profiles: Profile[], filter: string): FolderNode {
 }
 
 export function ConnectionManager() {
-  const { profiles, reloadProfiles, openConnectionManager, connectionManagerSelect, connect, sessions, toast, confirm, disconnect, dispatchTabs, testConnection } = useApp()
+  const { profiles, reloadProfiles, reorderProfiles, openConnectionManager, connectionManagerSelect, connect, sessions, toast, confirm, disconnect, dispatchTabs, testConnection } = useApp()
   const initial = connectionManagerSelect === 'new' ? null : (profiles.find((p) => p.id === connectionManagerSelect) ?? profiles[0] ?? null)
   const [selected, setSelected] = useState<string | null>(initial?.id ?? null)
   const [form, setForm] = useState<ProfileInput>(() => (initial ? fromProfile(initial) : blankProfile()))
@@ -242,6 +244,76 @@ export function ConnectionManager() {
     openConnectionManager(false)
   }
 
+  // Drag to reorder; dropping next to a connection in another folder (or on a
+  // folder) also moves it into that folder.
+  const [drag, setDrag] = useState<{ id: string; over?: string; before?: boolean } | null>(null)
+  const ids = profiles.map((p) => p.id)
+  const moveTo = async (id: string, target: Profile | null, folder: string, before: boolean) => {
+    const moving = profiles.find((p) => p.id === id)
+    setDrag(null)
+    if (!moving) return
+    try {
+      if ((moving.folder ?? '') !== folder) {
+        if (id === selected && dirty) {
+          toast({ kind: 'info', title: 'Save or discard your changes first', message: 'Then drag the connection to another folder.' })
+          return
+        }
+        await backend.setProfileFolder(id, folder)
+        if (id === selected) setForm((f) => ({ ...f, folder }))
+      }
+      if (target && target.id !== id) await reorderProfiles(moveId(ids, id, target.id, before))
+      else await reloadProfiles()
+    } catch (err) {
+      setError(toAppError(err))
+    }
+  }
+  const itemDrag = (p: Profile) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/mango3s-connection', p.id)
+      setDrag({ id: p.id })
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!drag || drag.id === p.id) return
+      e.preventDefault()
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const before = e.clientY < r.top + r.height / 2
+      if (drag.over !== p.id || drag.before !== before) setDrag({ ...drag, over: p.id, before })
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (drag) void moveTo(drag.id, p, p.folder ?? '', drag.over === p.id ? !!drag.before : true)
+    },
+    onDragEnd: () => setDrag(null),
+  })
+  const folderDrop = (path: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!drag) return
+      e.preventDefault()
+      if (drag.over !== `folder:${path}`) setDrag({ ...drag, over: `folder:${path}` })
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (drag) void moveTo(drag.id, null, path, false)
+    },
+  })
+  // Dropping on empty space in the list moves a connection out of its folder.
+  const listDrop = {
+    onDragOver: (e: React.DragEvent) => {
+      if (drag && e.target === e.currentTarget) e.preventDefault()
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (drag && e.target === e.currentTarget) {
+        e.preventDefault()
+        void moveTo(drag.id, null, '', false)
+      }
+    },
+  }
+  const dropClass = (key: string) => (drag?.over === key ? (key.startsWith('folder:') ? ' drop-into' : drag.before ? ' drop-before' : ' drop-after') : '')
+
   const renderFolder = (node: FolderNode, depth: number) => (
     <>
       {node.folders.map((f) => {
@@ -250,7 +322,8 @@ export function ConnectionManager() {
           <li key={`f:${f.path}`}>
             <button
               type="button"
-              className="conn-folder"
+              {...folderDrop(f.path)}
+              className={'conn-folder' + dropClass(`folder:${f.path}`)}
               style={{ paddingLeft: 8 + depth * 14 }}
               aria-expanded={open}
               onClick={() =>
@@ -263,7 +336,7 @@ export function ConnectionManager() {
               }
             >
               <span className={open ? 'caret open' : 'caret'} />
-              <span className="icon-folder" aria-hidden />
+              <FolderIcon open={open} />
               {f.name}
             </button>
             {open && <ul>{renderFolder(f, depth + 1)}</ul>}
@@ -274,11 +347,12 @@ export function ConnectionManager() {
         <li key={p.id}>
           <button
             type="button"
-            className={p.id === selected ? 'conn-item active' : 'conn-item'}
+            {...itemDrag(p)}
+            className={(p.id === selected ? 'conn-item active' : 'conn-item') + dropClass(p.id) + (drag?.id === p.id ? ' dragging' : '')}
             style={{ paddingLeft: 8 + depth * 14 }}
             onClick={() => void select(p)}
             onDoubleClick={() => void run('connect', p.id === selected ? form : fromProfile(p))}
-            title={p.uri}
+            title={`${p.uri} — drag to reorder or into a folder`}
           >
             <span className={sessions.some((s) => s.id === p.id) ? 'dot on' : 'dot'} />
             <span className="conn-name">{p.name}</span>
@@ -309,7 +383,7 @@ export function ConnectionManager() {
             </button>
           </div>
           <input className="conn-search" placeholder="Search connections" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search connections" />
-          <ul role="tree" aria-label="Saved connections">
+          <ul role="tree" aria-label="Saved connections" className="conn-tree" {...listDrop}>
             {renderFolder(tree, 0)}
             {profiles.length === 0 && <li className="muted small pad">No saved connections yet.</li>}
           </ul>

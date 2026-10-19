@@ -1380,6 +1380,7 @@ export namespace config {
 	    // Go type: time
 	    updatedAt: any;
 	    folder?: string;
+	    position?: number;
 	    server: ServerConfig;
 	    authProperties?: string;
 	    tls: TLSConfig;
@@ -1410,6 +1411,7 @@ export namespace config {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	        this.folder = source["folder"];
+	        this.position = source["position"];
 	        this.server = this.convertValues(source["server"], ServerConfig);
 	        this.authProperties = source["authProperties"];
 	        this.tls = this.convertValues(source["tls"], TLSConfig);

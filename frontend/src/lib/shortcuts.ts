@@ -171,6 +171,10 @@ export const SHORTCUTS: ShortcutDef[] = [
     handler: 'component',
     note: 'macOS: Fn+Delete.',
   }),
+  S('explorer.reorder', 'Move the connection up / down in the list', 'Explorer', ['Alt+ArrowUp', 'Alt+ArrowDown'], 'explorer', 'default', {
+    handler: 'component',
+    note: 'Or drag it.',
+  }),
   S('explorer.refreshAll', 'Refresh all connections', 'Explorer', ['Mod+Shift+R'], 'explorer', 'studio3t'),
   S('explorer.filter', 'Filter collections', 'Explorer', ['Mod+Shift+F'], 'global', 'default', { allowInInputs: true }),
 

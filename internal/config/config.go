@@ -212,6 +212,9 @@ type Profile struct {
 	// Connection manager tabs (see profile.go). Zero values keep the
 	// behavior of profiles saved before these existed.
 	Folder          string         `json:"folder,omitempty"`
+	// Position is the user's order (drag to reorder); 0 = not placed yet,
+	// listed after placed profiles, by name.
+	Position int `json:"position,omitempty"`
 	Server          ServerConfig   `json:"server"`
 	AuthProperties  string         `json:"authProperties,omitempty"` // authMechanismProperties, e.g. ENVIRONMENT:azure
 	TLS             TLSConfig      `json:"tls"`
@@ -305,9 +308,7 @@ func (s *Store) listLocked() ([]Profile, error) {
 	if err := readJSON(s.path("connections.json"), &f); err != nil {
 		return nil, err
 	}
-	sort.SliceStable(f.Profiles, func(i, j int) bool {
-		return strings.ToLower(f.Profiles[i].Name) < strings.ToLower(f.Profiles[j].Name)
-	})
+	sortProfiles(f.Profiles)
 	if f.Profiles == nil {
 		f.Profiles = []Profile{}
 	}
@@ -353,6 +354,9 @@ func (s *Store) SaveProfile(p Profile) (Profile, error) {
 				if p.LastConnectedAt == nil {
 					p.LastConnectedAt = list[i].LastConnectedAt
 				}
+				if p.Position == 0 {
+					p.Position = list[i].Position // edits keep the place in the list
+				}
 				list[i] = p
 				found = true
 			}
@@ -363,9 +367,83 @@ func (s *Store) SaveProfile(p Profile) (Profile, error) {
 	} else {
 		p.ID = NewID()
 		p.CreatedAt = now
+		p.Position = 0
+		if maxPos(list) > 0 {
+			p.Position = maxPos(list) + 1 // new connections go to the end of a custom order
+		}
 		list = append(list, p)
 	}
 	return p, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+}
+
+// sortProfiles orders by the user's position, then name (unplaced last).
+func sortProfiles(l []Profile) {
+	sort.SliceStable(l, func(i, j int) bool {
+		a, b := l[i], l[j]
+		if (a.Position == 0) != (b.Position == 0) {
+			return a.Position != 0
+		}
+		if a.Position != b.Position {
+			return a.Position < b.Position
+		}
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+	})
+}
+
+func maxPos(l []Profile) int {
+	m := 0
+	for _, p := range l {
+		if p.Position > m {
+			m = p.Position
+		}
+	}
+	return m
+}
+
+// ReorderProfiles stores the user's order: ids first, in that order; any
+// profile not listed keeps its relative place after them.
+func (s *Store) ReorderProfiles(ids []string) ([]Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list, err := s.listLocked()
+	if err != nil {
+		return nil, err
+	}
+	pos := map[string]int{}
+	for _, id := range ids {
+		if _, dup := pos[id]; !dup {
+			pos[id] = len(pos) + 1
+		}
+	}
+	next := len(pos)
+	for i := range list {
+		if p, ok := pos[list[i].ID]; ok {
+			list[i].Position = p
+		} else {
+			next++
+			list[i].Position = next
+		}
+	}
+	sortProfiles(list)
+	return list, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+}
+
+// SetProfileFolder moves a profile into a folder ("" = top level).
+func (s *Store) SetProfileFolder(id, folder string) (Profile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list, err := s.listLocked()
+	if err != nil {
+		return Profile{}, err
+	}
+	for i := range list {
+		if list[i].ID == id {
+			list[i].Folder = cleanFolder(folder)
+			list[i].UpdatedAt = time.Now().UTC()
+			return list[i], writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+		}
+	}
+	return Profile{}, apperr.New(apperr.CodeNotFound, "Connection profile not found.")
 }
 
 // TouchConnected records a successful connection (for "recent connections").

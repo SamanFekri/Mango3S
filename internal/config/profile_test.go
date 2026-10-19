@@ -156,3 +156,55 @@ func TestStoreKeepsNewSectionsAndLastConnected(t *testing.T) {
 		t.Fatalf("round trip: %+v", got)
 	}
 }
+
+func TestProfileOrder(t *testing.T) {
+	s := NewStore(t.TempDir())
+	add := func(name string) Profile {
+		p, err := s.SaveProfile(Profile{Name: name, URI: "mongodb://h"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	b, a, c := add("beta"), add("alpha"), add("charlie")
+	names := func() string {
+		l, _ := s.ListProfiles()
+		var out []string
+		for _, p := range l {
+			out = append(out, p.Name)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := names(); got != "alpha,beta,charlie" {
+		t.Fatalf("before any reorder the list is by name: %s", got)
+	}
+	if _, err := s.ReorderProfiles([]string{c.ID, a.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(); got != "charlie,alpha,beta" {
+		t.Fatalf("custom order (unlisted ones keep their place after): %s", got)
+	}
+	add("aardvark") // new connections go to the end of a custom order
+	if got := names(); got != "charlie,alpha,beta,aardvark" {
+		t.Fatalf("new profile: %s", got)
+	}
+	// Editing keeps the position; moving folders too.
+	b.Name = "bravo"
+	b.Position = 0
+	if _, err := s.SaveProfile(b); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetProfileFolder(c.ID, " Prod / EU "); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.GetProfile(c.ID)
+	if got.Folder != "Prod/EU" {
+		t.Fatalf("folder: %q", got.Folder)
+	}
+	if n := names(); n != "charlie,alpha,bravo,aardvark" {
+		t.Fatalf("an edit must keep the place in the list: %s", n)
+	}
+	if _, err := s.SetProfileFolder("nope", "x"); err == nil {
+		t.Fatal("unknown profile")
+	}
+}

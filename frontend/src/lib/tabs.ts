@@ -156,3 +156,14 @@ export function recentProfiles<T extends { name: string; lastConnectedAt?: strin
     return tb - ta || a.name.localeCompare(b.name)
   })
 }
+
+/**
+ * Moves id next to target (before or after it) in an ordered list of ids.
+ * Returns the list unchanged when id is target or either is missing.
+ */
+export function moveId(ids: string[], id: string, target: string, before: boolean): string[] {
+  if (id === target || !ids.includes(id) || !ids.includes(target)) return ids
+  const rest = ids.filter((x) => x !== id)
+  const at = rest.indexOf(target) + (before ? 0 : 1)
+  return [...rest.slice(0, at), id, ...rest.slice(at)]
+}

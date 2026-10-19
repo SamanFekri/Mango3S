@@ -140,3 +140,16 @@ describe('pagination under the results', () => {
     expect(screen.queryByRole('navigation', { name: 'Pagination (bottom)' })).toBeNull()
   })
 })
+
+describe('page size under the results', () => {
+  it('can be changed from the bottom bar too', () => {
+    const onPageSize = vi.fn()
+    renderResults({ onPageSize })
+    const top = screen.getByRole('combobox', { name: 'Page size' })
+    const bottom = screen.getByRole('combobox', { name: 'Page size (bottom)' })
+    expect(top).toHaveValue('2')
+    expect(bottom).toHaveValue('2')
+    fireEvent.change(bottom, { target: { value: '100' } })
+    expect(onPageSize).toHaveBeenCalledWith(100)
+  })
+})

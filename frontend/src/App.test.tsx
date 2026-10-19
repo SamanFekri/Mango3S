@@ -19,6 +19,8 @@ const backend = vi.hoisted(() => ({
   saveSettings: vi.fn(),
   listProfiles: vi.fn(),
   saveProfile: vi.fn(),
+  reorderProfiles: vi.fn(),
+  setProfileFolder: vi.fn(),
   deleteProfile: vi.fn(),
   testConnection: vi.fn(),
   connect: vi.fn(),
@@ -562,20 +564,87 @@ describe('app menu', () => {
     expect(screen.getAllByRole('tab', { name: /Settings/ })).toHaveLength(1) // reused, not duplicated
   })
 
-  it('About Mango3S shows the version, build and installation details', async () => {
+  it('About Mango3S shows the version and the license', async () => {
     render(<App />)
     await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
     menu('about')
     const dlg = await screen.findByRole('dialog', { name: 'About Mango3S' })
-    expect(dlg.textContent).toMatch(/Version 1\.2\.3 · build abcdef1/)
-    for (const text of [/abcdef1/, /darwin\/arm64/, /go1\.26\.0/, /MongoDB Go driver/, /v2\.9\.2/, /OS credential store/, /Mango3S\/backups/]) {
-      expect(within(dlg).getAllByText(text).length).toBeGreaterThan(0)
-    }
-    const write = vi.fn()
-    Object.assign(navigator, { clipboard: { writeText: write } })
-    fireEvent.click(within(dlg).getByRole('button', { name: 'Copy details' }))
-    expect(write.mock.calls[0][0]).toMatch(/^Mango3S 1\.2\.3\nBuild: abcdef123456 · 2026-10-18T10:00:00Z\nPlatform: darwin\/arm64 · go1\.26\.0\n/)
+    expect(dlg.textContent).toMatch(/Version 1\.2\.3 \(build abcdef1/)
+    expect(within(dlg).getByText(/Copyright © 2026 saman/)).toBeInTheDocument()
+    expect(within(dlg).getByText(/ABSOLUTELY NO\s+WARRANTY/)).toBeInTheDocument()
+    expect(within(dlg).queryByText(/Technical details/)).toBeNull()
+    fireEvent.click(within(dlg).getByRole('tab', { name: 'License' }))
+    expect(within(dlg).getByRole('tab', { name: 'License' })).toHaveAttribute('aria-selected', 'true')
+    const text = within(dlg).getByLabelText('License text')
+    expect(text.textContent).toContain('GNU GENERAL PUBLIC LICENSE')
+    expect(text.textContent).toContain('Version 3, 29 June 2007')
+    const third = within(dlg).getByText(/Third-party software/).closest('details')!
+    expect(within(third).getByText('go.mongodb.org/mongo-driver/v2')).toBeInTheDocument()
+    expect(within(third).getAllByText('Apache-2.0').length).toBeGreaterThan(0)
     fireEvent.click(within(dlg).getAllByRole('button', { name: 'Close' }).at(-1)!)
     expect(screen.queryByRole('dialog', { name: 'About Mango3S' })).toBeNull()
+  })
+
+})
+
+describe('reordering connections', () => {
+  const p2 = { ...profile, id: 'p2', name: 'Staging' }
+  const p3 = { ...profile, id: 'p3', name: 'Prod', folder: 'Clients' }
+
+  const dragOnto = (from: HTMLElement, to: HTMLElement, before: boolean) => {
+    const data = { setData: vi.fn(), getData: vi.fn(), effectAllowed: '', dropEffect: '' }
+    to.getBoundingClientRect = () => ({ top: 100, height: 20, bottom: 120, left: 0, right: 200, width: 200, x: 0, y: 100, toJSON: () => ({}) })
+    fireEvent.dragStart(from, { dataTransfer: data })
+    fireEvent.dragOver(to, { dataTransfer: data, clientY: before ? 102 : 118 })
+    fireEvent.drop(to, { dataTransfer: data, clientY: before ? 102 : 118 })
+  }
+
+  it('drag in the explorer saves the new order', async () => {
+    backend.listProfiles.mockResolvedValue([profile, p2, p3])
+    backend.reorderProfiles.mockImplementation(async (ids: string[]) => ids.map((id) => [profile, p2, p3].find((p) => p.id === id)))
+    render(<App />)
+    const sidebar = screen.getByRole('navigation', { name: 'Database explorer' })
+    const row = async (name: string) => (await within(sidebar).findByText(name)).closest('.tree-row') as HTMLElement
+    // Drop Local dev onto the lower half of Prod: it moves after it.
+    dragOnto(await row('Local dev'), await row('Prod'), false)
+    await waitFor(() => expect(backend.reorderProfiles).toHaveBeenCalledWith(['p2', 'p3', 'p1']))
+    await waitFor(() => {
+      const names = [...sidebar.querySelectorAll('.saved .tree-label')].map((e) => e.textContent?.replace('Clients / ', ''))
+      expect(names).toEqual(['Staging', 'Prod', 'Local dev'])
+    })
+  })
+
+  it('Alt+↓ moves the focused connection down', async () => {
+    backend.listProfiles.mockResolvedValue([profile, p2])
+    backend.reorderProfiles.mockImplementation(async (ids: string[]) => ids.map((id) => [profile, p2].find((p) => p.id === id)))
+    render(<App />)
+    const sidebar = screen.getByRole('navigation', { name: 'Database explorer' })
+    fireEvent.click(await within(sidebar).findAllByRole('button', { name: 'Connect' }).then((b) => b[0]))
+    await dismissConnectLog()
+    const tree = within(sidebar).getByRole('tree')
+    tree.focus()
+    act(() => {
+      tree.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    })
+    act(() => {
+      tree.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }))
+    })
+    await waitFor(() => expect(backend.reorderProfiles).toHaveBeenCalledWith(['p2', 'p1']))
+  })
+
+  it('dropping on a folder in the connection manager moves the connection into it', async () => {
+    backend.listProfiles.mockResolvedValue([profile, p3])
+    backend.setProfileFolder.mockResolvedValue({ ...profile, folder: 'Clients' })
+    render(<App />)
+    await screen.findByText('Local dev', { selector: '.welcome-name' })
+    fireEvent.click(within(screen.getByRole('tabpanel')).getByRole('button', { name: 'Open saved connections…' }))
+    const dlg = await screen.findByRole('dialog', { name: 'Connection Manager' })
+    const item = within(dlg).getByRole('button', { name: /Local dev/ })
+    const folder = within(dlg).getByRole('button', { name: /Clients/ })
+    const data = { setData: vi.fn(), getData: vi.fn(), effectAllowed: '', dropEffect: '' }
+    fireEvent.dragStart(item, { dataTransfer: data })
+    fireEvent.dragOver(folder, { dataTransfer: data })
+    fireEvent.drop(folder, { dataTransfer: data })
+    await waitFor(() => expect(backend.setProfileFolder).toHaveBeenCalledWith('p1', 'Clients'))
   })
 })

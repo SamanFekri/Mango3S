@@ -3,13 +3,16 @@ MONGO_URI ?= mongodb://localhost:27017
 PG_DSN ?= postgres://mango_reader:reader@localhost:5433/shop?sslmode=disable
 MYSQL_DSN ?= mango_reader:reader@tcp(localhost:3307)/shop
 
-.PHONY: dev build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down docker-build docker-test bindings mcp
+.PHONY: notices dev build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down docker-build docker-test bindings mcp
 
 dev: ## Run the app with hot reload
 	$(WAILS) dev
 
 build: ## Build the desktop app for this OS into build/bin
 	$(WAILS) build -clean
+
+notices: ## Regenerate the third-party license list shown in About › License
+	scripts/third-party-notices.sh
 
 bindings: ## Regenerate frontend/wailsjs after changing bound Go methods
 	$(WAILS) generate module

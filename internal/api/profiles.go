@@ -177,6 +177,18 @@ func (a *App) saveProfile(in ProfileInput) (config.Profile, error) {
 	return saved, nil
 }
 
+// ReorderProfiles saves the order of the connection list (drag to reorder).
+func (a *App) ReorderProfiles(ids []string) ([]config.Profile, error) {
+	l, err := a.store.ReorderProfiles(ids)
+	return l, a.encode("ReorderProfiles", err)
+}
+
+// SetProfileFolder moves a connection into a folder ("" = top level).
+func (a *App) SetProfileFolder(id, folder string) (config.Profile, error) {
+	p, err := a.store.SetProfileFolder(id, folder)
+	return p, a.encode("SetProfileFolder", err)
+}
+
 // DuplicateProfile copies a profile, its stored secrets and its collection
 // history under a new name.
 func (a *App) DuplicateProfile(id string) (config.Profile, error) {

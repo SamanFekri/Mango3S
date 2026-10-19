@@ -179,3 +179,14 @@ describe('buildQueryText', () => {
     expect(buildQueryText('we"ird', { filter: '', projection: '{}', sort: '{ }', skip: 0, limit: 0 })).toBe('db.getCollection("we\\"ird").find({})')
   })
 })
+
+import { moveId } from './tabs'
+
+describe('moveId', () => {
+  it('moves an id before or after another', () => {
+    expect(moveId(['a', 'b', 'c', 'd'], 'd', 'b', true)).toEqual(['a', 'd', 'b', 'c'])
+    expect(moveId(['a', 'b', 'c', 'd'], 'a', 'c', false)).toEqual(['b', 'c', 'a', 'd'])
+    expect(moveId(['a', 'b'], 'a', 'a', true)).toEqual(['a', 'b'])
+    expect(moveId(['a', 'b'], 'x', 'a', true)).toEqual(['a', 'b'])
+  })
+})
