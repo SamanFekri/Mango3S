@@ -1,14 +1,26 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { backend, newOpId, onConnectionStep, onJobUpdate, onNewNotification, onUpdateStatus } from '../lib/backend'
+import {
+  backend,
+  newOpId,
+  onAccountChanged,
+  onConnectionStep,
+  onJobUpdate,
+  onNewNotification,
+  onPrivacyRequired,
+  onProfilesChanged,
+  onUpdateStatus,
+} from '../lib/backend'
 import { errorTitle, toAppError, type AppError } from '../lib/errors'
 import { setKeymapOverrides } from '../lib/shortcuts'
 import { tabsReducer, type TabsAction, type TabsState } from '../lib/tabs'
 import type {
+  AccountState,
   AppInfo,
   ConnectionStep,
   Job,
   PlatformNotification,
+  PrivacyPolicy,
   Profile,
   ProfileInput,
   SessionInfo,
@@ -123,7 +135,19 @@ interface AppState {
   updateDialogOpen: boolean
   setUpdateDialogOpen: (open: boolean) => void
   notificationQueue: PlatformNotification[]
-  dismissNotification: (id: string) => void
+  /** Closes a notification, reporting the pressed button ("close" for the X). */
+  dismissNotification: (id: string, buttonId?: string) => void
+
+  /** Privacy policy: set while a new version waits for acceptance. */
+  privacyPolicy: PrivacyPolicy | null
+  privacyDialogOpen: boolean
+  setPrivacyDialogOpen: (open: boolean) => void
+  /** Opens the privacy dialog, optionally with a policy just fetched. */
+  openPrivacy: (policy?: PrivacyPolicy | null) => void
+  acceptPrivacy: (version: number) => Promise<void>
+  /** Optional Mango3S account. */
+  accountState: AccountState | null
+  setAccountState: (s: AccountState) => void
 }
 
 const Ctx = createContext<AppState | null>(null)
@@ -281,10 +305,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     wasReadyToInstall.current = isReady
   }, [updateStatus])
 
-  const dismissNotification = useCallback((id: string) => {
+  const dismissNotification = useCallback((id: string, buttonId = 'close') => {
     setNotificationQueue((q) => q.filter((n) => n.id !== id))
-    backend.ackNotification(id).catch(() => undefined)
+    backend.respondNotification(id, buttonId).catch(() => undefined)
   }, [])
+
+  // Privacy policy: the backend asks once per launch when a new version needs accepting.
+  const [privacyPolicy, setPrivacyPolicy] = useState<PrivacyPolicy | null>(null)
+  const [privacyDialogOpen, setPrivacyDialogOpen] = useState(false)
+  useEffect(
+    () =>
+      onPrivacyRequired((p) => {
+        setPrivacyPolicy(p)
+        setPrivacyDialogOpen(true)
+      }),
+    [],
+  )
+  const openPrivacy = useCallback((p?: PrivacyPolicy | null) => {
+    if (p) setPrivacyPolicy(p)
+    setPrivacyDialogOpen(true)
+  }, [])
+  const acceptPrivacy = useCallback(async (version: number) => {
+    const next = await backend.acceptPrivacyPolicy(version)
+    setPrivacyPolicy(next && next.acceptanceRequired ? next : null)
+    setPrivacyDialogOpen(!!next?.acceptanceRequired) // a newer version was published meanwhile
+    setAccountState((s) => (s ? { ...s, privacyPending: !!next?.acceptanceRequired } : s))
+  }, [])
+
+  // Account state, kept current by backend events (sign-out on an expired session, background sync).
+  const [accountState, setAccountState] = useState<AccountState | null>(null)
+  useEffect(() => {
+    backend.getAccountState().then(setAccountState).catch(() => undefined)
+    return onAccountChanged(setAccountState)
+  }, [])
+  // A restore from the account adds, changes or removes connections.
+  useEffect(() => onProfilesChanged(() => reloadProfilesRef.current?.()), [])
 
   // Background jobs: initial list plus live updates pushed by the backend.
   const refreshJobs = useCallback(() => {
@@ -502,6 +557,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setUpdateDialogOpen,
       notificationQueue,
       dismissNotification,
+      privacyPolicy,
+      privacyDialogOpen,
+      setPrivacyDialogOpen,
+      openPrivacy,
+      acceptPrivacy,
+      accountState,
+      setAccountState,
     }),
     [
       settings, saveSettings, appInfo, profiles, reloadProfiles, reorderProfiles, sessions, connect, disconnect, connecting,
@@ -510,6 +572,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       connectionLog, closeConnectionLog, testConnection,
       jobs, refreshJobs, prompt, promptRequest, resolvePrompt,
       updateStatus, updateDialogOpen, notificationQueue, dismissNotification,
+      privacyPolicy, privacyDialogOpen, openPrivacy, acceptPrivacy, accountState,
     ],
   )
 

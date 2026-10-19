@@ -31,6 +31,10 @@ export interface Settings {
   autoUpdateEnabled: boolean
   deviceFingerprint?: string
   updateInstallationId?: string
+  /** Back connections up to the signed-in Mango3S account in the background. */
+  syncAuto: boolean
+  /** Show Mango, the animated mascot, in the explorer. */
+  showMascot: boolean
 }
 
 export type UpdateState =
@@ -56,10 +60,113 @@ export interface UpdateStatus {
   lastCheckedAt?: string
 }
 
+export type NotificationAction = 'open_link' | 'ok' | 'accept' | 'cancel'
+
+export interface NotificationButton {
+  id: string
+  label: string
+  action: NotificationAction
+  url: string | null
+  style: 'primary' | 'secondary'
+}
+
 export interface PlatformNotification {
   id: string
   title: string
   body: string
+  /** 0–3 buttons, in order; a close (X) is always shown as well. */
+  buttons?: NotificationButton[] | null
+}
+
+/** GET /v1/policies/privacy for this installation. */
+export interface PrivacyPolicy {
+  version: number
+  title: string
+  /** Markdown. */
+  body: string
+  summary: string | null
+  publishedAt: string | null
+  url: string
+  acceptanceRequired: boolean
+  acceptedAt: string | null
+}
+
+export interface Donation {
+  url: string
+  heading: string
+  message: string
+  buttonLabel: string
+}
+
+/** About / Support links from the Mango3S server; donation is null when turned off. */
+export interface PlatformInfo {
+  name: string
+  websiteUrl: string
+  downloadUrl: string
+  privacyPolicyUrl: string
+  contactUrl: string
+  donation: Donation | null
+}
+
+export interface AccountMachine {
+  machineId: string
+  label: string | null
+  lastSeenAt: string | null
+}
+
+export interface Account {
+  clientId: string
+  email: string
+  createdAt: string
+  recoveryKeyCreatedAt: string | null
+  machines: AccountMachine[] | null
+  sync: { enabled: boolean; itemCount: number; lastSyncedAt: string | null; maxItems: number; maxItemKb: number }
+}
+
+export type AccountFeature = 'registration' | 'login' | 'passwordReset' | 'sync'
+
+export interface AccountState {
+  signedIn: boolean
+  email: string
+  account: Account | null
+  /** Features the server reported as turned off by the administrator. */
+  disabled: Partial<Record<AccountFeature, boolean>> | null
+  syncing: boolean
+  lastSyncAt: string
+  lastSyncError: string
+  pendingChanges: number
+  restoreSuggested: boolean
+  privacyPending: boolean
+}
+
+export interface AccountResult {
+  state: AccountState
+  /** Shown once after sign-up (and after a reset that erased the data). */
+  recoveryKey?: string
+  dataKept?: boolean | null
+}
+
+export interface CodeSent {
+  codeSentTo: string
+  expiresInMinutes: number
+}
+
+export interface SyncReport {
+  uploaded: number
+  deleted: number
+  added: number
+  updated: number
+  removed: number
+  skipped: number
+  errors: string[] | null
+}
+
+export interface ResetPasswordInput {
+  email: string
+  code: string
+  newPassword: string
+  recoveryKey: string
+  discardSyncedData: boolean
 }
 
 export type ServerMode = 'uri' | 'manual'

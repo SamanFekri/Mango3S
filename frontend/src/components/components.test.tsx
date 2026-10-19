@@ -5,6 +5,8 @@ import { emptyBuilder, type BuilderState } from '../lib/queryBuilder'
 import type { Page } from '../lib/types'
 import { ErrorBanner } from './common'
 import { highlight } from './highlight'
+import { highlightCode } from '../lib/syntax'
+import { PasswordInput } from './PasswordInput'
 import { QueryBuilder } from './QueryBuilder'
 import { ResultsView } from './ResultsView'
 
@@ -151,5 +153,42 @@ describe('page size under the results', () => {
     expect(bottom).toHaveValue('2')
     fireEvent.change(bottom, { target: { value: '100' } })
     expect(onPageSize).toHaveBeenCalledWith(100)
+  })
+})
+
+describe('syntax highlighting and password fields', () => {
+  it('highlights generated code per language, with strings in their own class', () => {
+    const py = render(<pre>{highlightCode('from pymongo import MongoClient\nclient = MongoClient("mongodb://x")  # hi', 'python')}</pre>)
+    expect(py.container.querySelector('.hl-keyword')?.textContent).toBe('from')
+    expect(py.container.querySelector('.hl-string')?.textContent).toBe('"mongodb://x"')
+    expect(py.container.querySelector('.hl-comment')?.textContent).toBe('# hi')
+    for (const [lang, code, kw] of [
+      ['java', 'public class A { String s = "x"; }', 'public'],
+      ['go', 'package main\nfunc main() { s := "x" }', 'package'],
+      ['csharp', 'using MongoDB.Driver;\nvar s = "x";', 'using'],
+      ['javascript', 'import { MongoClient } from "mongodb"', 'import'],
+    ]) {
+      const { container } = render(<pre>{highlightCode(code, lang)}</pre>)
+      expect(container.querySelector('.hl-string')?.textContent, lang).toMatch(/^"(x|mongodb)"$/)
+      expect(container.querySelector('.hl-keyword')?.textContent, lang).toBe(kw)
+      expect(container.textContent, lang).toBe(code) // nothing lost or reordered
+    }
+    expect(render(<pre>{highlightCode('anything', 'cobol')}</pre>).container.textContent).toBe('anything')
+  })
+
+  it('shows and hides a password with the eye button', () => {
+    render(
+      <label>
+        Password
+        <PasswordInput value="hunter2" onChange={() => undefined} />
+      </label>,
+    )
+    const input = screen.getByLabelText('Password')
+    expect(input).toHaveAttribute('type', 'password')
+    fireEvent.click(screen.getByRole('button', { name: 'Show password' }))
+    expect(input).toHaveAttribute('type', 'text')
+    expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(input).toHaveAttribute('type', 'password')
   })
 })

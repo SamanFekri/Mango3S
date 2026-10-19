@@ -1,3 +1,5 @@
+import { PasswordInput } from './PasswordInput'
+import { CodeBlock } from '../lib/syntax'
 import { useCallback, useEffect, useState } from 'react'
 import { backend } from '../lib/backend'
 import { toAppError } from '../lib/errors'
@@ -172,8 +174,7 @@ export function AISettings({ form, set }: { form: Settings; set: <K extends keyo
                 {status?.keySource === 'stored' ? 'stored in the credential store' : status?.keySource === 'environment' ? 'from ANTHROPIC_API_KEY' : 'not set'}
               </span>
               <div className="file-row">
-                <input
-                  type="password"
+                <PasswordInput
                   placeholder="sk-ant-…"
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
@@ -362,7 +363,7 @@ export function AISettings({ form, set }: { form: Settings; set: <K extends keyo
               <div className="field">
                 <span>API key (only if the server needs one) — {status?.localHasKey ? 'stored' : 'none'}</span>
                 <div className="file-row">
-                  <input type="password" value={localKey} onChange={(e) => setLocalKey(e.target.value)} autoComplete="off" aria-label="Local server API key" />
+                  <PasswordInput value={localKey} onChange={(e) => setLocalKey(e.target.value)} autoComplete="off" aria-label="Local server API key" />
                   <button
                     type="button"
                     disabled={!localKey}
@@ -573,7 +574,7 @@ export function MCPSettings() {
       </div>
       <div className="field">
         <span>Client configuration (e.g. claude_desktop_config.json)</span>
-        <pre className="code-output small">{info.snippet}</pre>
+        <CodeBlock code={info.snippet} lang="json" className="code-output small" />
         <button className="small" onClick={() => navigator.clipboard?.writeText(info.snippet)}>
           Copy
         </button>

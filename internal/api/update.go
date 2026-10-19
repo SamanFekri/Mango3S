@@ -72,15 +72,27 @@ type updateState struct {
 	mu          sync.Mutex
 	downloading bool
 	notifiedIDs map[string]bool // shown this session, so a later check doesn't show them again
-	pendingAcks map[string]bool // dismissed but not yet confirmed by the platform; retried each check
+	// pendingResponses are notifications the user answered (button ID, "close"
+	// for the X, or "" for a plain ack) that the platform hasn't confirmed
+	// yet; retried on each check.
+	pendingResponses map[string]string
+
+	// Privacy policy and About/Support links (see platform.go).
+	privacy         *update.PrivacyPolicy
+	privacyPrompted bool // asked once per launch
+	appInfo         *update.AppInfo
+	appInfoAt       time.Time
+
+	acct accountState // optional Mango3S account (account.go)
 }
 
 func newUpdateState() *updateState {
 	return &updateState{
-		tracker:     update.NewTracker(Version),
-		emit:        func(string, any) {},
-		notifiedIDs: map[string]bool{},
-		pendingAcks: map[string]bool{},
+		tracker:          update.NewTracker(Version),
+		emit:             func(string, any) {},
+		notifiedIDs:      map[string]bool{},
+		pendingResponses: map[string]string{},
+		acct:             accountState{disabled: map[string]bool{}},
 	}
 }
 
@@ -165,10 +177,13 @@ func (a *App) updateTick(ctx context.Context) tickResult {
 	}
 	a.markReachable()
 
-	a.flushPendingAcks(ctx, client, token)
+	a.flushPendingResponses(ctx, client, token)
 	if r := a.pollNotifications(ctx, client, token); r == tickBlocked {
 		return r
 	}
+	a.refreshPrivacyPolicy(ctx, client, token)
+	a.refreshAppInfo(ctx, client, false)
+	a.backgroundSync(ctx, client)
 	if a.currentSettings().AutoUpdateEnabled {
 		if r := a.checkAndMaybeDownload(ctx, client, token); r == tickBlocked {
 			return r
@@ -284,21 +299,30 @@ func (a *App) pollNotifications(ctx context.Context, client *update.Client, toke
 	return tickOK
 }
 
-// flushPendingAcks claims every pending ack before sending it (so two
-// concurrent flushes never send the same one) and puts back the ones that
-// still fail, for the next check.
-func (a *App) flushPendingAcks(ctx context.Context, client *update.Client, token string) {
+// flushPendingResponses claims every pending response before sending it (so
+// two concurrent flushes never send the same one) and puts back the ones that
+// failed transiently, for the next check. A 4xx (e.g. the notification was
+// deleted, or the button no longer exists) is final and dropped.
+func (a *App) flushPendingResponses(ctx context.Context, client *update.Client, token string) {
 	a.update.mu.Lock()
-	ids := make([]string, 0, len(a.update.pendingAcks))
-	for id := range a.update.pendingAcks {
-		ids = append(ids, id)
-		delete(a.update.pendingAcks, id)
+	pending := make(map[string]string, len(a.update.pendingResponses))
+	for id, button := range a.update.pendingResponses {
+		pending[id] = button
+		delete(a.update.pendingResponses, id)
 	}
 	a.update.mu.Unlock()
-	for _, id := range ids {
-		if err := client.Ack(ctx, token, id); err != nil {
+	for id, button := range pending {
+		var err error
+		if button == "" {
+			err = client.Ack(ctx, token, id)
+		} else {
+			err = client.Respond(ctx, token, id, button)
+		}
+		if update.IsTransient(err) || update.IsUnauthorized(err) {
 			a.update.mu.Lock()
-			a.update.pendingAcks[id] = true
+			if _, newer := a.update.pendingResponses[id]; !newer {
+				a.update.pendingResponses[id] = button
+			}
 			a.update.mu.Unlock()
 		}
 	}
@@ -469,21 +493,34 @@ func (a *App) FetchNotifications() []update.Notification {
 	return list
 }
 
-// AckNotification marks a notification read. If the platform can't be reached
-// the ack is kept and retried on later checks — the user already dismissed it,
-// so this never reports an error.
-func (a *App) AckNotification(id string) {
+// AckNotification marks a notification read without a response. Prefer
+// RespondNotification, which also records what the user chose.
+func (a *App) AckNotification(id string) { a.queueResponse(id, "") }
+
+// RespondNotification reports the button the user pressed on a notification
+// ("close" for its X), which also marks it read. If the platform can't be
+// reached the response is kept and retried on later checks — the user already
+// moved on, so this never reports an error.
+func (a *App) RespondNotification(id, buttonID string) {
+	if strings.TrimSpace(buttonID) == "" {
+		buttonID = update.CloseButtonID
+	}
+	a.queueResponse(id, buttonID)
+}
+
+func (a *App) queueResponse(id, buttonID string) {
 	a.update.mu.Lock()
-	a.update.pendingAcks[id] = true
+	a.update.pendingResponses[id] = buttonID
 	a.update.mu.Unlock()
 	token, _, ok := a.updateCredentials()
 	if !ok {
 		return
 	}
+	client := a.platformClient()
 	go func() {
-		defer a.guard("ack")
+		defer a.guard("respond")
 		ctx, cancel := context.WithTimeout(a.ctx, requestTimeout)
 		defer cancel()
-		a.flushPendingAcks(ctx, a.platformClient(), token)
+		a.flushPendingResponses(ctx, client, token)
 	}()
 }

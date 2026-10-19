@@ -6,6 +6,7 @@ import { sql as sqlLang } from '@codemirror/lang-sql'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { EditorView, keymap, placeholder as placeholderExt, type KeyBinding } from '@codemirror/view'
 import { basicSetup, minimalSetup } from 'codemirror'
+import { codeHighlighting } from '../lib/syntax'
 
 const OPERATORS = [
   '$eq', '$ne', '$gt', '$gte', '$lt', '$lte', '$in', '$nin', '$and', '$or', '$nor', '$not',
@@ -116,6 +117,7 @@ export function CodeEditor({
         extensions: [
           compact ? minimalSetup : basicSetup,
           language === 'sql' ? sqlLang() : javascript(),
+          codeHighlighting,
           theme,
           EditorView.lineWrapping,
           language === 'sql' ? [] : autocompletion({ override: [complete], activateOnTyping: true }),

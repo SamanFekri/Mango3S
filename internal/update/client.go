@@ -65,13 +65,43 @@ func New(baseURL string) *Client {
 
 // StatusError is returned when the platform responds with a non-2xx status.
 // Callers use IsForbidden to detect "this client/installation was disabled".
+// Code and Message come from the platform's error body
+// ({"error":{"code","message","details"}}) when it has one.
 type StatusError struct {
-	Status int
-	Body   string
+	Status  int
+	Body    string
+	Code    string
+	Message string
+	Details json.RawMessage
 }
 
 func (e *StatusError) Error() string {
 	return fmt.Sprintf("platform returned HTTP %d: %s", e.Status, e.Body)
+}
+
+func newStatusError(status int, body []byte) *StatusError {
+	se := &StatusError{Status: status, Body: strings.TrimSpace(string(body))}
+	var parsed struct {
+		Error struct {
+			Code    string          `json:"code"`
+			Message string          `json:"message"`
+			Details json.RawMessage `json:"details"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &parsed) == nil {
+		se.Code, se.Message, se.Details = parsed.Error.Code, parsed.Error.Message, parsed.Error.Details
+	}
+	return se
+}
+
+// ErrorCode returns the platform's error code (e.g. "invalid_code") for a
+// StatusError, or "" for any other error.
+func ErrorCode(err error) string {
+	var se *StatusError
+	if errors.As(err, &se) {
+		return se.Code
+	}
+	return ""
 }
 
 // IsForbidden reports whether err is a 403 — an admin blocked this installation.
@@ -90,16 +120,33 @@ func IsUnauthorized(err error) bool {
 // do sends one API call, retrying transient failures per RetryDelays (with
 // jitter, so a fleet of installs coming back online doesn't retry in lockstep).
 func (c *Client) do(ctx context.Context, method, path, token string, body, out any) error {
+	return c.send(ctx, call{method: method, path: path, token: token, body: body, out: out, retry: true})
+}
+
+// call is one request. Calls the user is waiting on (account actions) set
+// retry=false: they fail fast and the user decides whether to try again, and
+// a non-idempotent request such as "email me a code" is never sent twice.
+type call struct {
+	method, path, token string
+	headers             map[string]string
+	body, out           any
+	retry               bool
+}
+
+func (c *Client) send(ctx context.Context, cl call) error {
 	var payload []byte
-	if body != nil {
-		b, err := json.Marshal(body)
+	if cl.body != nil {
+		b, err := json.Marshal(cl.body)
 		if err != nil {
 			return err
 		}
 		payload = b
 	}
 	for attempt := 0; ; attempt++ {
-		err := c.doOnce(ctx, method, path, token, payload, out)
+		err := c.doOnce(ctx, cl, payload)
+		if !cl.retry {
+			return err
+		}
 		if err == nil || !IsTransient(err) || attempt >= len(RetryDelays) || ctx.Err() != nil {
 			return err
 		}
@@ -113,21 +160,25 @@ func (c *Client) do(ctx context.Context, method, path, token string, body, out a
 	}
 }
 
-func (c *Client) doOnce(ctx context.Context, method, path, token string, payload []byte, out any) error {
+func (c *Client) doOnce(ctx context.Context, cl call, payload []byte) error {
 	var rd io.Reader
 	if payload != nil {
 		rd = bytes.NewReader(payload)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, rd)
+	req, err := http.NewRequestWithContext(ctx, cl.method, c.BaseURL+cl.path, rd)
 	if err != nil {
 		return err
 	}
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if cl.token != "" {
+		req.Header.Set("Authorization", "Bearer "+cl.token)
 	}
+	for k, v := range cl.headers {
+		req.Header.Set(k, v)
+	}
+	out := cl.out
 	resp, err := HTTPClient.Do(req)
 	if err != nil {
 		return err
@@ -135,7 +186,7 @@ func (c *Client) doOnce(ctx context.Context, method, path, token string, payload
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 300 {
-		return &StatusError{Status: resp.StatusCode, Body: strings.TrimSpace(string(data))}
+		return newStatusError(resp.StatusCode, data)
 	}
 	if out != nil && len(data) > 0 {
 		return json.Unmarshal(data, out)
@@ -221,10 +272,32 @@ func (c *Client) CheckForUpdate(ctx context.Context, token, osName, arch, channe
 }
 
 // Notification is one platform notification targeted at this installation.
+// It is shown with its buttons (0–3, in order) plus an always-present close.
 type Notification struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Body  string `json:"body"`
+	ID      string               `json:"id"`
+	Title   string               `json:"title"`
+	Body    string               `json:"body"`
+	Buttons []NotificationButton `json:"buttons"`
+}
+
+// Notification button actions.
+const (
+	ActionOpenLink = "open_link" // open URL in the default browser
+	ActionOK       = "ok"
+	ActionAccept   = "accept" // records agreement
+	ActionCancel   = "cancel" // records declining
+)
+
+// CloseButtonID is the response sent when the user closes a notification with its X.
+const CloseButtonID = "close"
+
+// NotificationButton is one button on a notification.
+type NotificationButton struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Action string `json:"action"`
+	URL    string `json:"url"`
+	Style  string `json:"style"` // primary | secondary
 }
 
 // ListNotifications returns this installation's active, unacknowledged notifications.
@@ -237,6 +310,13 @@ func (c *Client) ListNotifications(ctx context.Context, token string) ([]Notific
 // Ack marks a notification as read for this installation.
 func (c *Client) Ack(ctx context.Context, token, id string) error {
 	return c.do(ctx, http.MethodPost, "/v1/notifications/"+url.PathEscape(id)+"/ack", token, nil, nil)
+}
+
+// Respond reports which button the user pressed (CloseButtonID for the X).
+// It also marks the notification as seen, so no separate Ack is needed.
+func (c *Client) Respond(ctx context.Context, token, id, buttonID string) error {
+	body := map[string]string{"buttonId": buttonID}
+	return c.do(ctx, http.MethodPost, "/v1/notifications/"+url.PathEscape(id)+"/respond", token, body, nil)
 }
 
 // DownloadArtifact streams downloadURL (relative to BaseURL, or absolute) to destPath,
@@ -261,7 +341,7 @@ func (c *Client) DownloadArtifact(ctx context.Context, token, downloadURL, destP
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
-		return &StatusError{Status: resp.StatusCode, Body: strings.TrimSpace(string(data))}
+		return newStatusError(resp.StatusCode, data)
 	}
 
 	out, err := os.Create(destPath)

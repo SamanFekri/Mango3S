@@ -12,6 +12,7 @@ import { ConnectionLogDialog } from './components/ConnectionLogDialog'
 import { ConnectionManager } from './components/ConnectionManager'
 import { JobsIndicator } from './components/JobsPanel'
 import { NotificationDialog } from './components/NotificationDialog'
+import { PrivacyDialog } from './components/PrivacyDialog'
 import { Sidebar } from './components/Sidebar'
 import { UpdateDialog } from './components/UpdateDialog'
 import { UpdateIndicator } from './components/UpdateIndicator'
@@ -266,6 +267,7 @@ function Shell() {
       <PromptDialog />
       <UpdateDialog />
       <NotificationDialog />
+      <PrivacyDialog />
       <Toasts />
     </div>
   )

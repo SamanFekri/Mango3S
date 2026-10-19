@@ -1,3 +1,4 @@
+import { CodeBlock } from '../lib/syntax'
 import { useEffect, useState } from 'react'
 import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
@@ -116,7 +117,7 @@ export function BulkWriteDialog({
             <strong>{preview.affected}</strong> document{preview.affected === 1 ? '' : 's'} will be {kind === 'remove' ? 'deleted' : 'updated'}
             {preview.sampleIds.length > 0 && <> (e.g. {preview.sampleIds.join(', ')})</>}. Their current versions are backed up first (Library → Backups).
           </p>
-          <pre className="doc-text small">{preview.shell}</pre>
+          <CodeBlock code={preview.shell} lang="mongosh" className="doc-text small" />
           {preview.affected > 0 && <ConfirmInput text={preview.confirmText} value={confirm} onChange={setConfirm} action={`${verb}s ${preview.affected} documents`} />}
         </section>
       )}

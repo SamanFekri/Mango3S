@@ -379,6 +379,89 @@ export namespace api {
 	        this.localHasKey = source["localHasKey"];
 	    }
 	}
+	export class AccountState {
+	    signedIn: boolean;
+	    email: string;
+	    account?: update.Account;
+	    disabled: Record<string, boolean>;
+	    syncing: boolean;
+	    lastSyncAt: string;
+	    lastSyncError: string;
+	    pendingChanges: number;
+	    restoreSuggested: boolean;
+	    privacyPending: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccountState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.signedIn = source["signedIn"];
+	        this.email = source["email"];
+	        this.account = this.convertValues(source["account"], update.Account);
+	        this.disabled = source["disabled"];
+	        this.syncing = source["syncing"];
+	        this.lastSyncAt = source["lastSyncAt"];
+	        this.lastSyncError = source["lastSyncError"];
+	        this.pendingChanges = source["pendingChanges"];
+	        this.restoreSuggested = source["restoreSuggested"];
+	        this.privacyPending = source["privacyPending"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AccountResult {
+	    state: AccountState;
+	    recoveryKey?: string;
+	    dataKept?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccountResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = this.convertValues(source["state"], AccountState);
+	        this.recoveryKey = source["recoveryKey"];
+	        this.dataKept = source["dataKept"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class AppInfo {
 	    version: string;
 	    configDir: string;
@@ -877,6 +960,26 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class ResetPasswordInput {
+	    email: string;
+	    code: string;
+	    newPassword: string;
+	    recoveryKey: string;
+	    discardSyncedData: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ResetPasswordInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.email = source["email"];
+	        this.code = source["code"];
+	        this.newPassword = source["newPassword"];
+	        this.recoveryKey = source["recoveryKey"];
+	        this.discardSyncedData = source["discardSyncedData"];
+	    }
+	}
 	export class RestoreRequest {
 	    connId: string;
 	    engine: string;
@@ -1021,6 +1124,30 @@ export namespace api {
 	}
 	
 	
+	export class SyncReport {
+	    uploaded: number;
+	    deleted: number;
+	    added: number;
+	    updated: number;
+	    removed: number;
+	    skipped: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SyncReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uploaded = source["uploaded"];
+	        this.deleted = source["deleted"];
+	        this.added = source["added"];
+	        this.updated = source["updated"];
+	        this.removed = source["removed"];
+	        this.skipped = source["skipped"];
+	        this.errors = source["errors"];
+	    }
+	}
 	export class TransformPreview {
 	    planId: string;
 	    preview: transform.Preview;
@@ -1784,6 +1911,8 @@ export namespace config {
 	    autoUpdateEnabled: boolean;
 	    deviceFingerprint?: string;
 	    updateInstallationId?: string;
+	    syncAuto: boolean;
+	    showMascot: boolean;
 	    keymap?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
@@ -1816,6 +1945,8 @@ export namespace config {
 	        this.autoUpdateEnabled = source["autoUpdateEnabled"];
 	        this.deviceFingerprint = source["deviceFingerprint"];
 	        this.updateInstallationId = source["updateInstallationId"];
+	        this.syncAuto = source["syncAuto"];
+	        this.showMascot = source["showMascot"];
 	        this.keymap = source["keymap"];
 	    }
 	}
@@ -4896,10 +5027,182 @@ export namespace transform {
 
 export namespace update {
 	
+	export class AccountSync {
+	    enabled: boolean;
+	    itemCount: number;
+	    lastSyncedAt?: string;
+	    maxItems: number;
+	    maxItemKb: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccountSync(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.itemCount = source["itemCount"];
+	        this.lastSyncedAt = source["lastSyncedAt"];
+	        this.maxItems = source["maxItems"];
+	        this.maxItemKb = source["maxItemKb"];
+	    }
+	}
+	export class AccountMachine {
+	    machineId: string;
+	    label?: string;
+	    lastSeenAt?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccountMachine(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineId = source["machineId"];
+	        this.label = source["label"];
+	        this.lastSeenAt = source["lastSeenAt"];
+	    }
+	}
+	export class Account {
+	    clientId: string;
+	    email: string;
+	    createdAt: string;
+	    recoveryKeyCreatedAt?: string;
+	    machines: AccountMachine[];
+	    sync: AccountSync;
+	
+	    static createFrom(source: any = {}) {
+	        return new Account(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.clientId = source["clientId"];
+	        this.email = source["email"];
+	        this.createdAt = source["createdAt"];
+	        this.recoveryKeyCreatedAt = source["recoveryKeyCreatedAt"];
+	        this.machines = this.convertValues(source["machines"], AccountMachine);
+	        this.sync = this.convertValues(source["sync"], AccountSync);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class Donation {
+	    url: string;
+	    heading: string;
+	    message: string;
+	    buttonLabel: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Donation(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.heading = source["heading"];
+	        this.message = source["message"];
+	        this.buttonLabel = source["buttonLabel"];
+	    }
+	}
+	export class AppInfo {
+	    name: string;
+	    websiteUrl: string;
+	    downloadUrl: string;
+	    privacyPolicyUrl: string;
+	    contactUrl: string;
+	    donation?: Donation;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.websiteUrl = source["websiteUrl"];
+	        this.downloadUrl = source["downloadUrl"];
+	        this.privacyPolicyUrl = source["privacyPolicyUrl"];
+	        this.contactUrl = source["contactUrl"];
+	        this.donation = this.convertValues(source["donation"], Donation);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CodeSent {
+	    codeSentTo: string;
+	    expiresInMinutes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CodeSent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.codeSentTo = source["codeSentTo"];
+	        this.expiresInMinutes = source["expiresInMinutes"];
+	    }
+	}
+	
+	export class NotificationButton {
+	    id: string;
+	    label: string;
+	    action: string;
+	    url: string;
+	    style: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NotificationButton(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.action = source["action"];
+	        this.url = source["url"];
+	        this.style = source["style"];
+	    }
+	}
 	export class Notification {
 	    id: string;
 	    title: string;
 	    body: string;
+	    buttons: NotificationButton[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Notification(source);
@@ -4910,6 +5213,52 @@ export namespace update {
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.body = source["body"];
+	        this.buttons = this.convertValues(source["buttons"], NotificationButton);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class PrivacyPolicy {
+	    version: number;
+	    title: string;
+	    body: string;
+	    summary?: string;
+	    publishedAt?: string;
+	    url: string;
+	    acceptanceRequired: boolean;
+	    acceptedAt?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PrivacyPolicy(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.title = source["title"];
+	        this.body = source["body"];
+	        this.summary = source["summary"];
+	        this.publishedAt = source["publishedAt"];
+	        this.url = source["url"];
+	        this.acceptanceRequired = source["acceptanceRequired"];
+	        this.acceptedAt = source["acceptedAt"];
 	    }
 	}
 	export class Status {

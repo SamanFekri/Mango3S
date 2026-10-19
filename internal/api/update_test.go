@@ -30,6 +30,8 @@ type fakePlatform struct {
 	blocked     bool // every call answers 403
 	down        bool // every call answers 503
 	failAcks    bool
+
+	ext fakeExtras // privacy, app info, accounts and sync (platform_test.go)
 }
 
 func (p *fakePlatform) handler(w http.ResponseWriter, r *http.Request) {
@@ -54,8 +56,14 @@ func (p *fakePlatform) handler(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(update.RegisterResponse{InstallationID: "inst-1", InstallationToken: token})
 		return
 	}
+	if p.extraNoInstallToken(w, r) {
+		return
+	}
 	if !p.validTokens[strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")] {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if p.extraWithInstallToken(w, r) {
 		return
 	}
 	switch {
@@ -206,7 +214,8 @@ func TestDismissedNotificationAckIsRetriedUntilDelivered(t *testing.T) {
 		p.mu.Unlock()
 		f.app.update.mu.Lock()
 		defer f.app.update.mu.Unlock()
-		return attempts >= len(update.RetryDelays)+1 && f.app.update.pendingAcks["n1"]
+		button, pending := f.app.update.pendingResponses["n1"]
+		return attempts >= len(update.RetryDelays)+1 && pending && button == ""
 	})
 
 	p.set(func(p *fakePlatform) { p.failAcks = false })
@@ -216,7 +225,7 @@ func TestDismissedNotificationAckIsRetriedUntilDelivered(t *testing.T) {
 	}
 	f.app.update.mu.Lock()
 	defer f.app.update.mu.Unlock()
-	if f.app.update.pendingAcks["n1"] {
+	if _, pending := f.app.update.pendingResponses["n1"]; pending {
 		t.Fatalf("delivered ack still pending")
 	}
 }

@@ -86,7 +86,8 @@ describe('CreateCollectionDialog', () => {
 describe('CollectionInfoDialog', () => {
   it('shows statistics and the recreate command', async () => {
     render(<CollectionInfoDialog conn={conn} db="shop" coll="people" onClose={vi.fn()} />)
-    expect(await screen.findByText('db.createCollection("people", {})')).toBeInTheDocument()
+    const recreate = await screen.findByText((_, el) => el?.tagName === 'PRE' && el.textContent === 'db.createCollection("people", {})')
+    expect(recreate.querySelector('.hl-string')).toHaveTextContent('"people"') // highlighted, strings in their own color
     expect(screen.getByText('Documents').closest('tr')).toHaveTextContent('2')
   })
 

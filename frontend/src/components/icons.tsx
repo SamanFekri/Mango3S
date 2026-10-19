@@ -130,3 +130,23 @@ export function GearIcon(p: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+/** An open eye: "show the password". */
+export function EyeIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(p)} className="icon icon-eye">
+      <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z" />
+      <circle cx="8" cy="8" r="2" />
+    </svg>
+  )
+}
+
+/** A struck-through eye: "hide the password". */
+export function EyeOffIcon(p: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(p)} className="icon icon-eye">
+      <path d="M6.2 3.8A6.6 6.6 0 0 1 8 3.5c4.1 0 6.5 4.5 6.5 4.5a11 11 0 0 1-1.9 2.4M10.1 10.6A2 2 0 0 1 6 8a2 2 0 0 1 .6-1.4M4.2 4.9C2.4 6.1 1.5 8 1.5 8s2.4 4.5 6.5 4.5c1.4 0 2.6-.5 3.6-1.2" />
+      <path d="M2 2l12 12" />
+    </svg>
+  )
+}

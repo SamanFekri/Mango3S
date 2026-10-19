@@ -3046,3 +3046,458 @@ tr.clickable {
 .results-footer > .muted {
   margin-right: auto;
 }
+
+/* ---------- Settings tabs ---------- */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+}
+.settings-tabs button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  border-left: 2px solid transparent;
+}
+.settings-tabs button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.settings-tabs button.active {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.settings-save {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 0;
+}
+@media (max-width: 720px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+  }
+  .settings-tabs button {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .settings-tabs button.active {
+    border-bottom-color: var(--accent);
+  }
+}
+
+/* ---------- Account ---------- */
+.account-form,
+.account-signed-in {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-form > .field,
+.account-password-action > .field {
+  max-width: 420px;
+}
+.account-form .segmented {
+  align-self: flex-start;
+  margin-bottom: 4px;
+}
+.password-hints {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  max-width: 420px;
+}
+.password-ok {
+  margin: 0;
+  color: var(--success);
+}
+.recovery-key {
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  max-width: 560px;
+}
+.recovery-key h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.recovery-key-value {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  user-select: all;
+  word-break: break-all;
+}
+.account-password-action {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 16px 12px;
+  background: var(--surface-2);
+}
+.account-password-action h3 {
+  font-size: 13px;
+  margin: 10px 0 4px;
+}
+.account-danger summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* ---------- Platform: notifications, privacy, About links ---------- */
+.notification-body {
+  white-space: pre-wrap;
+}
+.privacy-dialog {
+  width: min(560px, 80vw);
+}
+.privacy-summary {
+  background: var(--info-soft);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.privacy-summary p {
+  margin: 4px 0 0;
+}
+.markdown {
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 14px;
+  margin-top: 8px;
+  background: var(--surface);
+}
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+.markdown p,
+.markdown ul,
+.markdown ol {
+  margin: 6px 0;
+}
+.about-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 6px 0;
+}
+.about-donation {
+  margin: 12px auto 4px;
+  padding: 10px 14px;
+  max-width: 360px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.about-donation p {
+  margin: 4px 0 8px;
+}
+
+/* ---------- Syntax highlighting (lib/syntax.tsx) ----------
+   One palette for editors and read-only code. Strings are orange — readable
+   on both backgrounds, unlike CodeMirror's default red. */
+:root {
+  --hl-keyword: #8250df;
+  --hl-string: #a95e00;
+  --hl-regexp: #9a5b00;
+  --hl-number: #0b5cad;
+  --hl-atom: #0b5cad;
+  --hl-property: #0e7490;
+  --hl-function: #a32f6d;
+  --hl-type: #7a5c00;
+  --hl-comment: #6e7781;
+  --hl-meta: #6e7781;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --hl-keyword: #c39bff;
+    --hl-string: #ffb454;
+    --hl-regexp: #ffb870;
+    --hl-number: #79b8ff;
+    --hl-atom: #79b8ff;
+    --hl-property: #5fd3e0;
+    --hl-function: #f78fc4;
+    --hl-type: #e5c07b;
+    --hl-comment: #8b949e;
+    --hl-meta: #8b949e;
+  }
+}
+:root[data-theme='dark'] {
+  --hl-keyword: #c39bff;
+  --hl-string: #ffb454;
+  --hl-regexp: #ffb870;
+  --hl-number: #79b8ff;
+  --hl-atom: #79b8ff;
+  --hl-property: #5fd3e0;
+  --hl-function: #f78fc4;
+  --hl-type: #e5c07b;
+  --hl-comment: #8b949e;
+  --hl-meta: #8b949e;
+}
+.hl-keyword { color: var(--hl-keyword); }
+.hl-string { color: var(--hl-string); }
+.hl-regexp { color: var(--hl-regexp); }
+.hl-number,
+.hl-atom { color: var(--hl-number); }
+.hl-property { color: var(--hl-property); }
+.hl-function { color: var(--hl-function); }
+.hl-type { color: var(--hl-type); }
+.hl-definition { color: var(--text); }
+.hl-comment { color: var(--hl-comment); font-style: italic; }
+.hl-meta { color: var(--hl-meta); }
+.hl-punct { color: var(--text-muted); }
+.hl-invalid { text-decoration: underline wavy var(--danger); }
+.hl-code code {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+
+/* ---------- Password field with show / hide ---------- */
+.password-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.password-input > input {
+  flex: 1;
+  min-width: 0;
+  padding-right: 32px;
+}
+.password-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.password-toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.password-toggle[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+/* ---------- Mango, the mascot (components/MangoBuddy.tsx) ---------- */
+.mango-buddy {
+  position: relative;
+  flex: none;
+  user-select: none;
+  --mb-px: 0px;
+  --mb-py: 0px;
+}
+.mango-buddy-hit {
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.mango-buddy .mango-buddy-hit:hover,
+.mango-buddy .mango-buddy-hit:active,
+.mango-buddy .mango-buddy-hit:focus {
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+.mango-buddy-hit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.mango-buddy svg {
+  display: block;
+  overflow: visible;
+}
+.mango-buddy .mb-shadow {
+  fill: rgba(0, 0, 0, 0.16);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.mango-buddy .mb-body,
+.mango-buddy .mb-float {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+.mango-buddy .mb-limb {
+  stroke: #f08a24;
+  stroke-width: 6;
+  stroke-linecap: round;
+  fill: none;
+}
+.mango-buddy .mb-arm {
+  transform-box: view-box;
+  transform-origin: 96px 90px;
+}
+.mango-buddy .mb-leaf {
+  transform-box: view-box;
+  transform-origin: 64px 13px;
+}
+.mango-buddy .mb-pupil {
+  transform: translate(var(--mb-px), var(--mb-py));
+  transition: transform 0.12s ease-out;
+}
+.mango-buddy-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  width: max-content;
+  max-width: 200px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  line-height: 1.4;
+  transform-origin: 20px 100%;
+  animation: mb-bubble-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 5;
+}
+.mango-buddy-bubble::after {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: 100%;
+  border: 6px solid transparent;
+  border-top-color: var(--surface);
+}
+.mango-buddy-hide {
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 16px;
+  font-size: 13px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.mango-buddy:hover .mango-buddy-hide,
+.mango-buddy-hide:focus-visible {
+  opacity: 1;
+}
+@keyframes mb-bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mango-buddy .mb-float {
+    animation: mb-float 3.4s ease-in-out infinite;
+  }
+  .mango-buddy .mb-shadow {
+    animation: mb-shadow 3.4s ease-in-out infinite;
+  }
+  .mango-buddy .mb-leaf {
+    animation: mb-leaf 3.8s ease-in-out infinite;
+  }
+  .mango-buddy .mb-eye {
+    transform-box: view-box;
+    animation: mb-blink 5.2s infinite;
+  }
+  .mango-buddy.mood-sleepy .mb-float {
+    animation-duration: 5.5s;
+  }
+  .mango-buddy .mb-zzz {
+    animation: mb-zzz 2.4s ease-in-out infinite;
+  }
+  .mango-buddy.mood-worried .mb-body {
+    animation: mb-shiver 0.5s ease-in-out 2;
+  }
+}
+@keyframes mb-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes mb-shadow {
+  0%, 100% { transform: scaleX(1); opacity: 1; }
+  50% { transform: scaleX(0.82); opacity: 0.7; }
+}
+@keyframes mb-leaf {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(7deg); }
+}
+@keyframes mb-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+@keyframes mb-zzz {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes mb-shiver {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px) rotate(-2deg); }
+  75% { transform: translateX(2px) rotate(2deg); }
+}
+.sidebar-buddy {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 18px 12px 8px;
+  margin-top: auto;
+}

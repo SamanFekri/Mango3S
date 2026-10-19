@@ -1,3 +1,4 @@
+import { CodeBlock } from '../lib/syntax'
 import { useCallback, useEffect, useState } from 'react'
 import { backend, newOpId } from '../lib/backend'
 import { formatBytes, formatCount } from '../lib/format'
@@ -305,7 +306,7 @@ function Overview({ d }: { d: CollectionDetails }) {
       <h4>Options</h4>
       <pre className="job-log">{d.options || '{}'}</pre>
       <h4>Recreate with</h4>
-      <pre className="job-log">{d.shell}</pre>
+      <CodeBlock code={d.shell} lang="mongosh" className="job-log" />
     </>
   )
 }

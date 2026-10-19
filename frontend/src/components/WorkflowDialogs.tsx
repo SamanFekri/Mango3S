@@ -1,3 +1,4 @@
+import { CodeBlock } from '../lib/syntax'
 import { useCallback, useEffect, useState } from 'react'
 import { backend, newOpId } from '../lib/backend'
 import { formatBytes, formatCount } from '../lib/format'
@@ -480,7 +481,7 @@ export function IndexAdvisorDialog({ conn, db, coll, onClose }: { conn: SessionI
               <p className="small">
                 {advice.shapes[open].reason} Plans seen: {advice.shapes[open].plans.join(', ') || 'unknown'}.
               </p>
-              <pre className="job-log">{advice.shapes[open].example}</pre>
+              <CodeBlock code={advice.shapes[open].example} lang="mongosh" className="job-log" />
             </div>
           )}
           {findings('Unused indexes', advice.unused, 'Every index has been used since the server started.')}

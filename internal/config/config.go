@@ -79,6 +79,13 @@ type Settings struct {
 	DeviceFingerprint    string `json:"deviceFingerprint,omitempty"`
 	UpdateInstallationID string `json:"updateInstallationId,omitempty"`
 
+	// SyncAuto backs connections up to the signed-in Mango3S account in the
+	// background (encrypted on the server; see internal/api/account.go).
+	SyncAuto bool `json:"syncAuto"`
+
+	// ShowMascot shows Mango, the animated mascot, at the bottom of the explorer.
+	ShowMascot bool `json:"showMascot"`
+
 	// Keymap holds customized shortcuts (Preferences → Keymap) per platform
 	// ("mac" | "other") and action id. An entry replaces that action's
 	// default bindings; an empty list removes all of them.
@@ -110,6 +117,8 @@ func DefaultSettings() Settings {
 		LocalAPI:            "ollama",
 		SchedulerEnabled:    true,
 		AutoUpdateEnabled:   true,
+		SyncAuto:            true,
+		ShowMascot:          true,
 	}
 }
 
@@ -477,6 +486,51 @@ func (s *Store) TouchConnected(id string, at time.Time) error {
 }
 
 // DeleteProfile removes a profile; deleting a missing profile is not an error.
+// PutProfile stores a profile under its own ID and UpdatedAt, adding it if
+// it doesn't exist yet. It is for profiles that come from elsewhere (account
+// sync), where the ID and timestamp must match the other devices; the local
+// list position and last-connected time are kept.
+func (s *Store) PutProfile(p Profile) (Profile, error) {
+	p = p.Normalize()
+	if p.ID == "" {
+		return Profile{}, apperr.Invalid("A synced connection has no ID.")
+	}
+	if err := p.Validate(); err != nil {
+		return Profile{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	list, err := s.listLocked()
+	if err != nil {
+		return Profile{}, err
+	}
+	if p.UpdatedAt.IsZero() {
+		p.UpdatedAt = time.Now().UTC()
+	}
+	if p.ConnectTimeoutSeconds <= 0 {
+		p.ConnectTimeoutSeconds = 10
+	}
+	p.LastConnectedAt, p.Position = nil, 0
+	for i := range list {
+		if list[i].ID == p.ID {
+			p.Position, p.LastConnectedAt = list[i].Position, list[i].LastConnectedAt
+			if p.CreatedAt.IsZero() {
+				p.CreatedAt = list[i].CreatedAt
+			}
+			list[i] = p
+			return p, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+		}
+	}
+	if p.CreatedAt.IsZero() {
+		p.CreatedAt = p.UpdatedAt
+	}
+	if maxPos(list) > 0 {
+		p.Position = maxPos(list) + 1
+	}
+	list = append(list, p)
+	return p, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+}
+
 func (s *Store) DeleteProfile(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

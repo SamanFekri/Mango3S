@@ -1,5 +1,8 @@
 import type { QueryPayload, Stage } from './types'
 
+/** Tabs of the Settings page (deep links open one of them). */
+export type SettingsSection = 'general' | 'ai' | 'mcp' | 'keymap' | 'account' | 'platform' | 'about'
+
 export type TabKind =
   | 'welcome' | 'collection' | 'aggregation' | 'shell' | 'settings' | 'schema' | 'sql' | 'library'
   | 'compare' | 'reschema' | 'mask' | 'migrate' | 'tasks' | 'connection'
@@ -14,7 +17,7 @@ export interface TabInit {
   /** Library tab: which section to show. */
   section?: 'saved' | 'history' | 'backups'
   /** Settings tab: section to scroll to. */
-  settingsSection?: 'keymap' | 'platform'
+  settingsSection?: SettingsSection
 }
 
 export interface Tab {

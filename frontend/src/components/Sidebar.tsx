@@ -1,3 +1,4 @@
+import { AppBuddy } from './AppBuddy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import { backend } from '../lib/backend'
@@ -666,6 +667,8 @@ export function Sidebar() {
           </div>
         )}
       </div>
+
+      <AppBuddy />
 
       {menu && (
         <ul className="context-menu" style={{ left: menu.x, top: menu.y }} role="menu">

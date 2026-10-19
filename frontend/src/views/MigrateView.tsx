@@ -1,3 +1,4 @@
+import { PasswordInput } from '../components/PasswordInput'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { ErrorBanner, Spinner } from '../components/common'
 import { JobStatus, Stat, useJobDone } from '../components/p2common'
@@ -124,7 +125,7 @@ export function MigrateView({ tab }: { tab: Tab }) {
           </label>
           <label className="field">
             <span>Connection string (used for this run only; never saved or logged)</span>
-            <input type="password" className="mono" value={source.dsn} placeholder={DSN_HINTS[source.driver]} onChange={(e) => setSource({ ...source, dsn: e.target.value })} autoComplete="off" />
+            <PasswordInput className="mono" value={source.dsn} placeholder={DSN_HINTS[source.driver]} onChange={(e) => setSource({ ...source, dsn: e.target.value })} autoComplete="off" />
           </label>
           <button onClick={introspect} disabled={busy || !source.dsn}>
             {busy && <Spinner small />} Read schema

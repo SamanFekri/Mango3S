@@ -11,6 +11,10 @@ const profile = {
   createdAt: '',
   updatedAt: '',
 }
+const signedOut = {
+  signedIn: false, email: '', account: null, disabled: {}, syncing: false, lastSyncAt: '', lastSyncError: '',
+  pendingChanges: 0, restoreSuggested: false, privacyPending: false,
+}
 const session = { id: 'p1', name: 'Local dev', readOnly: false, serverVersion: '8.0.0', topology: 'standalone', connectedAt: '' }
 
 const backend = vi.hoisted(() => ({
@@ -62,6 +66,25 @@ const backend = vi.hoisted(() => ({
   applyPendingUpdate: vi.fn(),
   fetchNotifications: vi.fn(),
   ackNotification: vi.fn(),
+  respondNotification: vi.fn(),
+  openPlatformLink: vi.fn(),
+  getPlatformInfo: vi.fn(),
+  getPrivacyPolicy: vi.fn(),
+  acceptPrivacyPolicy: vi.fn(),
+  getAccountState: vi.fn(),
+  refreshAccount: vi.fn(),
+  accountStartSignUp: vi.fn(),
+  accountFinishSignUp: vi.fn(),
+  accountSignIn: vi.fn(),
+  accountSignOut: vi.fn(),
+  accountChangePassword: vi.fn(),
+  accountForgotPassword: vi.fn(),
+  accountResetPassword: vi.fn(),
+  accountRotateRecoveryKey: vi.fn(),
+  accountDelete: vi.fn(),
+  syncNow: vi.fn(),
+  syncRestore: vi.fn(),
+  syncWipe: vi.fn(),
 }))
 
 const jobListeners = vi.hoisted(() => [] as ((j: unknown) => void)[])
@@ -69,6 +92,8 @@ const stepListeners = vi.hoisted(() => [] as ((e: unknown) => void)[])
 const menuListeners = vi.hoisted(() => ({}) as Record<string, (() => void)[]>)
 const updateStatusListeners = vi.hoisted(() => [] as ((s: unknown) => void)[])
 const notificationListeners = vi.hoisted(() => [] as ((n: unknown) => void)[])
+const privacyListeners = vi.hoisted(() => [] as ((p: unknown) => void)[])
+const accountListeners = vi.hoisted(() => [] as ((s: unknown) => void)[])
 const quitAppMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./lib/backend', () => ({
@@ -90,6 +115,15 @@ vi.mock('./lib/backend', () => ({
     updateStatusListeners.push(cb)
     return () => undefined
   },
+  onPrivacyRequired: (cb: (p: unknown) => void) => {
+    privacyListeners.push(cb)
+    return () => undefined
+  },
+  onAccountChanged: (cb: (s: unknown) => void) => {
+    accountListeners.push(cb)
+    return () => undefined
+  },
+  onProfilesChanged: () => () => undefined,
   onNewNotification: (cb: (n: unknown) => void) => {
     notificationListeners.push(cb)
     return () => undefined
@@ -116,11 +150,17 @@ beforeEach(() => {
     theme: 'dark', pageSize: 50, queryTimeoutSeconds: 60, confirmDeletes: true, defaultView: 'tree', editorFontSize: 13, logLevel: 'info',
     aiEnabled: true, aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiTimeoutSeconds: 180, claudeCodePath: '', claudeCodeModel: '', codexPath: '', codexModel: '',
     localUrl: 'http://localhost:11434', localApi: 'ollama', localModel: '', aiAllowSamples: false, schedulerEnabled: true,
-    autoUpdateEnabled: true,
+    autoUpdateEnabled: true, syncAuto: true,
   })
   backend.getUpdateStatus.mockResolvedValue({ connected: false, revoked: false, state: 'idle', currentVersion: '1.2.3' })
   backend.fetchNotifications.mockResolvedValue([])
   backend.ackNotification.mockResolvedValue(undefined)
+  backend.respondNotification.mockResolvedValue(undefined)
+  backend.openPlatformLink.mockResolvedValue(undefined)
+  backend.getPlatformInfo.mockResolvedValue(null)
+  backend.getPrivacyPolicy.mockResolvedValue(null)
+  backend.getAccountState.mockResolvedValue(signedOut)
+  backend.refreshAccount.mockResolvedValue(signedOut)
   backend.checkForUpdatesNow.mockResolvedValue({ connected: true, revoked: false, state: 'up_to_date', currentVersion: '1.2.3' })
   backend.applyPendingUpdate.mockResolvedValue(false)
   backend.listProfiles.mockResolvedValue([profile])
@@ -178,6 +218,8 @@ beforeEach(() => {
   jobListeners.length = 0
   updateStatusListeners.length = 0
   notificationListeners.length = 0
+  privacyListeners.length = 0
+  accountListeners.length = 0
   // Connect goes through the logging variant; keep the connect mock as the source of truth.
   backend.connectWithLog.mockImplementation((_op: string, id: string) => backend.connect(id))
   backend.testConnectionWithLog.mockImplementation((_op: string, p: unknown) => backend.testConnection(p))
@@ -290,18 +332,66 @@ describe('platform updates', () => {
     expect(screen.getByRole('dialog', { name: 'Maintenance' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }))
-    expect(backend.ackNotification).toHaveBeenCalledWith('n1')
+    expect(backend.respondNotification).toHaveBeenCalledWith('n1', 'close')
     expect(await screen.findByRole('dialog', { name: 'New release' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Dismiss/ }))
-    expect(backend.ackNotification).toHaveBeenCalledWith('n2')
+    expect(backend.respondNotification).toHaveBeenCalledWith('n2', 'close')
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New release' })).toBeNull())
+  })
+
+  it('shows notification buttons, opens links and reports which one was pressed', async () => {
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+    const buttons = [
+      { id: 'b1', label: 'Take the survey', action: 'open_link', url: 'https://example.com/survey', style: 'primary' },
+      { id: 'later', label: 'Not now', action: 'cancel', url: null, style: 'secondary' },
+    ]
+    act(() => notificationListeners.forEach((l) => l({ id: 'n1', title: 'Quick survey', body: 'Two minutes', buttons })))
+    act(() => notificationListeners.forEach((l) => l({ id: 'n2', title: 'Terms', body: 'Agree?', buttons: [{ id: 'yes', label: 'I agree', action: 'accept', url: null, style: 'primary' }] })))
+    const dlg = await screen.findByRole('dialog', { name: 'Quick survey' })
+    expect(within(dlg).getByRole('button', { name: /Take the survey/ })).toHaveClass('primary')
+    expect(within(dlg).getByRole('button', { name: 'Close' })).toBeInTheDocument() // the X is always there
+
+    fireEvent.click(within(dlg).getByRole('button', { name: /Take the survey/ }))
+    expect(backend.openPlatformLink).toHaveBeenCalledWith('https://example.com/survey')
+    expect(backend.respondNotification).toHaveBeenCalledWith('n1', 'b1')
+
+    const next = await screen.findByRole('dialog', { name: 'Terms' })
+    fireEvent.click(within(next).getByRole('button', { name: 'I agree' }))
+    expect(backend.respondNotification).toHaveBeenCalledWith('n2', 'yes')
+    expect(backend.openPlatformLink).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks to accept a new privacy policy, and Later leaves the app usable', async () => {
+    backend.acceptPrivacyPolicy.mockResolvedValue({ version: 2, title: 'Privacy policy', body: '', summary: null, publishedAt: null, url: '', acceptanceRequired: false, acceptedAt: 'now' })
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+    const policy = { version: 2, title: 'Privacy policy', body: '## Who we are\nWe make **Mango3S**.\n\n- one\n- two', summary: 'We now name our email provider.', publishedAt: null, url: 'https://mango3s.com/privacy', acceptanceRequired: true, acceptedAt: null }
+    act(() => privacyListeners.forEach((l) => l(policy)))
+    let dlg = await screen.findByRole('dialog', { name: 'Privacy policy updated' })
+    expect(within(dlg).getByText('We now name our email provider.')).toBeInTheDocument()
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Read the full policy' }))
+    const text = within(dlg).getByLabelText('Privacy policy text')
+    expect(within(text).getByRole('heading', { name: 'Who we are' })).toBeInTheDocument()
+    expect(within(text).getByText('Mango3S').tagName).toBe('STRONG')
+    expect(within(text).getAllByRole('listitem')).toHaveLength(2)
+
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Later' }))
+    expect(screen.queryByRole('dialog', { name: 'Privacy policy updated' })).toBeNull()
+
+    act(() => privacyListeners.forEach((l) => l(policy)))
+    dlg = await screen.findByRole('dialog', { name: 'Privacy policy updated' })
+    fireEvent.click(within(dlg).getByRole('button', { name: /Accept/ }))
+    await waitFor(() => expect(backend.acceptPrivacyPolicy).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Privacy policy updated' })).toBeNull())
   })
 
   it('has no activation step: Settings offers only the auto-update toggle and Check now', async () => {
     render(<App />)
     fireEvent.click(within(screen.getByRole('tablist', { name: '' })).getByRole('button', { name: 'Settings' }))
     await screen.findByRole('heading', { name: 'Settings' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Updates' }))
 
     const section = document.getElementById('settings-platform')!
     expect(within(section).queryByRole('textbox')).toBeNull()
@@ -555,6 +645,7 @@ describe('AI settings', () => {
     backend.saveSettings.mockImplementation(async (s: unknown) => s)
     render(<App />)
     fireEvent.click(await screen.findByTitle(/Settings \(/))
+    fireEvent.click(await screen.findByRole('tab', { name: 'AI assistant' }))
     const group = await screen.findByRole('radiogroup', { name: 'AI provider' })
     const card = (name: RegExp) => within(group).getByRole('radio', { name })
     await waitFor(() => expect(card(/Claude Code/)).toHaveTextContent('signed in'))
@@ -652,15 +743,15 @@ describe('app menu', () => {
     render(<App />)
     await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
     menu('settings')
-    expect(await screen.findByRole('tab', { name: /Settings/ })).toHaveAttribute('aria-selected', 'true')
-    expect(await screen.findByRole('heading', { name: 'Keymap' })).toBeInTheDocument()
-    const scrolled = vi.fn()
-    Element.prototype.scrollIntoView = scrolled
+    expect(await screen.findByRole('tab', { name: /^Settings/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('tab', { name: 'General' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('heading', { name: 'Keymap' })).toBeNull() // one section at a time
     menu('welcome')
     menu('keymap')
-    await waitFor(() => expect(scrolled).toHaveBeenCalled())
-    expect(screen.getByRole('tab', { name: /Settings/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getAllByRole('tab', { name: /Settings/ })).toHaveLength(1) // reused, not duplicated
+    expect(await screen.findByRole('heading', { name: 'Keymap' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Keymap' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /^Settings/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByRole('tab', { name: /^Settings/ })).toHaveLength(1) // reused, not duplicated
   })
 
   it('About Mango3S shows the version and the license', async () => {
@@ -684,6 +775,147 @@ describe('app menu', () => {
     expect(screen.queryByRole('dialog', { name: 'About Mango3S' })).toBeNull()
   })
 
+})
+
+describe('settings tabs and account', () => {
+  const openSettings = async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByTitle(/Settings \(/))
+    await screen.findByRole('heading', { name: 'Settings' })
+  }
+
+  it('shows one section at a time and keeps unsaved edits across tabs', async () => {
+    backend.saveSettings.mockImplementation(async (s: unknown) => s)
+    await openSettings()
+    const list = screen.getByRole('tablist', { name: 'Settings sections' })
+    expect(within(list).getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'General', 'AI assistant', 'MCP server', 'Keymap', 'Account & sync', 'Updates', 'Diagnostics',
+    ])
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Documents per page/ }), { target: { value: '75' } })
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+
+    // Arrow keys move between tabs.
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'General' }), { key: 'ArrowDown' })
+    expect(screen.getByRole('tab', { name: 'AI assistant' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
+    expect(screen.queryByRole('spinbutton', { name: /Documents per page/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Save settings/ }))
+    await waitFor(() => expect(backend.saveSettings).toHaveBeenCalled())
+    expect(backend.saveSettings.mock.calls[0][0]).toMatchObject({ pageSize: 75 })
+
+    // Keymap and MCP save on their own: no shared Save bar there.
+    fireEvent.click(screen.getByRole('tab', { name: 'Keymap' }))
+    expect(screen.queryByRole('button', { name: /Save settings/ })).toBeNull()
+  })
+
+  it('signs up with an emailed code and shows the recovery key once', async () => {
+    backend.accountStartSignUp.mockResolvedValue({ codeSentTo: 'ada@example.com', expiresInMinutes: 15 })
+    const signedIn = { ...signedOut, signedIn: true, email: 'ada@example.com', account: { clientId: 'c', email: 'ada@example.com', createdAt: '', recoveryKeyCreatedAt: null, machines: [], sync: { enabled: true, itemCount: 0, lastSyncedAt: null, maxItems: 500, maxItemKb: 256 } } }
+    backend.accountFinishSignUp.mockResolvedValue({ state: signedIn, recoveryKey: '7KQ2-9XWD-AAAA-BBBB' })
+    backend.refreshAccount.mockResolvedValue(signedIn)
+    await openSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Account & sync' }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Create account' }))
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ada@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'weakpass' } })
+    expect(screen.getByRole('list', { name: 'Password requirements' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Send code/ })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Correct-Horse-9' } })
+    fireEvent.change(screen.getByLabelText('Repeat password'), { target: { value: 'Correct-Horse-9' } })
+    fireEvent.click(screen.getByRole('button', { name: /Send code/ }))
+    await waitFor(() => expect(backend.accountStartSignUp).toHaveBeenCalledWith('ada@example.com', 'Correct-Horse-9'))
+
+    fireEvent.change(await screen.findByLabelText('Code'), { target: { value: '12a3456' } })
+    expect(screen.getByLabelText('Code')).toHaveValue('123456')
+    fireEvent.click(screen.getByRole('button', { name: /Create account/ }))
+    await waitFor(() => expect(backend.accountFinishSignUp).toHaveBeenCalledWith('ada@example.com', '123456', 'Correct-Horse-9'))
+
+    expect(await screen.findByLabelText('Your recovery key')).toHaveTextContent('7KQ2-9XWD-AAAA-BBBB')
+    const cont = screen.getByRole('button', { name: 'Continue' })
+    expect(cont).toBeDisabled()
+    fireEvent.click(screen.getByRole('checkbox', { name: /I saved my recovery key/ }))
+    fireEvent.click(cont)
+    expect(await screen.findByText('Signed in as')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Your recovery key')).toBeNull()
+  })
+
+  it('hides what the server turned off', async () => {
+    backend.getAccountState.mockResolvedValue({ ...signedOut, disabled: { registration: true, passwordReset: true } })
+    await openSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Account & sync' }))
+    expect(await screen.findByRole('tab', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Create account' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Forgot password?' })).toBeNull()
+  })
+
+  it('syncs and restores when signed in; restoring asks for the password', async () => {
+    const signedIn = { ...signedOut, signedIn: true, email: 'ada@example.com', pendingChanges: 2, account: { clientId: 'c', email: 'ada@example.com', createdAt: '', recoveryKeyCreatedAt: null, machines: [{ machineId: 'abcdef123456', label: 'Ada-MBP', lastSeenAt: null }], sync: { enabled: true, itemCount: 3, lastSyncedAt: null, maxItems: 500, maxItemKb: 256 } } }
+    backend.getAccountState.mockResolvedValue(signedIn)
+    backend.refreshAccount.mockResolvedValue(signedIn)
+    backend.syncNow.mockResolvedValue({ uploaded: 2, deleted: 0, added: 0, updated: 0, removed: 0, skipped: 0, errors: [] })
+    backend.syncRestore.mockResolvedValue({ uploaded: 0, deleted: 0, added: 1, updated: 0, removed: 0, skipped: 0, errors: [] })
+    await openSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Account & sync' }))
+    expect(await screen.findByText('ada@example.com')).toBeInTheDocument()
+    expect(screen.getByText(/2 changes not uploaded yet/)).toBeInTheDocument()
+    expect(screen.getByText('Ada-MBP')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Sync now/ }))
+    await waitFor(() => expect(backend.syncNow).toHaveBeenCalled())
+    expect(await screen.findByText('Connections synced')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Restore from account/ }))
+    const form = screen.getByRole('form', { name: 'Restore connections' })
+    const submit = within(form).getByRole('button', { name: /Restore connections/ })
+    expect(submit).toBeDisabled()
+    fireEvent.change(within(form).getByLabelText('Account password'), { target: { value: 'Correct-Horse-9' } })
+    fireEvent.click(submit)
+    await waitFor(() => expect(backend.syncRestore).toHaveBeenCalledWith('Correct-Horse-9'))
+    expect(await screen.findByText('Connections restored')).toBeInTheDocument()
+  })
+
+  it('About shows the server links and the donation only when the admin turned it on', async () => {
+    backend.getPlatformInfo.mockResolvedValue({ name: 'Mango3S', websiteUrl: 'https://mango3s.com', downloadUrl: '', privacyPolicyUrl: 'https://mango3s.com/privacy', contactUrl: 'https://samanfekri.me', donation: null })
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+    act(() => (menuListeners.about ?? []).forEach((f) => f()))
+    let dlg = await screen.findByRole('dialog', { name: 'About Mango3S' })
+    fireEvent.click(await within(dlg).findByRole('button', { name: 'Privacy policy' }))
+    expect(backend.openPlatformLink).toHaveBeenCalledWith('https://mango3s.com/privacy')
+    expect(within(dlg).queryByRole('button', { name: /Donate/ })).toBeNull()
+    fireEvent.click(within(dlg).getAllByRole('button', { name: 'Close' }).at(-1)!)
+
+    backend.getPlatformInfo.mockResolvedValue({ name: 'Mango3S', websiteUrl: 'https://mango3s.com', downloadUrl: '', privacyPolicyUrl: '', contactUrl: '', donation: { url: 'https://donate.example', heading: 'Support Mango3S', message: 'Made by one person', buttonLabel: 'Buy me a coffee' } })
+    act(() => (menuListeners.about ?? []).forEach((f) => f()))
+    dlg = await screen.findByRole('dialog', { name: 'About Mango3S' })
+    fireEvent.click(await within(dlg).findByRole('button', { name: /Buy me a coffee/ }))
+    expect(backend.openPlatformLink).toHaveBeenCalledWith('https://donate.example')
+  })
+})
+
+describe('Mango, the mascot', () => {
+  it('lives in the explorer, shares a tip when clicked, and can be hidden', async () => {
+    backend.saveSettings.mockImplementation(async (s: unknown) => s)
+    render(<App />)
+    const mango = await screen.findByRole('button', { name: /Mango, the Mango3S mascot/ })
+    fireEvent.click(mango)
+    expect(await screen.findByText(/Say Mango3S fast: Mango Trees/)).toBeInTheDocument()
+    fireEvent.click(mango)
+    expect(await screen.findByText(/Run a query with/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Mango' }))
+    await waitFor(() => expect(backend.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ showMascot: false })))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Mango, the Mango3S mascot/ })).toBeNull())
+    expect(await screen.findByText('Mango is resting')).toBeInTheDocument()
+  })
+
+  it('stays hidden when turned off in Settings', async () => {
+    backend.getSettings.mockResolvedValue({ ...(await backend.getSettings()), showMascot: false })
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Welcome to Mango3S' })
+    expect(screen.queryByRole('button', { name: /Mango, the Mango3S mascot/ })).toBeNull()
+  })
 })
 
 describe('reordering connections', () => {

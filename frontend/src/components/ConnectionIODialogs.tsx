@@ -1,3 +1,4 @@
+import { PasswordInput } from './PasswordInput'
 import { useState } from 'react'
 import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
@@ -81,11 +82,11 @@ export function ConnectionExportDialog({ selected, onClose }: { selected: Profil
           <div className="field-row">
             <label className="field">
               <span>Passphrase (at least {MIN_PASSPHRASE} characters)</span>
-              <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="new-password" aria-label="Passphrase" />
+              <PasswordInput value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="new-password" aria-label="Passphrase" />
             </label>
             <label className="field">
               <span>Repeat passphrase</span>
-              <input type="password" value={pass2} onChange={(e) => setPass2(e.target.value)} autoComplete="new-password" aria-label="Repeat passphrase" />
+              <PasswordInput value={pass2} onChange={(e) => setPass2(e.target.value)} autoComplete="new-password" aria-label="Repeat passphrase" />
             </label>
           </div>
           {pass2 && pass !== pass2 && <p className="error-text small">The passphrases differ.</p>}
@@ -200,8 +201,7 @@ export function ConnectionImportDialog({ onClose }: { onClose: () => void }) {
           ))}
           {preview.hasSecrets && (
             <div className="file-row">
-              <input
-                type="password"
+              <PasswordInput
                 value={pass}
                 onChange={(e) => setPass(e.target.value)}
                 placeholder="Passphrase for the passwords in this file"

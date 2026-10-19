@@ -1,3 +1,4 @@
+import { PasswordInput } from './PasswordInput'
 // The nine tab panels of the connection dialog. They all edit one
 // ProfileInput owned by ConnectionManager, so switching tabs never loses
 // changes.
@@ -58,8 +59,7 @@ export function SecretField({ label, kind, form, set, stored, placeholder }: { l
   return (
     <div className="field">
       <span>{label}</span>
-      <input
-        type="password"
+      <PasswordInput
         aria-label={label}
         value={value}
         onChange={(e) => update(e.target.value, false)}

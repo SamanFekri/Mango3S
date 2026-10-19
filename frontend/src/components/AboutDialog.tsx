@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import licenseText from '../../../LICENSE?raw'
 import appIcon from '../assets/appicon.png'
 import thirdParty from '../assets/third-party.json'
+import { backend } from '../lib/backend'
+import type { PlatformInfo } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { Modal } from './common'
 
@@ -16,8 +18,22 @@ interface Component {
 
 /** About Mango3S: the version, and the license (GPL-3.0) with third-party notices. */
 export function AboutDialog({ onClose }: { onClose: () => void }) {
-  const { appInfo: i } = useApp()
+  const { appInfo: i, toastError } = useApp()
   const [tab, setTab] = useState<'about' | 'license'>('about')
+  // Website, privacy and support links come from the Mango3S server (cached for a
+  // day, kept for offline use); nothing is shown until they have been fetched once.
+  const [links, setLinks] = useState<PlatformInfo | null>(null)
+  useEffect(() => {
+    let live = true
+    backend
+      .getPlatformInfo()
+      .then((info) => live && setLinks(info))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [])
+  const open = (url: string) => backend.openPlatformLink(url).catch((err) => toastError(err, 'Could not open the link'))
   const built = i?.buildTime ? new Date(i.buildTime) : null
   return (
     <Modal
@@ -59,6 +75,34 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                 )}
               </p>
               <p className="small">{COPYRIGHT}</p>
+              {links && (
+                <nav className="about-links" aria-label="Mango3S links">
+                  {links.websiteUrl && (
+                    <button className="link" onClick={() => open(links.websiteUrl)}>
+                      Website
+                    </button>
+                  )}
+                  {links.privacyPolicyUrl && (
+                    <button className="link" onClick={() => open(links.privacyPolicyUrl)}>
+                      Privacy policy
+                    </button>
+                  )}
+                  {links.contactUrl && (
+                    <button className="link" onClick={() => open(links.contactUrl)}>
+                      Contact
+                    </button>
+                  )}
+                </nav>
+              )}
+              {links?.donation && (
+                <div className="about-donation">
+                  <strong>{links.donation.heading}</strong>
+                  {links.donation.message && <p className="muted small">{links.donation.message}</p>}
+                  <button className="primary" onClick={() => open(links.donation!.url)}>
+                    {links.donation.buttonLabel || 'Donate'} ↗
+                  </button>
+                </div>
+              )}
               <p className="muted small about-notice">
                 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by
                 the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It comes with ABSOLUTELY NO

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
 import type { CodeLanguage, CodeRequest } from '../lib/types'
+import { CodeBlock } from '../lib/syntax'
 import { ErrorBanner, Modal, Spinner } from './common'
 
 const LAST_LANG = 'mango3s.codeLanguage'
@@ -75,9 +76,7 @@ export function CodeDialog({ request, onClose }: { request: Omit<CodeRequest, 'l
         {loading && <Spinner small />}
       </div>
       <ErrorBanner error={error} />
-      <pre className="code-output" aria-label="Generated code">
-        {code}
-      </pre>
+      <CodeBlock code={code} lang={lang} label="Generated code" />
     </Modal>
   )
 }

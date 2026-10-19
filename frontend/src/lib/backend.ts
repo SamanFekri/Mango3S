@@ -101,6 +101,13 @@ import type {
   TestResult,
   UpdateStatus,
   PlatformNotification,
+  PlatformInfo,
+  PrivacyPolicy,
+  AccountState,
+  AccountResult,
+  CodeSent,
+  SyncReport,
+  ResetPasswordInput,
 } from './types'
 
 async function wrap<T>(p: Promise<unknown>): Promise<T> {
@@ -302,6 +309,29 @@ export const backend = {
   applyPendingUpdate: () => wrap<boolean>(a.ApplyPendingUpdate()),
   fetchNotifications: () => wrap<PlatformNotification[]>(a.FetchNotifications()),
   ackNotification: (id: string) => wrap<void>(a.AckNotification(id)),
+  /** Reports the pressed button ("close" for the X); also marks the notification read. */
+  respondNotification: (id: string, buttonId: string) => wrap<void>(a.RespondNotification(id, buttonId)),
+  /** Opens an http(s) link from the platform in the default browser. */
+  openPlatformLink: (url: string) => wrap<void>(a.OpenPlatformLink(url)),
+  getPlatformInfo: () => wrap<PlatformInfo | null>(a.GetPlatformInfo()),
+  getPrivacyPolicy: () => wrap<PrivacyPolicy | null>(a.GetPrivacyPolicy()),
+  acceptPrivacyPolicy: (version: number) => wrap<PrivacyPolicy | null>(a.AcceptPrivacyPolicy(version)),
+
+  // Optional Mango3S account with encrypted connection sync.
+  getAccountState: () => wrap<AccountState>(a.GetAccountState()),
+  refreshAccount: () => wrap<AccountState>(a.RefreshAccount()),
+  accountStartSignUp: (email: string, password: string) => wrap<CodeSent>(a.AccountStartSignUp(email, password)),
+  accountFinishSignUp: (email: string, code: string, password: string) => wrap<AccountResult>(a.AccountFinishSignUp(email, code, password)),
+  accountSignIn: (email: string, password: string) => wrap<AccountResult>(a.AccountSignIn(email, password)),
+  accountSignOut: () => wrap<AccountState>(a.AccountSignOut()),
+  accountChangePassword: (current: string, next: string) => wrap<void>(a.AccountChangePassword(current, next)),
+  accountForgotPassword: (email: string) => wrap<CodeSent>(a.AccountForgotPassword(email)),
+  accountResetPassword: (input: ResetPasswordInput) => wrap<AccountResult>(a.AccountResetPassword(input)),
+  accountRotateRecoveryKey: (password: string) => wrap<string>(a.AccountRotateRecoveryKey(password)),
+  accountDelete: (password: string) => wrap<void>(a.AccountDelete(password)),
+  syncNow: () => wrap<SyncReport>(a.SyncNow()),
+  syncRestore: (password: string) => wrap<SyncReport>(a.SyncRestore(password)),
+  syncWipe: (password: string) => wrap<void>(a.SyncWipe(password)),
 }
 
 /** Subscribes to backend job updates; returns an unsubscribe function. */
@@ -344,6 +374,33 @@ export function onUpdateStatus(cb: (s: UpdateStatus) => void): () => void {
 export function onNewNotification(cb: (n: PlatformNotification) => void): () => void {
   try {
     return EventsOn('notifications:new', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** The server requires accepting a new privacy policy (sent once per launch). */
+export function onPrivacyRequired(cb: (p: PrivacyPolicy) => void): () => void {
+  try {
+    return EventsOn('privacy:required', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** The account changed (signed in/out, synced) in the background. */
+export function onAccountChanged(cb: (s: AccountState) => void): () => void {
+  try {
+    return EventsOn('account:changed', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Connections changed outside the UI (restored from the account). */
+export function onProfilesChanged(cb: () => void): () => void {
+  try {
+    return EventsOn('profiles:changed', cb)
   } catch {
     return () => undefined
   }
