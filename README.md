@@ -344,7 +344,7 @@ samples contain none.
 | `MANGO3S_CONFIG_DIR` | Config directory override |
 | `MANGO3S_SECRET_BACKEND` | `keyring` (OS store), `file` (encrypted file), `memory` (tests). Default: keyring if available, else file |
 | `ANTHROPIC_API_KEY` | AI assistant key when none is stored in Settings → AI |
-| `MANGO3S_PLATFORM_URL` | Update server to use instead of the built-in one, e.g. `http://localhost:4000` for a local web platform |
+| `MANGO3S_PLATFORM_URL` | Update server to use instead of the built-in one, e.g. `http://localhost:4330` for a local web platform |
 | `MONGO_URI`, `MONGO_AUTH_URI`, `PG_DSN`, `MYSQL_DSN` | Integration tests only |
 
 The update server's address is `PlatformBaseURL` in `internal/api/update.go`

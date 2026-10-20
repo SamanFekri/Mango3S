@@ -24,7 +24,7 @@ import (
 // repo). Change it here, at build time with
 // `make build PLATFORM_BASE_URL=https://...`, or at runtime with the
 // MANGO3S_PLATFORM_URL environment variable (handy for pointing a dev build at
-// a local API, e.g. MANGO3S_PLATFORM_URL=http://localhost:4000).
+// a local API, e.g. MANGO3S_PLATFORM_URL=http://localhost:4330).
 var PlatformBaseURL = "https://mango3s.com"
 
 // EnvPlatformURL overrides PlatformBaseURL at runtime.

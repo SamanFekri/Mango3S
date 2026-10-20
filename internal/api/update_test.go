@@ -251,8 +251,8 @@ func TestSavingSettingsFromAStaleFormKeepsThePlatformIdentity(t *testing.T) {
 }
 
 func TestPlatformURLCanBeOverriddenAtRuntime(t *testing.T) {
-	t.Setenv(EnvPlatformURL, "http://localhost:4000")
-	if got := platformURL(); got != "http://localhost:4000" {
+	t.Setenv(EnvPlatformURL, "http://localhost:4330")
+	if got := platformURL(); got != "http://localhost:4330" {
 		t.Fatalf("platformURL() = %q", got)
 	}
 }
