@@ -465,32 +465,32 @@
     "semantic_hash": ""
   },
   "app/frontend/wailsjs/go/api/App.d.ts": {
-    "mtime": 1792445929.8248703,
+    "mtime": 1792519036.363117,
     "ast_hash": "9217a29ec779ea5f54941654f5d1a7e7",
     "semantic_hash": ""
   },
   "app/frontend/wailsjs/go/api/App.js": {
-    "mtime": 1792445929.8245983,
+    "mtime": 1792519036.3629568,
     "ast_hash": "a8365509171510e77cdb2b6a1e1bba83",
     "semantic_hash": ""
   },
   "app/frontend/wailsjs/go/models.ts": {
-    "mtime": 1792445929.8403053,
+    "mtime": 1792519036.3790169,
     "ast_hash": "1f9f8e375ef8338c6026e3cf42aa0fa3",
     "semantic_hash": ""
   },
   "app/frontend/wailsjs/runtime/package.json": {
-    "mtime": 1792445929.84634,
+    "mtime": 1792519036.3846953,
     "ast_hash": "a79e9c39ebcda0fdeb14a44939bc489e",
     "semantic_hash": ""
   },
   "app/frontend/wailsjs/runtime/runtime.d.ts": {
-    "mtime": 1792445929.8465772,
+    "mtime": 1792519036.3848367,
     "ast_hash": "dcd9fca4af1912f552547c22f315c25e",
     "semantic_hash": ""
   },
   "app/frontend/wailsjs/runtime/runtime.js": {
-    "mtime": 1792445929.846687,
+    "mtime": 1792519036.3849235,
     "ast_hash": "efc7f0ddc7f96e446ad0252df27b477f",
     "semantic_hash": ""
   },
@@ -610,13 +610,13 @@
     "semantic_hash": ""
   },
   "app/internal/api/update.go": {
-    "mtime": 1792444237.673653,
-    "ast_hash": "1c41311f651309f7b93eab1ee8f9789b",
+    "mtime": 1792520153.4809897,
+    "ast_hash": "90f5974b03f987f44f91c9a41c5a9b94",
     "semantic_hash": ""
   },
   "app/internal/api/update_test.go": {
-    "mtime": 1792444202.7802556,
-    "ast_hash": "60127f170ddfe0c213ad63299c7c0c90",
+    "mtime": 1792520153.481569,
+    "ast_hash": "779b3693f42d0457172d64c9d3cb3f86",
     "semantic_hash": ""
   },
   "app/internal/apperr/apperr.go": {
@@ -1235,8 +1235,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/package.json": {
-    "mtime": 1792441038.5801477,
-    "ast_hash": "dc051c8164925dd5c03abe9033ca3897",
+    "mtime": 1792518628.655567,
+    "ast_hash": "abb74a0476c19de5d9e8b47d49b87eeb",
     "semantic_hash": ""
   },
   "web/apps/api/prisma/migrations/20261019122325_init/migration.sql": {
@@ -1265,8 +1265,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/src/config/env.ts": {
-    "mtime": 1792416073.6969085,
-    "ast_hash": "bce419cc00207dc61314207cdad03763",
+    "mtime": 1792518628.6541848,
+    "ast_hash": "cbce8a41e5c7f89de5a31dadfcd52c22",
     "semantic_hash": ""
   },
   "web/apps/api/src/db/client.ts": {
@@ -1400,13 +1400,13 @@
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/backups/mappers.ts": {
-    "mtime": 1792416222.211445,
-    "ast_hash": "3493a85c573ff7dc9f780af315b2863d",
+    "mtime": 1792518502.347595,
+    "ast_hash": "72b18dd2a3d949268f96e9dfa8c2971d",
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/backups/routes.ts": {
-    "mtime": 1792416407.3985453,
-    "ast_hash": "ae1035cec2f9e2796cb9b93e1bc2677f",
+    "mtime": 1792518517.3053133,
+    "ast_hash": "ab67890d6e082e7d8f0e23f4853ac13b",
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/backups/service.ts": {
@@ -1455,8 +1455,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/releases/mappers.ts": {
-    "mtime": 1792439012.2999167,
-    "ast_hash": "9b649dec5cdea5a1b8cb8f2d813aad6a",
+    "mtime": 1792518502.3467448,
+    "ast_hash": "a831e7c5f462b1f9f71ac5c840f792e9",
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/releases/public-routes.ts": {
@@ -1465,13 +1465,13 @@
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/releases/routes.ts": {
-    "mtime": 1792439012.3007247,
-    "ast_hash": "aed20d0918d45fce2f88addd1beea916",
+    "mtime": 1792518502.3459966,
+    "ast_hash": "e1541e0ad7fdb17ea1709d4a04e12452",
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/releases/v1-routes.ts": {
-    "mtime": 1792412380.2999907,
-    "ast_hash": "3d264917b9807da26356c2291e952854",
+    "mtime": 1792518502.347057,
+    "ast_hash": "18cdfac444e685e15770152d839349b5",
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/settings/routes.ts": {
@@ -1525,8 +1525,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/tests/releases.test.ts": {
-    "mtime": 1792412841.1463668,
-    "ast_hash": "83d3fb20d4019adff99a142b451b3917",
+    "mtime": 1792518556.2579696,
+    "ast_hash": "5400c331b863a912f016f7238cce162b",
     "semantic_hash": ""
   },
   "web/apps/api/tests/schedule.test.ts": {
@@ -1555,8 +1555,8 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/package.json": {
-    "mtime": 1792442568.6730301,
-    "ast_hash": "b294631a70cbad5d009cdadae04a8dc3",
+    "mtime": 1792518628.655195,
+    "ast_hash": "a02c4a9933392b0da85324f93208f595",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/App.vue": {
@@ -1580,8 +1580,8 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/api/client.ts": {
-    "mtime": 1792439156.0969927,
-    "ast_hash": "2f6247876132fe3ed2164ea4756e36d9",
+    "mtime": 1792518628.6545553,
+    "ast_hash": "d6aeb5bf7aec0b3716453ce42dc27403",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/api/clients.ts": {
@@ -1720,8 +1720,8 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/DownloadsView.vue": {
-    "mtime": 1792445671.6158035,
-    "ast_hash": "b379fc51d854f126ce9fec895a469c5d",
+    "mtime": 1792519782.5078056,
+    "ast_hash": "476e9ee8024ad62937024af09549b3c6",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/InstallationsView.vue": {
@@ -1795,8 +1795,8 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/vite.config.ts": {
-    "mtime": 1792418600.235135,
-    "ast_hash": "440cd14940a745b5f536399cd287d371",
+    "mtime": 1792518628.654878,
+    "ast_hash": "42cba0e57fc7fce95b9b5d23913cc06c",
     "semantic_hash": ""
   },
   "web/apps/dashboard/vitest.config.ts": {
@@ -1885,8 +1885,8 @@
     "semantic_hash": ""
   },
   "app/README.md": {
-    "mtime": 1792445831.707224,
-    "ast_hash": "c947da127f128bdde1b0315f80a48424",
+    "mtime": 1792520153.4800882,
+    "ast_hash": "88b61ce87594e14cad271b8975c70234",
     "semantic_hash": ""
   },
   "app/docker-compose.yml": {
@@ -1920,8 +1920,8 @@
     "semantic_hash": ""
   },
   "web/README.md": {
-    "mtime": 1792421318.9979448,
-    "ast_hash": "9854004b34d74da68d65f5a7d1943d7c",
+    "mtime": 1792518729.0115993,
+    "ast_hash": "84e011484cf918e367e814cb31c6961c",
     "semantic_hash": ""
   },
   "web/apps/dashboard/index.html": {
@@ -1930,13 +1930,13 @@
     "semantic_hash": ""
   },
   "web/docker-compose.yml": {
-    "mtime": 1792412755.79143,
-    "ast_hash": "1b0aa6f69be4948c48445e280fd921d2",
+    "mtime": 1792518628.6558867,
+    "ast_hash": "99fc8242299d4dbeea55ba9f627ae3a7",
     "semantic_hash": ""
   },
   "web/docs/API_CONTRACT.md": {
-    "mtime": 1792445748.9161296,
-    "ast_hash": "c3ba545f8b68205f4a882b57d3275be2",
+    "mtime": 1792518628.6577048,
+    "ast_hash": "0f941a0404391f8cb23697bbb9f24226",
     "semantic_hash": ""
   },
   "web/docs/ARCHITECTURE.md": {
@@ -1950,8 +1950,8 @@
     "semantic_hash": ""
   },
   "web/docs/SETUP.md": {
-    "mtime": 1792421318.9983182,
-    "ast_hash": "891a08a28ecab98ff92ae4fe254838f9",
+    "mtime": 1792518628.656867,
+    "ast_hash": "fbdc18a2f2671922f3ea0cf7e9ed3376",
     "semantic_hash": ""
   },
   "web/pnpm-workspace.yaml": {
@@ -1980,8 +1980,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/download-links/service.ts": {
-    "mtime": 1792420253.9752972,
-    "ast_hash": "90f27c643ae0ab7eb61d94be0078d26d",
+    "mtime": 1792518502.3472514,
+    "ast_hash": "671283309787263458887cc24037c083",
     "semantic_hash": ""
   },
   "web/apps/api/tests/download-links.test.ts": {
@@ -2120,8 +2120,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/src/lib/remote-file.ts": {
-    "mtime": 1792438998.110705,
-    "ast_hash": "214221c0718fed115d6bc47fcf08c4d8",
+    "mtime": 1792518502.3456676,
+    "ast_hash": "54c67ee3cba7cbd40c80537f5fb35712",
     "semantic_hash": ""
   },
   "web/apps/api/src/middleware/account-auth.ts": {
@@ -2235,8 +2235,8 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/components/ProductTour.vue": {
-    "mtime": 1792438184.9514997,
-    "ast_hash": "faf05cd0b8b11ab42fa09b739c874927",
+    "mtime": 1792519675.5158472,
+    "ast_hash": "92712ef9a8488a153cb16e9393e5107f",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/components/ThemeToggle.vue": {
@@ -2362,6 +2362,36 @@
   "web/apps/dashboard/public/screenshots/table-light.webp": {
     "mtime": 1792421875.442026,
     "ast_hash": "d22e387145ac62c7e77a71ef2981e310",
+    "semantic_hash": ""
+  },
+  "web/apps/api/prisma/migrations/20261020090000_big_file_sizes/migration.sql": {
+    "mtime": 1792518504.5325234,
+    "ast_hash": "f0df90c6c8799c28b8b5113136adc128",
+    "semantic_hash": ""
+  },
+  "web/apps/api/src/lib/upload-limits.ts": {
+    "mtime": 1792518502.3451772,
+    "ast_hash": "e648a272bfb5a285eb8cb3323949d077",
+    "semantic_hash": ""
+  },
+  "web/apps/dashboard/src/components/LaunchFilm.vue": {
+    "mtime": 1792519925.3815653,
+    "ast_hash": "2d4de1d5625f3ca0e78e592029277993",
+    "semantic_hash": ""
+  },
+  "web/docs/DEPLOY.md": {
+    "mtime": 1792518757.6016583,
+    "ast_hash": "58fdf1387e1473c07c2cb879e5e1ab93",
+    "semantic_hash": ""
+  },
+  "web/apps/dashboard/public/media/mango3s-tour-poster.webp": {
+    "mtime": 1792519622.6210225,
+    "ast_hash": "3500502a0f326cbca1097693d95947af",
+    "semantic_hash": ""
+  },
+  "web/apps/dashboard/public/media/mango3s-tour.mp4": {
+    "mtime": 1792519622.4403496,
+    "ast_hash": "01f42b5a2aae12bb83b4de2a1fe7c17d",
     "semantic_hash": ""
   }
 }
