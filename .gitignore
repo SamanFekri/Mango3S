@@ -49,6 +49,10 @@ graphify-out/.graphify_*.txt
 graphify-out/.needs_update
 graphify-out/*.tmp
 
+# /brag launch-video runs (brag-output/ and timestamped brag-output-*/)
+brag-output/
+brag-output-*/
+
 # Editors / OS
 .DS_Store
 .idea/
