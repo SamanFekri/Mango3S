@@ -1,7 +1,7 @@
 import type { QueryPayload, Stage } from './types'
 
 /** Tabs of the Settings page (deep links open one of them). */
-export type SettingsSection = 'general' | 'ai' | 'mcp' | 'keymap' | 'account' | 'platform' | 'about'
+export type SettingsSection = 'general' | 'ai' | 'mcp' | 'keymap' | 'account' | 'platform' | 'storage' | 'about' | 'api'
 
 export type TabKind =
   | 'welcome' | 'collection' | 'aggregation' | 'shell' | 'settings' | 'schema' | 'sql' | 'library'

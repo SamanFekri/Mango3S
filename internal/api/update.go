@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -84,6 +83,8 @@ type updateState struct {
 	appInfoAt       time.Time
 
 	acct accountState // optional Mango3S account (account.go)
+
+	console *update.Console // API console variables (test mode; platformdebug.go)
 }
 
 func newUpdateState() *updateState {
@@ -162,7 +163,7 @@ func (a *App) updateTick(ctx context.Context) tickResult {
 	if err != nil {
 		return a.noteFailure("register", err)
 	}
-	hb := update.HeartbeatRequest{AppVersion: Version, OS: goruntime.GOOS, Arch: goruntime.GOARCH}
+	hb := update.HeartbeatRequest{AppVersion: Version, OS: update.HostOS(), Arch: update.HostArch()}
 	err = client.Heartbeat(ctx, installationID, token, hb)
 	if update.IsUnauthorized(err) {
 		// The token was invalidated server-side: register again (same
@@ -203,7 +204,13 @@ func (a *App) ensureRegistered(ctx context.Context, client *update.Client) (toke
 	if token, id, ok := a.updateCredentials(); ok { // registered while we waited
 		return token, id, nil
 	}
+	return a.register(ctx, client)
+}
 
+// register registers this installation (re-registering returns the same
+// installation with a fresh token) and stores the credentials. Callers hold
+// regMu.
+func (a *App) register(ctx context.Context, client *update.Client) (token, installationID string, err error) {
 	fingerprint := a.currentSettings().DeviceFingerprint
 	if fingerprint == "" {
 		// Persist the identity before using it, so a crash mid-registration
@@ -215,7 +222,7 @@ func (a *App) ensureRegistered(ctx context.Context, client *update.Client) (toke
 	}
 
 	resp, err := client.Register(ctx, update.RegisterRequest{
-		DeviceFingerprint: fingerprint, AppVersion: Version, OS: goruntime.GOOS, Arch: goruntime.GOARCH,
+		DeviceFingerprint: fingerprint, AppVersion: Version, OS: update.HostOS(), Arch: update.HostArch(),
 	})
 	if err != nil {
 		return "", "", err
@@ -339,7 +346,7 @@ func (a *App) checkAndMaybeDownload(ctx context.Context, client *update.Client, 
 		return tickOK // already downloaded and waiting for the user to install it
 	}
 
-	result, err := client.CheckForUpdate(ctx, token, goruntime.GOOS, goruntime.GOARCH, "stable", Version)
+	result, err := client.CheckForUpdate(ctx, token, update.HostOS(), update.HostArch(), "stable", Version)
 	if err != nil {
 		return a.noteFailure("update check", err)
 	}

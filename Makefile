@@ -10,10 +10,22 @@ VERSION ?= $(shell node -pe "require('./wails.json').info.productVersion" 2>/dev
 PLATFORM_BASE_URL ?= https://mango3s.com
 LDFLAGS := -X mango3s/internal/api.Version=$(VERSION) -X mango3s/internal/api.PlatformBaseURL=$(PLATFORM_BASE_URL)
 
-.PHONY: notices dev build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down docker-build docker-test bindings mcp
+# Point `make dev` / `make platform-check` at another platform without
+# rebuilding, e.g. `make dev PLATFORM_URL=http://localhost:4330` for the local
+# web API (`pnpm run dev:api` in ../web). Sets MANGO3S_PLATFORM_URL.
+PLATFORM_URL ?=
+PLATFORM_ENV := $(if $(PLATFORM_URL),MANGO3S_PLATFORM_URL=$(PLATFORM_URL))
 
-dev: ## Run the app with hot reload
-	$(WAILS) dev -ldflags "$(LDFLAGS)"
+.PHONY: notices dev platform-check platform-api build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down docker-build docker-test bindings mcp
+
+dev: ## Run the app with hot reload in test mode: request log + API console (Settings › Diagnostics)
+	$(PLATFORM_ENV) MANGO3S_TEST_MODE=1 $(WAILS) dev -ldflags "$(LDFLAGS)"
+
+platform-api: ## Send one web API request, e.g. `make platform-api ARGS="call notifications.list"` (ARGS=list for all)
+	$(PLATFORM_ENV) go run -ldflags "$(LDFLAGS)" . platform-api $(ARGS)
+
+platform-check: ## Test the web platform APIs: all, or one with CHECK=notifications (ARGS="--list", "--register -v")
+	$(PLATFORM_ENV) go run -ldflags "$(LDFLAGS)" . platform-check $(if $(CHECK),--only $(CHECK)) $(ARGS)
 
 build: ## Build the desktop app for this OS into build/bin
 	$(WAILS) build -clean -ldflags "$(LDFLAGS)"

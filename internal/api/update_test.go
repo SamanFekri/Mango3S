@@ -48,6 +48,13 @@ func (p *fakePlatform) handler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/v1/installations/register" {
 		var body map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		// Like the real API (OPERATING_SYSTEMS in the contracts package):
+		// Go's "darwin" must be sent as "macos".
+		if os, _ := body["os"].(string); os != "windows" && os != "macos" && os != "linux" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"code":"validation_error","message":"Invalid request"}}`))
+			return
+		}
 		p.registrations = append(p.registrations, body)
 		p.tokenSeq++
 		token := "it_" + strings.Repeat("x", p.tokenSeq)

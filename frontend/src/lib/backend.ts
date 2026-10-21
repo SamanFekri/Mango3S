@@ -102,6 +102,16 @@ import type {
   UpdateStatus,
   PlatformNotification,
   PlatformInfo,
+  PlatformCheck,
+  APIConsoleState,
+  APIRequest,
+  APIResponse,
+  PlatformDebug,
+  PlatformProbeReport,
+  PlatformProbeStep,
+  StorageCleanResult,
+  StorageUsage,
+  PlatformTraceEntry,
   PrivacyPolicy,
   AccountState,
   AccountResult,
@@ -316,6 +326,24 @@ export const backend = {
   getPlatformInfo: () => wrap<PlatformInfo | null>(a.GetPlatformInfo()),
   getPrivacyPolicy: () => wrap<PrivacyPolicy | null>(a.GetPrivacyPolicy()),
   acceptPrivacyPolicy: (version: number) => wrap<PrivacyPolicy | null>(a.AcceptPrivacyPolicy(version)),
+  // Developer tools (Settings › Diagnostics): target URL, connection test, request log.
+  getPlatformDebug: () => wrap<PlatformDebug>(a.GetPlatformDebug()),
+  /** Runs the step-by-step connection test; register=true registers first if needed. */
+  testPlatformConnection: (register: boolean) => wrap<PlatformProbeReport>(a.TestPlatformConnection(register)),
+  clearPlatformTrace: () => wrap<void>(a.ClearPlatformTrace()),
+  getPlatformChecks: () => wrap<PlatformCheck[]>(a.GetPlatformChecks()),
+  /** Runs one platform API check by ID (see getPlatformChecks). */
+  runPlatformCheck: (id: string) => wrap<PlatformProbeStep>(a.RunPlatformCheck(id)),
+
+  // API console (test mode only): send any request to the web platform API.
+  getAPIConsole: () => wrap<APIConsoleState>(a.GetAPIConsole()),
+  setAPIConsoleVar: (name: string, value: string) => wrap<Record<string, string>>(a.SetAPIConsoleVar(name, value)),
+  resetAPIConsole: () => wrap<Record<string, string>>(a.ResetAPIConsole()),
+  sendAPIRequest: (req: APIRequest) => wrap<APIResponse>(a.SendAPIRequest(req)),
+
+  // Storage: what Mango3S keeps on disk, and clearing logs, caches and temp files.
+  getStorageUsage: () => wrap<StorageUsage>(a.GetStorageUsage()),
+  clearStorage: (ids: string[]) => wrap<StorageCleanResult>(a.ClearStorage(ids)),
 
   // Optional Mango3S account with encrypted connection sync.
   getAccountState: () => wrap<AccountState>(a.GetAccountState()),
@@ -365,6 +393,15 @@ export function onJobUpdate(cb: (j: Job) => void): () => void {
 export function onUpdateStatus(cb: (s: UpdateStatus) => void): () => void {
   try {
     return EventsOn('update:status', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Subscribes to platform requests as they complete ("platform:trace", only while tracing is on). */
+export function onPlatformTrace(cb: (e: PlatformTraceEntry) => void): () => void {
+  try {
+    return EventsOn('platform:trace', cb)
   } catch {
     return () => undefined
   }

@@ -155,6 +155,7 @@ func (l Lifecycle) Startup(ctx context.Context) {
 		}
 	}
 	l.app.startUpdateTicker(ctx)
+	l.app.startPlatformTrace()
 	l.app.log.Info("Mango3S started", "version", Version)
 }
 
@@ -298,6 +299,7 @@ type AppInfo struct {
 	GoVersion  string            `json:"goVersion"`
 	Platform   string            `json:"platform"`   // e.g. darwin/arm64
 	Executable string            `json:"executable"` // path of the running binary (used by `mango3s mcp`)
+	TestMode   bool              `json:"testMode"`   // MANGO3S_TEST_MODE (`make dev`): API console on
 	BackupDir  string            `json:"backupDir"`
 	Components map[string]string `json:"components"` // key libraries and their versions
 }
@@ -318,7 +320,7 @@ var keyModules = map[string]string{
 // GetAppInfo returns version, build details and paths.
 func (a *App) GetAppInfo() AppInfo {
 	info := AppInfo{Version: Version, ConfigDir: a.store.Dir(), LogFile: a.logPath, SecretBackend: a.secrets.Backend(),
-		GoVersion: goruntime.Version(), Platform: goruntime.GOOS + "/" + goruntime.GOARCH,
+		GoVersion: goruntime.Version(), Platform: goruntime.GOOS + "/" + goruntime.GOARCH, TestMode: TestMode(),
 		BackupDir: filepath.Join(a.store.Dir(), "backups"), Components: map[string]string{}}
 	if exe, err := os.Executable(); err == nil {
 		info.Executable = exe

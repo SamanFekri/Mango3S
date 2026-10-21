@@ -96,7 +96,11 @@ export function ClearHistory():Promise<void>;
 
 export function ClearLocalAIKey():Promise<void>;
 
+export function ClearPlatformTrace():Promise<void>;
+
 export function ClearProfile(arg1:string,arg2:string):Promise<void>;
+
+export function ClearStorage(arg1:Array<string>):Promise<api.StorageCleanResult>;
 
 export function CodeLanguages():Promise<Array<codegen.Language>>;
 
@@ -170,6 +174,8 @@ export function GenerateCode(arg1:api.CodeRequest):Promise<string>;
 
 export function GetAIStatus():Promise<api.AIStatus>;
 
+export function GetAPIConsole():Promise<api.APIConsole>;
+
 export function GetAccountState():Promise<api.AccountState>;
 
 export function GetAppInfo():Promise<api.AppInfo>;
@@ -184,6 +190,10 @@ export function GetField(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Ar
 
 export function GetMCPInfo():Promise<api.MCPInfo>;
 
+export function GetPlatformChecks():Promise<Array<update.ProbeCheck>>;
+
+export function GetPlatformDebug():Promise<api.PlatformDebug>;
+
 export function GetPlatformInfo():Promise<update.AppInfo>;
 
 export function GetPrivacyPolicy():Promise<update.PrivacyPolicy>;
@@ -191,6 +201,8 @@ export function GetPrivacyPolicy():Promise<update.PrivacyPolicy>;
 export function GetProfiling(arg1:string,arg2:string):Promise<manage.Profiling>;
 
 export function GetSettings():Promise<config.Settings>;
+
+export function GetStorageUsage():Promise<api.StorageUsage>;
 
 export function GetSyncOutcome(arg1:string):Promise<syncer.Outcome>;
 
@@ -290,6 +302,8 @@ export function ReplaceDocument(arg1:string,arg2:string,arg3:string,arg4:string,
 
 export function ReschemaTypes():Promise<Array<string>>;
 
+export function ResetAPIConsole():Promise<Record<string, string>>;
+
 export function RespondNotification(arg1:string,arg2:string):Promise<void>;
 
 export function RevokeTask(arg1:string):Promise<scheduler.Task>;
@@ -297,6 +311,8 @@ export function RevokeTask(arg1:string):Promise<scheduler.Task>;
 export function RollbackMigration(arg1:string,arg2:string):Promise<migrate.Run>;
 
 export function RunAggregation(arg1:string,arg2:aggregate.Request):Promise<model.Page>;
+
+export function RunPlatformCheck(arg1:string):Promise<update.ProbeStep>;
 
 export function RunQuery(arg1:string,arg2:query.Request):Promise<model.Page>;
 
@@ -322,7 +338,11 @@ export function SaveSettings(arg1:config.Settings):Promise<config.Settings>;
 
 export function SaveTask(arg1:scheduler.Task):Promise<scheduler.Task>;
 
+export function SendAPIRequest(arg1:update.ConsoleRequest):Promise<update.ConsoleResponse>;
+
 export function SetAIKey(arg1:string):Promise<void>;
+
+export function SetAPIConsoleVar(arg1:string,arg2:string):Promise<Record<string, string>>;
 
 export function SetLocalAIKey(arg1:string):Promise<void>;
 
@@ -373,6 +393,8 @@ export function TestAI(arg1:string):Promise<string>;
 export function TestConnection(arg1:api.ProfileInput):Promise<mongox.TestResult>;
 
 export function TestConnectionWithLog(arg1:string,arg2:api.ProfileInput):Promise<mongox.TestResult>;
+
+export function TestPlatformConnection(arg1:boolean):Promise<update.ProbeReport>;
 
 export function TranslateSQL(arg1:string):Promise<api.SQLTranslation>;
 

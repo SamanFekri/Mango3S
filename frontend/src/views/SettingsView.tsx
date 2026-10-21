@@ -4,6 +4,9 @@ import { AccountSettings } from '../components/AccountSettings'
 import { KeymapSettings } from '../components/KeymapSettings'
 import { AISettings, MCPSettings } from '../components/P2Settings'
 import { PlatformSettings } from '../components/PlatformSettings'
+import { PlatformConnection } from '../components/PlatformConnection'
+import { StorageSettings } from '../components/StorageSettings'
+import { APIConsole } from '../components/APIConsole'
 import { backend } from '../lib/backend'
 import type { SettingsSection, Tab } from '../lib/tabs'
 import type { Settings } from '../lib/types'
@@ -14,16 +17,20 @@ interface SectionDef {
   label: string
   /** The section edits the shared settings form, so it gets the Save / Revert bar. */
   form: boolean
+  /** Shown only in test mode (`make dev`). */
+  testOnly?: boolean
 }
 
-const SECTIONS: SectionDef[] = [
+const ALL_SECTIONS: SectionDef[] = [
   { id: 'general', label: 'General', form: true },
   { id: 'ai', label: 'AI assistant', form: true },
   { id: 'mcp', label: 'MCP server', form: false },
   { id: 'keymap', label: 'Keymap', form: false },
   { id: 'account', label: 'Account & sync', form: false },
   { id: 'platform', label: 'Updates', form: true },
+  { id: 'storage', label: 'Storage', form: false },
   { id: 'about', label: 'Diagnostics', form: true },
+  { id: 'api', label: 'API console', form: false, testOnly: true },
 ]
 
 /** Settings, split into tabs. Unsaved edits are kept while switching tabs and
@@ -34,6 +41,7 @@ export function SettingsView({ tab }: { tab?: Tab }) {
   const [busy, setBusy] = useState(false)
   const [section, setSection] = useState<SettingsSection>(tab?.init?.settingsSection ?? 'general')
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const SECTIONS = ALL_SECTIONS.filter((s) => !s.testOnly || appInfo?.testMode)
 
   useEffect(() => setForm(settings), [settings])
   // App menu → Keymap… (and other deep links) open Settings at that tab.
@@ -162,6 +170,8 @@ export function SettingsView({ tab }: { tab?: Tab }) {
           )}
           {section === 'account' && <AccountSettings />}
           {section === 'platform' && <PlatformSettings form={form} set={set} />}
+          {section === 'storage' && <StorageSettings />}
+          {section === 'api' && appInfo?.testMode && <APIConsole />}
 
           {section === 'about' && (
             <section className="settings-group">
@@ -188,6 +198,7 @@ export function SettingsView({ tab }: { tab?: Tab }) {
                 </dl>
               )}
               <PrivacyStatus />
+              <PlatformConnection />
             </section>
           )}
 

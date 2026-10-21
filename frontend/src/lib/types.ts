@@ -60,6 +60,135 @@ export interface UpdateStatus {
   lastCheckedAt?: string
 }
 
+/** One platform request recorded while MANGO3S_PLATFORM_TRACE is on (`make dev`); secrets are masked. */
+export interface PlatformTraceEntry {
+  id: number
+  time: string
+  method: string
+  url: string
+  /** 0 when no response arrived. */
+  status: number
+  durationMs: number
+  error?: string
+  requestHeaders?: Record<string, string>
+  requestBody?: string
+  responseHeaders?: Record<string, string>
+  responseBody?: string
+}
+
+export interface PlatformDebug {
+  baseUrl: string
+  baseUrlSource: string
+  traceEnabled: boolean
+  registered: boolean
+  installationId: string
+  status: UpdateStatus
+  requests: PlatformTraceEntry[]
+}
+
+/** One route of the web platform API (API console, test mode). */
+export interface APIEndpoint {
+  id: string
+  group: string
+  name: string
+  method: string
+  /** May contain {variables}. */
+  path: string
+  query?: string
+  body?: string
+  auth: 'none' | 'installation' | 'account' | 'device' | 'admin'
+  writes: boolean
+  multipart?: boolean
+  description: string
+  captures?: Record<string, string>
+}
+
+export interface APIConsoleState {
+  enabled: boolean
+  baseUrl: string
+  endpoints: APIEndpoint[]
+  vars: Record<string, string>
+  /** Variables shown masked. */
+  secret: string[]
+}
+
+export interface APIRequest {
+  endpointId: string
+  method: string
+  path: string
+  query: string
+  body: string
+  auth: string
+}
+
+export interface APIResponse {
+  endpointId: string
+  method: string
+  url: string
+  status: number
+  statusText: string
+  durationMs: number
+  requestHeaders: Record<string, string>
+  requestBody?: string
+  responseHeaders?: Record<string, string>
+  responseBody?: string
+  error?: string
+  captured?: Record<string, string>
+}
+
+/** One platform API the connection test can call on its own. */
+export interface PlatformCheck {
+  id: string
+  name: string
+  method: string
+  path: string
+  needsToken: boolean
+  writes: boolean
+  description: string
+}
+
+/** A category of files Mango3S keeps on disk (Settings › Diagnostics › Storage). */
+export interface StorageItem {
+  id: string
+  label: string
+  description: string
+  bytes: number
+  files: number
+  clearable: boolean
+  recommended: boolean
+}
+
+export interface StorageUsage {
+  configDir: string
+  items: StorageItem[]
+}
+
+export interface StorageCleanResult {
+  freedBytes: number
+  cleared: string[]
+  skipped?: string[]
+  usage: StorageUsage
+}
+
+export interface PlatformProbeStep {
+  id: string
+  name: string
+  method: string
+  path: string
+  ok: boolean
+  skipped: boolean
+  status: number
+  durationMs: number
+  detail: string
+  error?: string
+}
+
+export interface PlatformProbeReport {
+  baseUrl: string
+  ok: boolean
+  steps: PlatformProbeStep[]
+}
+
 export type NotificationAction = 'open_link' | 'ok' | 'accept' | 'cancel'
 
 export interface NotificationButton {
@@ -503,6 +632,8 @@ export interface AppInfo {
   goVersion?: string
   platform?: string
   executable?: string
+  /** Test mode (`make dev`): the API console is available. */
+  testMode?: boolean
   backupDir?: string
   components: Record<string, string>
 }

@@ -134,8 +134,16 @@ export function ClearLocalAIKey() {
   return window['go']['api']['App']['ClearLocalAIKey']();
 }
 
+export function ClearPlatformTrace() {
+  return window['go']['api']['App']['ClearPlatformTrace']();
+}
+
 export function ClearProfile(arg1, arg2) {
   return window['go']['api']['App']['ClearProfile'](arg1, arg2);
+}
+
+export function ClearStorage(arg1) {
+  return window['go']['api']['App']['ClearStorage'](arg1);
 }
 
 export function CodeLanguages() {
@@ -282,6 +290,10 @@ export function GetAIStatus() {
   return window['go']['api']['App']['GetAIStatus']();
 }
 
+export function GetAPIConsole() {
+  return window['go']['api']['App']['GetAPIConsole']();
+}
+
 export function GetAccountState() {
   return window['go']['api']['App']['GetAccountState']();
 }
@@ -310,6 +322,14 @@ export function GetMCPInfo() {
   return window['go']['api']['App']['GetMCPInfo']();
 }
 
+export function GetPlatformChecks() {
+  return window['go']['api']['App']['GetPlatformChecks']();
+}
+
+export function GetPlatformDebug() {
+  return window['go']['api']['App']['GetPlatformDebug']();
+}
+
 export function GetPlatformInfo() {
   return window['go']['api']['App']['GetPlatformInfo']();
 }
@@ -324,6 +344,10 @@ export function GetProfiling(arg1, arg2) {
 
 export function GetSettings() {
   return window['go']['api']['App']['GetSettings']();
+}
+
+export function GetStorageUsage() {
+  return window['go']['api']['App']['GetStorageUsage']();
 }
 
 export function GetSyncOutcome(arg1) {
@@ -522,6 +546,10 @@ export function ReschemaTypes() {
   return window['go']['api']['App']['ReschemaTypes']();
 }
 
+export function ResetAPIConsole() {
+  return window['go']['api']['App']['ResetAPIConsole']();
+}
+
 export function RespondNotification(arg1, arg2) {
   return window['go']['api']['App']['RespondNotification'](arg1, arg2);
 }
@@ -536,6 +564,10 @@ export function RollbackMigration(arg1, arg2) {
 
 export function RunAggregation(arg1, arg2) {
   return window['go']['api']['App']['RunAggregation'](arg1, arg2);
+}
+
+export function RunPlatformCheck(arg1) {
+  return window['go']['api']['App']['RunPlatformCheck'](arg1);
 }
 
 export function RunQuery(arg1, arg2) {
@@ -586,8 +618,16 @@ export function SaveTask(arg1) {
   return window['go']['api']['App']['SaveTask'](arg1);
 }
 
+export function SendAPIRequest(arg1) {
+  return window['go']['api']['App']['SendAPIRequest'](arg1);
+}
+
 export function SetAIKey(arg1) {
   return window['go']['api']['App']['SetAIKey'](arg1);
+}
+
+export function SetAPIConsoleVar(arg1, arg2) {
+  return window['go']['api']['App']['SetAPIConsoleVar'](arg1, arg2);
 }
 
 export function SetLocalAIKey(arg1) {
@@ -688,6 +728,10 @@ export function TestConnection(arg1) {
 
 export function TestConnectionWithLog(arg1, arg2) {
   return window['go']['api']['App']['TestConnectionWithLog'](arg1, arg2);
+}
+
+export function TestPlatformConnection(arg1) {
+  return window['go']['api']['App']['TestPlatformConnection'](arg1);
 }
 
 export function TranslateSQL(arg1) {

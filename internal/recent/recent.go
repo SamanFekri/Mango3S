@@ -3,6 +3,7 @@
 package recent
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -103,6 +104,16 @@ func (s *Store) Clear(profileID string) error {
 	}
 	delete(f.Profiles, profileID)
 	return config.WriteJSON(s.path, f)
+}
+
+// ClearAll deletes every connection's history.
+func (s *Store) ClearAll() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // Copy duplicates a connection's history (used by "Duplicate connection").

@@ -70,6 +70,17 @@ const backend = vi.hoisted(() => ({
   openPlatformLink: vi.fn(),
   getPlatformInfo: vi.fn(),
   getPrivacyPolicy: vi.fn(),
+  getPlatformDebug: vi.fn(),
+  testPlatformConnection: vi.fn(),
+  clearPlatformTrace: vi.fn(),
+  getPlatformChecks: vi.fn(),
+  runPlatformCheck: vi.fn(),
+  getStorageUsage: vi.fn(),
+  clearStorage: vi.fn(),
+  getAPIConsole: vi.fn(),
+  setAPIConsoleVar: vi.fn(),
+  resetAPIConsole: vi.fn(),
+  sendAPIRequest: vi.fn(),
   acceptPrivacyPolicy: vi.fn(),
   getAccountState: vi.fn(),
   refreshAccount: vi.fn(),
@@ -115,6 +126,7 @@ vi.mock('./lib/backend', () => ({
     updateStatusListeners.push(cb)
     return () => undefined
   },
+  onPlatformTrace: () => () => undefined,
   onPrivacyRequired: (cb: (p: unknown) => void) => {
     privacyListeners.push(cb)
     return () => undefined
@@ -137,14 +149,16 @@ import App from './App'
 const keyOf = (r: HTMLElement) => r.querySelector('.tree-field, .tree-index')?.textContent ?? ''
 import { setShortcutPlatform } from './state/shortcuts'
 
+const appInfoFixture = {
+  version: '1.2.3', configDir: '/Users/me/Library/Application Support/Mango3S', logFile: '/Users/me/Library/Application Support/Mango3S/logs/mango3s.log',
+  secretBackend: 'keyring', commit: 'abcdef1234567890', buildTime: '2026-10-18T10:00:00Z', modified: false, goVersion: 'go1.26.0',
+  platform: 'darwin/arm64', executable: '/Applications/Mango3S.app/Contents/MacOS/mango3s', backupDir: '/Users/me/Library/Application Support/Mango3S/backups',
+  components: { Wails: 'v2.16.0', 'MongoDB Go driver': 'v2.9.2' },
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
-  backend.getAppInfo.mockResolvedValue({
-    version: '1.2.3', configDir: '/Users/me/Library/Application Support/Mango3S', logFile: '/Users/me/Library/Application Support/Mango3S/logs/mango3s.log',
-    secretBackend: 'keyring', commit: 'abcdef1234567890', buildTime: '2026-10-18T10:00:00Z', modified: false, goVersion: 'go1.26.0',
-    platform: 'darwin/arm64', executable: '/Applications/Mango3S.app/Contents/MacOS/mango3s', backupDir: '/Users/me/Library/Application Support/Mango3S/backups',
-    components: { Wails: 'v2.16.0', 'MongoDB Go driver': 'v2.9.2' },
-  })
+  backend.getAppInfo.mockResolvedValue({ ...appInfoFixture })
   for (const k of Object.keys(menuListeners)) delete menuListeners[k]
   backend.getSettings.mockResolvedValue({
     theme: 'dark', pageSize: 50, queryTimeoutSeconds: 60, confirmDeletes: true, defaultView: 'tree', editorFontSize: 13, logLevel: 'info',
@@ -159,6 +173,21 @@ beforeEach(() => {
   backend.openPlatformLink.mockResolvedValue(undefined)
   backend.getPlatformInfo.mockResolvedValue(null)
   backend.getPrivacyPolicy.mockResolvedValue(null)
+  backend.getPlatformDebug.mockResolvedValue({
+    baseUrl: 'http://localhost:4330',
+    baseUrlSource: 'MANGO3S_PLATFORM_URL',
+    traceEnabled: true,
+    registered: false,
+    installationId: '',
+    status: { connected: false, revoked: false, state: 'idle', currentVersion: '1.2.3' },
+    requests: [],
+  })
+  backend.clearPlatformTrace.mockResolvedValue(undefined)
+  backend.getPlatformChecks.mockResolvedValue([
+    { id: 'health', name: 'Server reachable', method: 'GET', path: '/health', needsToken: false, writes: false, description: 'Health check' },
+    { id: 'notifications', name: 'Notifications', method: 'GET', path: '/v1/notifications', needsToken: true, writes: false, description: 'Pending announcements' },
+  ])
+  backend.getStorageUsage.mockResolvedValue(storageUsage)
   backend.getAccountState.mockResolvedValue(signedOut)
   backend.refreshAccount.mockResolvedValue(signedOut)
   backend.checkForUpdatesNow.mockResolvedValue({ connected: true, revoked: false, state: 'up_to_date', currentVersion: '1.2.3' })
@@ -777,6 +806,17 @@ describe('app menu', () => {
 
 })
 
+const storageUsage = {
+  configDir: '/home/ada/.config/Mango3S',
+  items: [
+    { id: 'logs', label: 'Logs', description: 'Log files', bytes: 3000, files: 2, clearable: true, recommended: true },
+    { id: 'cache', label: 'Cached server info', description: 'Links', bytes: 0, files: 0, clearable: true, recommended: true },
+    { id: 'temp', label: 'Temporary files', description: 'Temp', bytes: 1096, files: 1, clearable: true, recommended: true },
+    { id: 'history', label: 'Query history', description: 'History', bytes: 9000, files: 1, clearable: true, recommended: false },
+    { id: 'backups', label: 'Backups (before-images)', description: 'Backups', bytes: 5000, files: 3, clearable: false, recommended: false },
+  ],
+}
+
 describe('settings tabs and account', () => {
   const openSettings = async () => {
     render(<App />)
@@ -789,7 +829,7 @@ describe('settings tabs and account', () => {
     await openSettings()
     const list = screen.getByRole('tablist', { name: 'Settings sections' })
     expect(within(list).getAllByRole('tab').map((t) => t.textContent)).toEqual([
-      'General', 'AI assistant', 'MCP server', 'Keymap', 'Account & sync', 'Updates', 'Diagnostics',
+      'General', 'AI assistant', 'MCP server', 'Keymap', 'Account & sync', 'Updates', 'Storage', 'Diagnostics',
     ])
     fireEvent.change(screen.getByRole('spinbutton', { name: /Documents per page/ }), { target: { value: '75' } })
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
@@ -806,6 +846,58 @@ describe('settings tabs and account', () => {
     // Keymap and MCP save on their own: no shared Save bar there.
     fireEvent.click(screen.getByRole('tab', { name: 'Keymap' }))
     expect(screen.queryByRole('button', { name: /Save settings/ })).toBeNull()
+  })
+
+  it('runs one platform API at a time from Diagnostics', async () => {
+    backend.runPlatformCheck.mockResolvedValue({
+      id: 'notifications', name: 'Notifications', method: 'GET', path: '/v1/notifications',
+      ok: false, skipped: false, status: 401, durationMs: 9, detail: '', error: 'platform returned HTTP 401',
+    })
+    await openSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Diagnostics' }))
+    expect(await screen.findByText('http://localhost:4330', { exact: false })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Run Notifications' }))
+    await waitFor(() => expect(backend.runPlatformCheck).toHaveBeenCalledWith('notifications'))
+    expect(backend.runPlatformCheck).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('platform returned HTTP 401')).toBeInTheDocument()
+  })
+
+  it('clears logs and caches from the Storage tab, keeping history unless chosen', async () => {
+    backend.clearStorage.mockResolvedValue({ freedBytes: 4096, cleared: ['logs', 'temp'], usage: storageUsage })
+    await openSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Storage' }))
+    expect(await screen.findByRole('checkbox', { name: 'Logs' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Query history' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Backups (before-images)' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /Clear selected/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear' }))
+    await waitFor(() => expect(backend.clearStorage).toHaveBeenCalledWith(['logs', 'temp']))
+  })
+
+  it('sends any web API request from the API console in test mode', async () => {
+    backend.getAppInfo.mockResolvedValue({ ...appInfoFixture, testMode: true })
+    backend.getAPIConsole.mockResolvedValue({
+      enabled: true,
+      baseUrl: 'http://localhost:4330',
+      secret: ['installationToken'],
+      vars: { installationId: 'inst-1', installationToken: 'it_x', os: 'macos' },
+      endpoints: [
+        { id: 'health', group: 'Public', name: 'Health check', method: 'GET', path: '/health', auth: 'none', writes: false, description: '' },
+        { id: 'notifications.list', group: 'App: installation', name: 'List notifications', method: 'GET', path: '/v1/notifications', auth: 'installation', writes: false, description: '' },
+      ],
+    })
+    backend.sendAPIRequest.mockResolvedValue({
+      endpointId: 'notifications.list', method: 'GET', url: 'http://localhost:4330/v1/notifications', status: 200, statusText: 'OK',
+      durationMs: 4, requestHeaders: {}, responseBody: '[]',
+    })
+    await openSettings()
+    fireEvent.click(await screen.findByRole('tab', { name: 'API console' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Send List notifications' }))
+    await waitFor(() =>
+      expect(backend.sendAPIRequest).toHaveBeenCalledWith({ endpointId: 'notifications.list', method: 'GET', path: '/v1/notifications', query: '', body: '', auth: 'installation' }),
+    )
+    expect(backend.sendAPIRequest).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('200 · 4 ms', { selector: '.ac-row .ac-pill' })).toBeInTheDocument()
   })
 
   it('signs up with an emailed code and shows the recovery key once', async () => {

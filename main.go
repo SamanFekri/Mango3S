@@ -32,6 +32,12 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "mcp" {
 		run = runMCP // `mango3s mcp`: stdio MCP server for Claude Desktop / Claude Code
 	}
+	if len(os.Args) > 1 && os.Args[1] == "platform-api" {
+		run = func() error { return runPlatformAPI(os.Args[2:]) } // send any web API request (API console in the terminal)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "platform-check" {
+		run = func() error { return runPlatformCheck(os.Args[2:]) } // connection test for the web platform
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "Mango3S:", err)
 		os.Exit(1)

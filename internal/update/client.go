@@ -56,6 +56,9 @@ func IsTransient(err error) bool {
 // Client talks to one platform deployment.
 type Client struct {
 	BaseURL string
+	// NoRetry makes every call fail fast instead of retrying transient
+	// failures (used by the connection probe, where the user is waiting).
+	NoRetry bool
 }
 
 // New returns a client for baseURL (trailing slash optional).
@@ -144,7 +147,7 @@ func (c *Client) send(ctx context.Context, cl call) error {
 	}
 	for attempt := 0; ; attempt++ {
 		err := c.doOnce(ctx, cl, payload)
-		if !cl.retry {
+		if !cl.retry || c.NoRetry {
 			return err
 		}
 		if err == nil || !IsTransient(err) || attempt >= len(RetryDelays) || ctx.Err() != nil {
