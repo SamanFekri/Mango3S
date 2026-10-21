@@ -48,7 +48,7 @@ Legend:
 | Task definition import and export | ✅ | Tasks → *Import…* / *Export…* | Imported tasks always start unapproved | `TestExportImportDefinitionsResetApproval`, UI test |
 | Index advisor | ✅ | Database or collection → *Index advisor…*. Groups profiled queries by shape (fields matched exactly, ranges, sort) and ranks them by total time. Suggests an index for each (fields matched exactly, then the sort, then ranges) and says whether an existing index already serves it. Lists unused indexes and indexes made redundant by a longer one. Create, unhide, hide and drop from the dialog | Profiler data (it offers to turn the profiler on); `$indexStats` | `TestClassifyAndSuggest`, `TestServes`, `TestRedundant`, `TestDecide`, `TestIndexAdvisor` (suggestion created, then reported as served), UI tests |
 | Query profiler | ✅ | Database → *Query profiler…*: level, slow threshold, sample rate, filter by collection, operation and duration, show the command, clear | mongod (not through mongos) | `TestProfiler`, UI tests |
-| Explain, schema, compare/sync, reschema, masking, AI, MCP | ✅ | Existing (see [P2.md](P2.md) and the README) | | Existing tests |
+| Explain, schema, compare/sync, reschema, masking, AI, MCP | ✅ | Existing (see [P2.md](P2.md) and [REFERENCE.md](REFERENCE.md)) | | Existing tests |
 | User and role management UI | ✗ | Use the shell (`db.createUser`) or include users and roles in an archive backup | | |
 | GridFS-specific browser | ✗ | GridFS buckets (`fs.files`, `fs.chunks`) are ordinary collections and are backed up, restored and copied like any other | | |
 

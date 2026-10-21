@@ -12,7 +12,7 @@ Planned features, in six phases. Each phase depends only on the ones before it, 
 - Secrets stay in the credential store and never reach logs or command lines.
 - Data is streamed, never loaded whole into memory.
 - Each feature gets unit tests, a test against a real server and UI tests.
-- Update [FEATURES.md](FEATURES.md) and the README.
+- Update [FEATURES.md](FEATURES.md) and [REFERENCE.md](REFERENCE.md).
 - Never mention or imply another product as the inspiration.
 
 Sizes:

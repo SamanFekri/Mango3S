@@ -1,5 +1,5 @@
 // Package sqlq translates a documented subset of SQL SELECT into MongoDB
-// find queries or aggregation pipelines. See README "SQL query" for the
+// find queries or aggregation pipelines. See docs/REFERENCE.md "SQL query" for the
 // grammar; anything outside it is rejected with a positioned error.
 package sqlq
 
