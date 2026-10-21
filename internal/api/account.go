@@ -1,7 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +18,7 @@ import (
 
 	"mango3s/internal/apperr"
 	"mango3s/internal/config"
+	"mango3s/internal/mongox"
 	"mango3s/internal/secrets"
 	"mango3s/internal/update"
 )
@@ -23,19 +28,34 @@ import (
 // off until the user signs in, every call is user-initiated or a quiet
 // background push, and an unreachable server only means "try again later".
 //
-// What is synced: one item per connection ("conn-<id>"), holding the profile
-// and its secrets (passwords, keys). The server encrypts each item to the
-// account's public key, so uploading needs no password; reading back needs
-// it. Locally, sync bookkeeping (which version of each connection the server
-// has) lives in account-sync.json; the account token lives in the OS
-// credential store like every other secret.
+// What is synced: one item per connection ("conn-<id>"), holding everything
+// needed to recreate it as it is here: every setting, every secret
+// (passwords, passphrases, tokens), the contents of the files it points to
+// (SSH private key, TLS client certificate/key, CA) and the known_hosts lines
+// that vouch for its SSH server. Connections listed in Settings.SyncExclude
+// stay on this computer. Pushing and pulling are manual unless SyncAuto is on,
+// which pushes a few seconds after a connection changes.
+//
+// Each item is sealed to the server's transport key before it is sent (see
+// update/transport.go); the server opens it and encrypts it to the account's
+// public key, so uploading needs no password; reading back needs it. Locally,
+// sync bookkeeping (which version of each connection the server has) lives in
+// account-sync.json; the account token lives in the OS credential store like
+// every other secret.
 
 const (
 	secretAccountToken = "account:token"
 	accountSyncFile    = "account-sync.json"
 	syncKeyPrefix      = "conn-"
-	syncItemVersion    = 1
+	// syncItemVersion 2 added Files and KnownHosts; version 1 items still apply.
+	syncItemVersion = 2
+	// syncedFilesDir (in the data folder) holds key files that arrived with
+	// a synced connection, one folder per connection.
+	syncedFilesDir = "synced-files"
 )
+
+// autoPushDelay lets a burst of edits go up as one push.
+const autoPushDelay = 5 * time.Second
 
 // Platform error codes that mean "the admin turned this part off". They are
 // remembered (until the next success) so the UI can hide what won't work.
@@ -52,13 +72,18 @@ type accountState struct {
 	account  *update.Account
 	disabled map[string]bool
 	syncing  bool
+	autoPush *time.Timer   // pending automatic push after a change
+	pushWait time.Duration // delay before it (autoPushDelay; shorter in tests)
 }
 
 // syncBook is account-sync.json.
 type syncBook struct {
 	Email string `json:"email,omitempty"`
 	// Items maps each synced key to the version (updatedAt) the server has.
-	Items      map[string]string `json:"items"`
+	Items map[string]string `json:"items"`
+	// Content maps each synced key to the contentHash of the files and
+	// known_hosts lines the server has, so editing a key file is a change too.
+	Content    map[string]string `json:"content,omitempty"`
 	LastSyncAt string            `json:"lastSyncAt,omitempty"`
 	LastError  string            `json:"lastError,omitempty"`
 	// RestoreSuggested is set when the server had a newer version of
@@ -66,11 +91,24 @@ type syncBook struct {
 	RestoreSuggested bool `json:"restoreSuggested,omitempty"`
 }
 
-// syncPayload is what one synced connection holds.
+// syncPayload is what one synced connection holds: everything needed to
+// recreate it as it is here.
 type syncPayload struct {
 	V       int               `json:"v"`
 	Profile config.Profile    `json:"profile"`
 	Secrets map[string]string `json:"secrets,omitempty"`
+	// Files holds the contents of the files the connection points to, by
+	// kind (syncFileSSHKey, ...), so it works where those files don't exist.
+	Files map[string]syncFile `json:"files,omitempty"`
+	// KnownHosts are the known_hosts lines listing the SSH server's keys, so
+	// the tunnel is trusted the same way on another computer.
+	KnownHosts []string `json:"knownHosts,omitempty"`
+}
+
+// syncFile is one file's contents.
+type syncFile struct {
+	Name string `json:"name"` // base name, for the copy written on another computer
+	Data string `json:"data"` // base64
 }
 
 // AccountState is what the Account settings tab shows.
@@ -131,6 +169,9 @@ func (a *App) readBook() syncBook {
 	if b.Items == nil {
 		b.Items = map[string]string{}
 	}
+	if b.Content == nil {
+		b.Content = map[string]string{}
+	}
 	return b
 }
 
@@ -180,6 +221,9 @@ func (a *App) accountState() AccountState {
 func (a *App) accountErr(err error) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, update.ErrTransportUnsupported) {
+		return &apperr.Error{Code: apperr.CodeUnsupported, Message: "The Mango3S server can't take encrypted sync yet, so nothing was sent. Ask the administrator to update it.", Detail: "transport_unsupported"}
 	}
 	var se *update.StatusError
 	if !errors.As(err, &se) {
@@ -432,7 +476,7 @@ func (a *App) AccountResetPassword(in ResetPasswordInput) (AccountResult, error)
 	if ferr == nil && s.DataKept != nil && !*s.DataKept {
 		// The server's copies are gone: everything local counts as not uploaded.
 		book := a.readBook()
-		book.Items, book.RestoreSuggested = map[string]string{}, false
+		book.Items, book.Content, book.RestoreSuggested = map[string]string{}, map[string]string{}, false
 		a.writeBook(book)
 		res.State = a.accountState()
 	}
@@ -472,7 +516,7 @@ func (a *App) AccountDelete(password string) error {
 
 // ---- bound methods: sync ---------------------------------------------------
 
-// SyncNow uploads every connection changed (or deleted) since the last sync.
+// SyncNow pushes every connection changed (or deleted) since the last sync.
 func (a *App) SyncNow() (SyncReport, error) {
 	ctx, cancel := a.accountCtx()
 	defer cancel()
@@ -481,22 +525,20 @@ func (a *App) SyncNow() (SyncReport, error) {
 	return r, a.encode("SyncNow", err)
 }
 
-// SyncRestore uploads local changes, then downloads the account's
-// connections (this needs the password) and applies the newer ones here:
-// new connections are added, changed ones updated, and ones deleted on
-// another device removed — unless they changed here since.
-func (a *App) SyncRestore(password string) (SyncReport, error) {
+// SyncPull downloads the account's connections (this needs the password)
+// and applies the newer ones here: new connections are added, changed ones
+// updated, and ones deleted on another device removed — unless they changed
+// here since (the next push sends those). Nothing is uploaded.
+func (a *App) SyncPull(password string) (SyncReport, error) {
 	ctx, cancel := a.accountCtx()
 	defer cancel()
-	client := a.platformClient()
-	report, err := a.pushChanges(ctx, client)
-	if err != nil {
-		a.emitAccount()
-		return report, a.encode("SyncRestore", err)
+	report := SyncReport{Errors: []string{}}
+	if err := requirePrivacy(a); err != nil {
+		return report, a.encode("SyncPull", err)
 	}
-	err = a.pullAndApply(ctx, client, password, &report)
+	err := a.pullAndApply(ctx, a.platformClient(), password, &report)
 	a.emitAccount()
-	return report, a.encode("SyncRestore", err)
+	return report, a.encode("SyncPull", err)
 }
 
 // SyncWipe erases everything synced to the account on the server.
@@ -511,7 +553,7 @@ func (a *App) SyncWipe(password string) error {
 		return a.encode("SyncWipe", a.accountErr(err))
 	}
 	book := a.readBook()
-	book.Items, book.RestoreSuggested, book.LastError = map[string]string{}, false, ""
+	book.Items, book.Content, book.RestoreSuggested, book.LastError = map[string]string{}, map[string]string{}, false, ""
 	a.writeBook(book)
 	if s := a.currentSettings(); s.SyncAuto {
 		// Otherwise the next background run would upload everything again.
@@ -537,26 +579,135 @@ func parseStamp(s string) (time.Time, bool) {
 	return t.UTC().Truncate(time.Millisecond), true
 }
 
+// Kinds of files a synced connection carries the contents of.
+const (
+	syncFileSSHKey  = "sshPrivateKey"
+	syncFileTLSCert = "tlsCertKey"
+	syncFileTLSCA   = "tlsCA"
+)
+
+// maxSyncFileBytes caps one key or certificate file; real ones are a few KB.
+const maxSyncFileBytes = 256 << 10
+
+// connFile is one file a profile points to.
+type connFile struct {
+	kind  string
+	path  *string
+	inUse bool // the connection needs it to work
+}
+
+func connFiles(p *config.Profile) []connFile {
+	return []connFile{
+		{syncFileSSHKey, &p.SSH.PrivateKeyFile, p.SSH.Enabled && p.SSH.AuthMethod == config.SSHAuthKey},
+		{syncFileTLSCert, &p.TLS.CertKeyFile, p.TLS.Enabled},
+		{syncFileTLSCA, &p.TLS.CAFile, p.TLS.Enabled},
+	}
+}
+
+var syncFileLabels = map[string]string{
+	syncFileSSHKey:  "SSH private key",
+	syncFileTLSCert: "TLS client certificate",
+	syncFileTLSCA:   "TLS CA file",
+}
+
+func readSmallFile(path string) ([]byte, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if st.Size() > maxSyncFileBytes {
+		return nil, fmt.Errorf("%s is larger than %d KB", path, maxSyncFileBytes>>10)
+	}
+	return os.ReadFile(path)
+}
+
+// connContent reads what a connection carries besides its settings: the
+// files it points to and the known_hosts lines for its SSH server. A file
+// the connection needs that can't be read is an error; unused ones are left
+// out.
+func connContent(p config.Profile) (map[string]syncFile, []string, error) {
+	files := map[string]syncFile{}
+	for _, f := range connFiles(&p) {
+		path := strings.TrimSpace(*f.path)
+		if path == "" {
+			continue
+		}
+		data, err := readSmallFile(path)
+		if err != nil {
+			if f.inUse {
+				return nil, nil, apperr.Invalid("The %s of %q can't be read (%s), so it can't be synced. Fix the path or the file, then push again.", syncFileLabels[f.kind], p.Name, err)
+			}
+			continue
+		}
+		files[f.kind] = syncFile{Name: filepath.Base(path), Data: base64.StdEncoding.EncodeToString(data)}
+	}
+	var known []string
+	if p.SSH.Enabled && p.SSH.Host != "" {
+		known = mongox.KnownHostLines(p.SSH.Host, p.SSH.Port)
+	}
+	return files, known, nil
+}
+
+// contentHash fingerprints a connection's files and known_hosts lines.
+func contentHash(files map[string]syncFile, known []string) string {
+	h := sha256.New()
+	kinds := make([]string, 0, len(files))
+	for k := range files {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	for _, k := range kinds {
+		fmt.Fprintf(h, "f\x00%s\x00%s\x00%s\x00", k, files[k].Name, files[k].Data)
+	}
+	for _, l := range known {
+		fmt.Fprintf(h, "k\x00%s\x00", l)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:32]
+}
+
+// localContentHash is contentHash for a profile as it is on disk now; an
+// unreadable file gives a value that never matches, so it shows as pending.
+func localContentHash(p config.Profile) string {
+	files, known, err := connContent(p)
+	if err != nil {
+		return "unreadable"
+	}
+	return contentHash(files, known)
+}
+
+func excludedSet(s config.Settings) map[string]bool {
+	out := make(map[string]bool, len(s.SyncExclude))
+	for _, id := range s.SyncExclude {
+		out[id] = true
+	}
+	return out
+}
+
 // localChanges lists what the server doesn't have yet: connections changed
-// since their last sync, and tombstones for connections deleted here.
+// since their last sync (settings, or the contents of their files), and
+// tombstones for connections deleted here. Excluded connections are skipped.
 func (a *App) localChanges(book syncBook) ([]update.SyncItem, error) {
 	list, err := a.store.ListProfiles()
 	if err != nil {
 		return nil, err
 	}
+	excluded := excludedSet(a.currentSettings())
 	var items []update.SyncItem
 	seen := map[string]bool{}
 	for _, p := range list {
 		key := syncKeyPrefix + p.ID
 		seen[key] = true
-		if book.Items[key] == stamp(p.UpdatedAt) {
+		if excluded[p.ID] {
+			continue
+		}
+		if book.Items[key] == stamp(p.UpdatedAt) && book.Content[key] == localContentHash(p) {
 			continue
 		}
 		items = append(items, update.SyncItem{Key: key, UpdatedAt: stamp(p.UpdatedAt)})
 	}
 	keys := make([]string, 0, len(book.Items))
 	for key := range book.Items {
-		if !seen[key] {
+		if !seen[key] && !excluded[strings.TrimPrefix(key, syncKeyPrefix)] {
 			keys = append(keys, key)
 		}
 	}
@@ -568,11 +719,13 @@ func (a *App) localChanges(book syncBook) ([]update.SyncItem, error) {
 	return items, nil
 }
 
-// payload builds the data of one connection item, secrets included.
-func (a *App) payload(id string) (string, error) {
+// payload builds the data of one connection item: the profile, its secrets,
+// its files and known_hosts lines. It also returns the content hash to
+// remember once the server has it.
+func (a *App) payload(id string) (string, string, error) {
 	p, err := a.store.GetProfile(id)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	sec := map[string]string{}
 	for _, kind := range config.SecretKinds {
@@ -584,13 +737,17 @@ func (a *App) payload(id string) (string, error) {
 			continue
 		}
 		if err != nil {
-			return "", apperr.Wrap(apperr.CodeSecretBackend, err, fmt.Sprintf("A saved secret of %q could not be read.", p.Name))
+			return "", "", apperr.Wrap(apperr.CodeSecretBackend, err, fmt.Sprintf("A saved secret of %q could not be read.", p.Name))
 		}
 		sec[kind] = v
 	}
+	files, known, err := connContent(p)
+	if err != nil {
+		return "", "", err
+	}
 	p.LastConnectedAt, p.Position = nil, 0 // per-device details
-	data, err := json.Marshal(syncPayload{V: syncItemVersion, Profile: p, Secrets: sec})
-	return string(data), err
+	data, err := json.Marshal(syncPayload{V: syncItemVersion, Profile: p, Secrets: sec, Files: files, KnownHosts: known})
+	return string(data), contentHash(files, known), err
 }
 
 func (a *App) beginSync() (func(), error) {
@@ -609,7 +766,27 @@ func (a *App) beginSync() (func(), error) {
 	}, nil
 }
 
-// pushChanges uploads local changes. No password is needed.
+// touchContentChanges gives connections whose files changed (but not their
+// settings) a new version, so the server takes them as newer.
+func (a *App) touchContentChanges(book syncBook, items []update.SyncItem) {
+	for i, it := range items {
+		if it.Deleted || book.Items[it.Key] != it.UpdatedAt {
+			continue
+		}
+		p, err := a.store.GetProfile(strings.TrimPrefix(it.Key, syncKeyPrefix))
+		if err != nil {
+			continue
+		}
+		p.UpdatedAt = time.Now().UTC().Truncate(time.Millisecond)
+		if saved, err := a.store.PutProfile(p); err == nil {
+			items[i].UpdatedAt = stamp(saved.UpdatedAt)
+		}
+	}
+}
+
+// pushChanges uploads local changes. No password is needed. A connection
+// that can't be packed (an unreadable key file, too large) is reported and
+// left out; the rest still go up.
 func (a *App) pushChanges(ctx context.Context, client *update.Client) (SyncReport, error) {
 	report := SyncReport{Errors: []string{}}
 	token := a.accountToken()
@@ -626,19 +803,38 @@ func (a *App) pushChanges(ctx context.Context, client *update.Client) (SyncRepor
 	defer done()
 
 	book := a.readBook()
-	items, err := a.localChanges(book)
+	all, err := a.localChanges(book)
 	if err != nil {
 		return report, err
 	}
-	for i := range items {
-		if items[i].Deleted {
-			continue
+	a.touchContentChanges(book, all)
+	maxBytes := 0
+	a.update.acct.mu.Lock()
+	if acct := a.update.acct.account; acct != nil {
+		maxBytes = acct.Sync.MaxItemKB * 1024
+	}
+	a.update.acct.mu.Unlock()
+
+	items := make([]update.SyncItem, 0, len(all))
+	hashes := map[string]string{}
+	for _, it := range all {
+		if !it.Deleted {
+			id := strings.TrimPrefix(it.Key, syncKeyPrefix)
+			data, hash, err := a.payload(id)
+			if err == nil && maxBytes > 0 && len(data) > maxBytes {
+				err = apperr.Invalid("It is larger than the server's limit of %d KB per connection.", maxBytes/1024)
+			}
+			if err != nil {
+				name := id
+				if p, perr := a.store.GetProfile(id); perr == nil {
+					name = p.Name
+				}
+				report.Errors = append(report.Errors, fmt.Sprintf("%s: %s", name, apperr.From(err).Message))
+				continue
+			}
+			it.Data, hashes[it.Key] = &data, hash
 		}
-		data, err := a.payload(strings.TrimPrefix(items[i].Key, syncKeyPrefix))
-		if err != nil {
-			return report, err
-		}
-		items[i].Data = &data
+		items = append(items, it)
 	}
 	versions := map[string]update.SyncItem{}
 	for _, it := range items {
@@ -658,9 +854,10 @@ func (a *App) pushChanges(ctx context.Context, client *update.Client) (SyncRepor
 			it := versions[key]
 			if it.Deleted {
 				delete(book.Items, key)
+				delete(book.Content, key)
 				report.Deleted++
 			} else {
-				book.Items[key] = it.UpdatedAt
+				book.Items[key], book.Content[key] = it.UpdatedAt, hashes[key]
 				report.Uploaded++
 			}
 		}
@@ -668,11 +865,15 @@ func (a *App) pushChanges(ctx context.Context, client *update.Client) (SyncRepor
 			report.Skipped++
 			book.RestoreSuggested = true
 			if versions[key].Deleted {
-				delete(book.Items, key) // the server has a newer version; Restore brings it back
+				delete(book.Items, key) // the server has a newer version; a pull brings it back
+				delete(book.Content, key)
 			}
 		}
 	}
 	book.LastSyncAt, book.LastError = time.Now().UTC().Format(time.RFC3339), ""
+	if len(report.Errors) > 0 {
+		book.LastError = report.Errors[0]
+	}
 	a.writeBook(book)
 	a.setDisabled("sync", false)
 	return report, nil
@@ -695,12 +896,16 @@ func (a *App) pullAndApply(ctx context.Context, client *update.Client, password 
 		return a.accountErr(err)
 	}
 	book := a.readBook()
+	excluded := excludedSet(a.currentSettings())
 	changed := false
 	for _, it := range items {
 		if !strings.HasPrefix(it.Key, syncKeyPrefix) {
 			continue // something a newer app version syncs; leave it alone
 		}
 		id := strings.TrimPrefix(it.Key, syncKeyPrefix)
+		if excluded[id] {
+			continue // kept on this computer only
+		}
 		remote, ok := parseStamp(it.UpdatedAt)
 		if !ok {
 			continue
@@ -720,6 +925,7 @@ func (a *App) pullAndApply(ctx context.Context, client *update.Client, password 
 				changed = true
 			}
 			delete(book.Items, it.Key)
+			delete(book.Content, it.Key)
 			continue
 		}
 		if it.Data == nil {
@@ -730,7 +936,16 @@ func (a *App) pullAndApply(ctx context.Context, client *update.Client, password 
 			report.Errors = append(report.Errors, fmt.Sprintf("%s: this item could not be read.", it.Key))
 			continue
 		}
-		if err := a.applySynced(id, remote, pl); err != nil {
+		if pl.V > syncItemVersion {
+			report.Errors = append(report.Errors, fmt.Sprintf("%s: it was synced by a newer Mango3S. Update the app to bring it in.", pl.Profile.Name))
+			continue
+		}
+		var prev *config.Profile
+		if exists {
+			prev = &local
+		}
+		saved, err := a.applySynced(id, remote, pl, prev)
+		if err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("%s: %s", pl.Profile.Name, apperr.From(err).Message))
 			continue
 		}
@@ -739,7 +954,7 @@ func (a *App) pullAndApply(ctx context.Context, client *update.Client, password 
 		} else {
 			report.Added++
 		}
-		book.Items[it.Key] = stamp(remote)
+		book.Items[it.Key], book.Content[it.Key] = stamp(remote), localContentHash(saved)
 		changed = true
 	}
 	book.RestoreSuggested = false
@@ -748,37 +963,164 @@ func (a *App) pullAndApply(ctx context.Context, client *update.Client, password 
 	if changed {
 		a.update.emit("profiles:changed", nil)
 	}
-	a.log.Info("restored connections from account", "added", report.Added, "updated", report.Updated, "removed", report.Removed, "errors", len(report.Errors))
+	a.log.Info("pulled connections from account", "added", report.Added, "updated", report.Updated, "removed", report.Removed, "errors", len(report.Errors))
 	return nil
 }
 
-// applySynced stores one connection from the account, with its secrets.
-func (a *App) applySynced(id string, version time.Time, pl syncPayload) error {
+// applySynced stores one connection from the account with its secrets, its
+// files and its known_hosts lines. prev is the version already here, if any.
+func (a *App) applySynced(id string, version time.Time, pl syncPayload, prev *config.Profile) (config.Profile, error) {
 	p := pl.Profile
 	p.ID, p.UpdatedAt = id, version
 	p.HasPassword, p.StoredSecrets = false, nil
 	for kind := range pl.Secrets {
 		p.SetSecretFlag(kind, true)
 	}
+	if err := a.placeSyncedFiles(id, &p, pl.Files, prev); err != nil {
+		return config.Profile{}, err
+	}
+	if err := mongox.AddKnownHostLines(pl.KnownHosts); err != nil {
+		a.log.Warn("could not save synced known_hosts lines", "err", err)
+	}
 	saved, err := a.store.PutProfile(p)
 	if err != nil {
-		return err
+		return config.Profile{}, err
 	}
 	for _, kind := range config.SecretKinds {
 		key := config.SecretKey(saved.ID, kind)
 		if v, ok := pl.Secrets[kind]; ok && v != "" {
 			if err := a.secrets.Set(key, v); err != nil {
-				return apperr.Wrap(apperr.CodeSecretBackend, err, "A secret could not be stored securely.")
+				return config.Profile{}, apperr.Wrap(apperr.CodeSecretBackend, err, "A secret could not be stored securely.")
 			}
 		} else if err := a.secrets.Delete(key); err != nil && !errors.Is(err, secrets.ErrNotFound) {
 			a.log.Warn("could not remove a stored secret", "kind", kind, "err", err)
 		}
 	}
+	return saved, nil
+}
+
+// placeSyncedFiles points p at a local copy of each synced file. A file
+// this computer already has with the same contents (at the path the item
+// names, or where this connection had it before) is used as it is;
+// otherwise the contents are written to the data folder, readable only by
+// this user.
+func (a *App) placeSyncedFiles(id string, p *config.Profile, files map[string]syncFile, prev *config.Profile) error {
+	prevPaths := map[string]string{}
+	if prev != nil {
+		for _, f := range connFiles(prev) {
+			prevPaths[f.kind] = *f.path
+		}
+	}
+	for _, f := range connFiles(p) {
+		sf, ok := files[f.kind]
+		if !ok {
+			continue
+		}
+		data, err := base64.StdEncoding.DecodeString(sf.Data)
+		if err != nil {
+			return apperr.Invalid("The synced %s could not be read.", syncFileLabels[f.kind])
+		}
+		reused := false
+		for _, candidate := range []string{*f.path, prevPaths[f.kind]} {
+			if candidate == "" {
+				continue
+			}
+			if have, err := readSmallFile(candidate); err == nil && bytes.Equal(have, data) {
+				*f.path, reused = candidate, true
+				break
+			}
+		}
+		if reused {
+			continue
+		}
+		dst, err := a.writeSyncedFile(id, f.kind, sf.Name, data)
+		if err != nil {
+			return apperr.Wrap(apperr.CodeInternal, err, "The synced "+syncFileLabels[f.kind]+" could not be saved.")
+		}
+		*f.path = dst
+	}
 	return nil
 }
 
-// backgroundSync pushes local changes on the regular check-in when the user
-// is signed in and automatic sync is on. Failures are recorded quietly.
+func (a *App) syncedFilesPath(id string) string {
+	return filepath.Join(a.store.Dir(), syncedFilesDir, filepath.Base(id))
+}
+
+// writeSyncedFile replaces the connection's copy of one kind of file.
+func (a *App) writeSyncedFile(id, kind, name string, data []byte) (string, error) {
+	dir := a.syncedFilesPath(id)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	if old, _ := filepath.Glob(filepath.Join(dir, kind+"-*")); len(old) > 0 {
+		for _, f := range old {
+			_ = os.Remove(f)
+		}
+	}
+	name = strings.TrimLeft(filepath.Base(strings.ReplaceAll(name, "\\", "/")), ".")
+	if name == "" || name == "/" {
+		name = "file"
+	}
+	dst := filepath.Join(dir, kind+"-"+name)
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil && !errors.Is(err, errors.ErrUnsupported) {
+		a.log.Debug("could not restrict synced file permissions", "err", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		return "", err
+	}
+	return dst, os.Rename(tmp.Name(), dst)
+}
+
+// removeSyncedFiles deletes the key files that came with a connection.
+func (a *App) removeSyncedFiles(id string) {
+	if id == "" {
+		return
+	}
+	if err := os.RemoveAll(a.syncedFilesPath(id)); err != nil {
+		a.log.Warn("could not remove synced key files", "err", err)
+	}
+}
+
+// scheduleAutoPush runs after any change to a connection: the account view
+// is refreshed and, with automatic sync on, a push follows shortly.
+func (a *App) scheduleAutoPush() {
+	if a.accountToken() == "" {
+		return
+	}
+	a.emitAccount()
+	if !a.currentSettings().SyncAuto {
+		return
+	}
+	st := &a.update.acct
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if st.autoPush != nil {
+		st.autoPush.Stop()
+	}
+	wait := st.pushWait
+	if wait == 0 {
+		wait = autoPushDelay
+	}
+	st.autoPush = time.AfterFunc(wait, func() {
+		defer a.guard("automatic sync")
+		ctx, cancel := a.accountCtx()
+		defer cancel()
+		a.backgroundSync(ctx, a.platformClient())
+	})
+}
+
+// backgroundSync pushes local changes when the user is signed in and
+// automatic sync is on: after a change, and on the regular check-in (which
+// catches edited key files). Failures are recorded quietly.
 func (a *App) backgroundSync(ctx context.Context, client *update.Client) {
 	if a.accountToken() == "" || !a.currentSettings().SyncAuto || a.privacyPending() {
 		return

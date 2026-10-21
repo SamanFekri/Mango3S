@@ -16,6 +16,9 @@ func TestCatalogIsWellFormed(t *testing.T) {
 		if e.ID == "" || e.Group == "" || e.Name == "" || !strings.HasPrefix(e.Path, "/") {
 			t.Errorf("incomplete endpoint: %+v", e)
 		}
+		if strings.HasPrefix(e.Path, "/api/") {
+			t.Errorf("%s: admin dashboard routes don't belong in the app's console", e.ID)
+		}
 		if seen[e.ID] {
 			t.Errorf("duplicate endpoint ID %q", e.ID)
 		}
@@ -32,7 +35,7 @@ func TestCatalogIsWellFormed(t *testing.T) {
 			}
 		}
 		switch e.Auth {
-		case AuthNone, AuthInstallation, AuthAccount, AuthDevice, AuthAdmin:
+		case AuthNone, AuthInstallation, AuthAccount, AuthDevice:
 		default:
 			t.Errorf("%s: unknown auth %q", e.ID, e.Auth)
 		}
@@ -41,11 +44,11 @@ func TestCatalogIsWellFormed(t *testing.T) {
 
 func TestConsoleSendsFillsAndCaptures(t *testing.T) {
 	var got struct {
-		path, query, auth, cookie string
-		body                      map[string]any
+		path, query, auth string
+		body              map[string]any
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got.path, got.query, got.auth, got.cookie = r.URL.Path, r.URL.RawQuery, r.Header.Get("Authorization"), r.Header.Get("Cookie")
+		got.path, got.query, got.auth = r.URL.Path, r.URL.RawQuery, r.Header.Get("Authorization")
 		got.body = nil
 		if data, _ := io.ReadAll(r.Body); len(data) > 0 {
 			_ = json.Unmarshal(data, &got.body)
@@ -54,11 +57,8 @@ func TestConsoleSendsFillsAndCaptures(t *testing.T) {
 		switch r.URL.Path {
 		case "/v1/installations/register":
 			_, _ = w.Write([]byte(`{"installationId":"inst-9","installationToken":"it_secret_1234"}`))
-		case "/api/auth/login":
-			http.SetCookie(w, &http.Cookie{Name: "mango3s_admin", Value: "sess-abc"})
-			_, _ = w.Write([]byte(`{"admin":{"username":"ada"}}`))
-		case "/api/clients":
-			_, _ = w.Write([]byte(`{"items":[{"id":"client-7"}],"total":1}`))
+		case "/v1/notifications":
+			_, _ = w.Write([]byte(`[{"id":"note-7"}]`))
 		default:
 			_, _ = w.Write([]byte(`{}`))
 		}
@@ -96,27 +96,18 @@ func TestConsoleSendsFillsAndCaptures(t *testing.T) {
 		t.Fatalf("query: %s", got.query)
 	}
 
-	c.SetVar("adminUser", "ada")
-	c.SetVar("adminPassword", "correct horse")
-	if r := send("admin.login"); r.Captured["adminCookie"] == "" {
-		t.Fatalf("admin cookie not captured: %+v", r)
+	if r := send("notifications.list"); r.Captured["notificationId"] != "note-7" {
+		t.Fatalf("notification id not captured: %v", r.Captured)
 	}
-	if r := send("admin.clients"); r.Captured["clientId"] != "client-7" || got.cookie != "mango3s_admin=sess-abc" {
-		t.Fatalf("admin call: cookie %q, captured %v", got.cookie, r.Captured)
-	}
-	send("admin.clients.get")
-	if got.path != "/api/clients/client-7" {
+	send("notifications.ack")
+	if got.path != "/v1/notifications/note-7/ack" {
 		t.Fatalf("path variable not filled: %s", got.path)
 	}
 }
 
-func TestConsoleRejectsBadBodyAndUploads(t *testing.T) {
+func TestConsoleRejectsBadBody(t *testing.T) {
 	c := NewConsole(nil)
 	if r := c.Send(context.Background(), "http://127.0.0.1:1", ConsoleRequest{Method: "POST", Path: "/x", Body: "{nope"}); r.Error != "the body isn't valid JSON" {
-		t.Fatalf("got %+v", r)
-	}
-	req, _ := RequestFor("admin.backups.restore-upload")
-	if r := c.Send(context.Background(), "http://127.0.0.1:1", req); !strings.Contains(r.Error, "multipart") {
 		t.Fatalf("got %+v", r)
 	}
 }

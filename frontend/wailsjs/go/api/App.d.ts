@@ -384,7 +384,7 @@ export function StartTransform(arg1:string,arg2:string):Promise<jobs.Job>;
 
 export function SyncNow():Promise<api.SyncReport>;
 
-export function SyncRestore(arg1:string):Promise<api.SyncReport>;
+export function SyncPull(arg1:string):Promise<api.SyncReport>;
 
 export function SyncWipe(arg1:string):Promise<void>;
 

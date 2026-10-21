@@ -4,7 +4,7 @@ import { Spinner } from './common'
 import { backend } from '../lib/backend'
 import { toAppError } from '../lib/errors'
 import { passwordProblems } from '../lib/password'
-import type { AccountState, SyncReport } from '../lib/types'
+import type { AccountState, Profile, SyncReport } from '../lib/types'
 import { useApp } from '../state/AppContext'
 
 type Mode = 'signin' | 'signup' | 'verify' | 'forgot' | 'reset'
@@ -360,7 +360,70 @@ function RecoveryKeyPanel({ recoveryKey, why, onDone }: { recoveryKey: string; w
 
 // ---- signed in ------------------------------------------------------------------
 
-type PasswordAction = 'restore' | 'rotate' | 'wipe' | 'delete' | 'change'
+type PasswordAction = 'pull' | 'rotate' | 'wipe' | 'delete' | 'change'
+
+/** Which connections sync: all by default; unticked ones stay on this computer. Grouped by folder. */
+function SyncScope({ disabled }: { disabled: boolean }) {
+  const { settings, saveSettings, profiles, toastError } = useApp()
+  const excluded = new Set(settings?.syncExclude ?? [])
+  const included = profiles.filter((p) => !excluded.has(p.id)).length
+  const folders = new Map<string, Profile[]>()
+  for (const p of profiles) folders.set(p.folder ?? '', [...(folders.get(p.folder ?? '') ?? []), p])
+  const groups = [...folders.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)))
+
+  const save = async (ids: string[], include: boolean) => {
+    if (!settings) return
+    const next = new Set(excluded)
+    for (const id of ids) {
+      if (include) next.delete(id)
+      else next.add(id)
+    }
+    // Forget IDs of connections that no longer exist.
+    const known = new Set(profiles.map((p) => p.id))
+    try {
+      await saveSettings({ ...settings, syncExclude: [...next].filter((id) => known.has(id)) })
+    } catch (err) {
+      toastError(err, 'Could not save the setting')
+    }
+  }
+
+  return (
+    <details className="sync-scope">
+      <summary>
+        Connections to sync: {included === profiles.length ? `all (${profiles.length})` : `${included} of ${profiles.length}`}
+      </summary>
+      {profiles.length === 0 && <p className="muted small">No connections yet.</p>}
+      {groups.map(([folder, list]) => {
+        const on = list.filter((p) => !excluded.has(p.id)).length
+        return (
+          <fieldset key={folder || '-'} className="sync-scope-group">
+            {folder && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={on === list.length}
+                  ref={(el) => {
+                    if (el) el.indeterminate = on > 0 && on < list.length
+                  }}
+                  onChange={(e) => void save(list.map((p) => p.id), e.target.checked)}
+                  disabled={disabled}
+                />
+                <strong>{folder}</strong>
+              </label>
+            )}
+            {list.map((p) => (
+              <label key={p.id} className={folder ? 'check indent' : 'check'}>
+                <input type="checkbox" checked={!excluded.has(p.id)} onChange={(e) => void save([p.id], e.target.checked)} disabled={disabled} />
+                {p.name}
+              </label>
+            ))}
+          </fieldset>
+        )
+      })}
+      <p className="muted small">Unticked connections stay on this computer: they aren't pushed, and pulling leaves them alone.</p>
+    </details>
+  )
+}
 
 function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey: (key: string) => void }) {
   const { settings, saveSettings, setAccountState, toast, toastError, confirm } = useApp()
@@ -384,9 +447,9 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
     toast({ kind: r.errors?.length ? 'error' : 'success', title, message: [parts.join(', ') || 'Everything was already in sync', ...(r.errors ?? [])].join('\n') })
   }
 
-  const syncNow = async () => {
-    const r = await run('sync', () => backend.syncNow(), 'Sync failed')
-    if (r) reportToast('Connections synced', r)
+  const pushNow = async () => {
+    const r = await run('push', () => backend.syncNow(), 'Push failed')
+    if (r) reportToast('Connections pushed', r)
     refresh()
   }
   const setAuto = async (on: boolean) => {
@@ -398,7 +461,7 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
     }
   }
   const signOut = async () => {
-    const ok = await confirm({ title: 'Sign out?', message: 'Your connections stay on this computer. Automatic backup stops until you sign in again.', confirmLabel: 'Sign out' })
+    const ok = await confirm({ title: 'Sign out?', message: 'Your connections stay on this computer. Sync stops until you sign in again.', confirmLabel: 'Sign out' })
     if (!ok) return
     const s = await run('signout', () => backend.accountSignOut(), 'Could not sign out')
     if (s) setAccountState(s)
@@ -411,10 +474,10 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
       setPassword('')
       setNewPassword('')
     }
-    if (action === 'restore') {
-      const r = await run('restore', () => backend.syncRestore(password), 'Restore failed')
+    if (action === 'pull') {
+      const r = await run('pull', () => backend.syncPull(password), 'Pull failed')
       if (r) {
-        reportToast('Connections restored', r)
+        reportToast('Connections pulled', r)
         done()
       }
     } else if (action === 'rotate') {
@@ -432,7 +495,7 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
     } else if (action === 'wipe') {
       const ok = await confirm({
         title: 'Erase synced data?',
-        message: 'Every connection backed up to your account is deleted from the server. Connections on your computers are not affected. Automatic backup is turned off.',
+        message: 'Every connection synced to your account is deleted from the server. Connections on your computers are not affected. Automatic sync is turned off.',
         confirmLabel: 'Erase',
         danger: true,
       })
@@ -461,7 +524,7 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
   }
 
   const actionLabel: Record<PasswordAction, string> = {
-    restore: 'Restore connections',
+    pull: 'Pull connections',
     rotate: 'Create new recovery key',
     change: 'Change password',
     wipe: 'Erase synced data',
@@ -485,7 +548,7 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
         )}
         <dt>This computer</dt>
         <dd>
-          {state.pendingChanges > 0 ? `${state.pendingChanges} change${state.pendingChanges === 1 ? '' : 's'} not uploaded yet` : 'Up to date'}
+          {state.pendingChanges > 0 ? `${state.pendingChanges} change${state.pendingChanges === 1 ? '' : 's'} not pushed yet` : 'Up to date'}
           {state.lastSyncAt ? ` · synced ${new Date(state.lastSyncAt).toLocaleString()}` : ''}
         </dd>
         {machines.length > 0 && (
@@ -498,21 +561,34 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
       {syncOff && <p className="muted small">Sync is turned off on the Mango3S server right now. Your synced data there is untouched.</p>}
       {state.lastSyncError && !syncOff && <p className="small error-text">Last sync failed: {state.lastSyncError}</p>}
       {state.restoreSuggested && (
-        <p className="small">Another computer has newer versions of some connections. Use Restore to bring them here.</p>
+        <p className="small">Another computer has newer versions of some connections. Pull to bring them here.</p>
       )}
 
-      <label className="check">
-        <input type="checkbox" checked={!!settings?.syncAuto} onChange={(e) => void setAuto(e.target.checked)} disabled={syncOff} />
-        Back up connection changes automatically
-      </label>
-      <p className="muted small">Uploads changes every 10 minutes while Mango3S is open. Restoring always asks for your password.</p>
+      <h3>Connection sync</h3>
+      <p className="muted small">
+        Each synced connection is a complete copy: all its settings, passwords and passphrases, SSH private key, TLS certificate and key
+        files, and the trusted SSH server keys, so it works the same on your other computers. Everything is encrypted before it leaves this
+        computer.
+      </p>
+      <div role="radiogroup" aria-label="When to push" className="sync-mode">
+        <label className="check">
+          <input type="radio" name="sync-mode" checked={!settings?.syncAuto} onChange={() => void setAuto(false)} disabled={syncOff} />
+          Manual: push and pull with the buttons below
+        </label>
+        <label className="check">
+          <input type="radio" name="sync-mode" checked={!!settings?.syncAuto} onChange={() => void setAuto(true)} disabled={syncOff} />
+          Automatic: push a few seconds after a connection changes
+        </label>
+      </div>
+      <p className="muted small">Pulling is always manual, because it needs your account password.</p>
+      <SyncScope disabled={syncOff} />
 
       <div className="form-actions">
-        <button className="primary" onClick={syncNow} disabled={!!busy || syncOff || state.syncing}>
-          {(busy === 'sync' || state.syncing) && <Spinner small />} Sync now
+        <button className="primary" onClick={pushNow} disabled={!!busy || syncOff || state.syncing}>
+          {(busy === 'push' || state.syncing) && <Spinner small />} Push now
         </button>
-        <button onClick={() => setAction('restore')} disabled={!!busy || syncOff}>
-          Restore from account…
+        <button onClick={() => setAction('pull')} disabled={!!busy || syncOff}>
+          Pull now…
         </button>
         <button onClick={() => setAction('change')} disabled={!!busy}>
           Change password…
@@ -529,10 +605,10 @@ function SignedIn({ state, onRecoveryKey }: { state: AccountState; onRecoveryKey
       {action && (
         <form className="account-password-action" onSubmit={submitPassword} aria-label={actionLabel[action]}>
           <h3>{actionLabel[action]}</h3>
-          {action === 'restore' && (
+          {action === 'pull' && (
             <p className="small muted">
-              Downloads your backed-up connections and adds or updates the newer ones here. Connections deleted on another computer are removed
-              here too, unless you changed them since.
+              Downloads your synced connections and adds or updates the newer ones here, with their passwords and key files. Connections
+              deleted on another computer are removed here too, unless you changed them since. Nothing is uploaded.
             </p>
           )}
           <label className="field">

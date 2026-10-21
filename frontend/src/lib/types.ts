@@ -31,8 +31,10 @@ export interface Settings {
   autoUpdateEnabled: boolean
   deviceFingerprint?: string
   updateInstallationId?: string
-  /** Back connections up to the signed-in Mango3S account in the background. */
+  /** Push connections to the signed-in Mango3S account a few seconds after one changes (off = manual). */
   syncAuto: boolean
+  /** Connection IDs kept on this computer only: never pushed, left alone by pulls. */
+  syncExclude?: string[]
   /** Show Mango, the animated mascot, in the explorer. */
   showMascot: boolean
 }
@@ -96,9 +98,8 @@ export interface APIEndpoint {
   path: string
   query?: string
   body?: string
-  auth: 'none' | 'installation' | 'account' | 'device' | 'admin'
+  auth: 'none' | 'installation' | 'account' | 'device'
   writes: boolean
-  multipart?: boolean
   description: string
   captures?: Record<string, string>
 }

@@ -241,6 +241,7 @@ func (a *App) DeleteProfile(id string) error {
 		}
 	}
 	_ = a.recent.Clear(id)
+	a.removeSyncedFiles(id)
 	return a.encode("DeleteProfile", a.store.DeleteProfile(id))
 }
 

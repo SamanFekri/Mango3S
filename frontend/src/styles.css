@@ -3178,6 +3178,32 @@ tr.clickable {
   font-size: 12px;
   margin-top: 8px;
 }
+.account-signed-in > h3 {
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+.sync-mode .check {
+  margin-bottom: 4px;
+}
+.sync-scope {
+  max-width: 560px;
+}
+.sync-scope summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.sync-scope-group {
+  border: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.sync-scope-group .check {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+.sync-scope-group .check.indent {
+  padding-left: 20px;
+}
 
 /* ---------- Platform: notifications, privacy, About links ---------- */
 .notification-body {

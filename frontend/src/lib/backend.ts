@@ -358,7 +358,7 @@ export const backend = {
   accountRotateRecoveryKey: (password: string) => wrap<string>(a.AccountRotateRecoveryKey(password)),
   accountDelete: (password: string) => wrap<void>(a.AccountDelete(password)),
   syncNow: () => wrap<SyncReport>(a.SyncNow()),
-  syncRestore: (password: string) => wrap<SyncReport>(a.SyncRestore(password)),
+  syncPull: (password: string) => wrap<SyncReport>(a.SyncPull(password)),
   syncWipe: (password: string) => wrap<void>(a.SyncWipe(password)),
 }
 

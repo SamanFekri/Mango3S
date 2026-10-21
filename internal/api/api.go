@@ -133,6 +133,9 @@ func New(d Deps) *App {
 	if a.logLevel != nil {
 		a.logLevel.Set(logging.ParseLevel(st.LogLevel))
 	}
+	// SSH server keys that arrive with synced connections (account.go).
+	mongox.AppKnownHostsFile = filepath.Join(d.Store.Dir(), "known_hosts")
+	d.Store.SetOnProfilesChanged(a.scheduleAutoPush)
 	return a
 }
 

@@ -710,8 +710,8 @@ export function SyncNow() {
   return window['go']['api']['App']['SyncNow']();
 }
 
-export function SyncRestore(arg1) {
-  return window['go']['api']['App']['SyncRestore'](arg1);
+export function SyncPull(arg1) {
+  return window['go']['api']['App']['SyncPull'](arg1);
 }
 
 export function SyncWipe(arg1) {

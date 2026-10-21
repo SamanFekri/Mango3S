@@ -18,7 +18,7 @@ import (
 
 // The API console sends one request at a time to any route in APICatalog (or
 // any path at all), filling {variables} from its own set and saving values
-// from responses — tokens, created IDs, the admin session cookie — so a
+// from responses — tokens and IDs — so a
 // developer can walk through a whole flow by hand. It is a test-mode tool:
 // the app only enables it when MANGO3S_TEST_MODE is set (`make dev`).
 
@@ -60,16 +60,13 @@ type Console struct {
 var ConsoleDefaultVars = []string{
 	"os", "arch", "appVersion", "deviceFingerprint", "installationId", "installationToken",
 	"email", "password", "newPassword", "code", "recoveryKey", "accountToken",
-	"adminUser", "adminEmail", "adminPassword", "adminCookie",
-	"notificationId", "policyVersion", "artifactId", "clientId", "machineRowId", "releaseId",
-	"linkId", "roleId", "adminUserId", "sessionId", "inviteId", "inviteToken", "policyId",
-	"templateId", "backupId",
+	"notificationId", "policyVersion", "artifactId",
 }
 
 // SecretVars are shown masked.
 var SecretVars = map[string]bool{
 	"installationToken": true, "password": true, "newPassword": true, "recoveryKey": true,
-	"accountToken": true, "adminPassword": true, "adminCookie": true, "inviteToken": true, "code": true,
+	"accountToken": true, "code": true,
 }
 
 // NewConsole starts a console with the default variables plus initial.
@@ -125,10 +122,6 @@ func (c *Console) Send(ctx context.Context, baseURL string, req ConsoleRequest) 
 	if res.Method == "" {
 		res.Method = http.MethodGet
 	}
-	if e, ok := FindEndpoint(req.EndpointID); ok && e.Multipart {
-		res.Error = "this endpoint takes a file upload (multipart form); use the dashboard for it"
-		return res
-	}
 	var missing []string
 	fill := func(s string, enc func(string) string) string {
 		return placeholder.ReplaceAllStringFunc(s, func(m string) string {
@@ -155,8 +148,6 @@ func (c *Console) Send(ctx context.Context, baseURL string, req ConsoleRequest) 
 		if t := vars["installationToken"]; t != "" {
 			headers["X-Installation-Token"] = t
 		}
-	case AuthAdmin:
-		headers["Cookie"] = need(vars, "adminCookie", &missing)
 	}
 	for k, v := range req.Headers {
 		headers[k] = fill(v, func(v string) string { return v })
@@ -224,16 +215,7 @@ func (c *Console) capture(endpointID string, resp *http.Response, data []byte) m
 	_ = json.Unmarshal(data, &doc)
 	out := map[string]string{}
 	for field, name := range e.Captures {
-		var v string
-		if field == "$cookie" {
-			var parts []string
-			for _, ck := range resp.Cookies() {
-				parts = append(parts, ck.Name+"="+ck.Value)
-			}
-			v = strings.Join(parts, "; ")
-		} else {
-			v = lookupJSON(doc, field)
-		}
+		v := lookupJSON(doc, field)
 		if v == "" {
 			continue
 		}

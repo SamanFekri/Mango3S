@@ -79,9 +79,13 @@ type Settings struct {
 	DeviceFingerprint    string `json:"deviceFingerprint,omitempty"`
 	UpdateInstallationID string `json:"updateInstallationId,omitempty"`
 
-	// SyncAuto backs connections up to the signed-in Mango3S account in the
-	// background (encrypted on the server; see internal/api/account.go).
+	// SyncAuto pushes connections to the signed-in Mango3S account a few
+	// seconds after one changes (see internal/api/account.go). Off by
+	// default: pushing and pulling are manual until the user turns it on.
 	SyncAuto bool `json:"syncAuto"`
+	// SyncExclude lists connection IDs kept on this computer only: they are
+	// never pushed, and pulls leave them alone.
+	SyncExclude []string `json:"syncExclude,omitempty"`
 
 	// ShowMascot shows Mango, the animated mascot, at the bottom of the explorer.
 	ShowMascot bool `json:"showMascot"`
@@ -117,7 +121,7 @@ func DefaultSettings() Settings {
 		LocalAPI:            "ollama",
 		SchedulerEnabled:    true,
 		AutoUpdateEnabled:   true,
-		SyncAuto:            true,
+		SyncAuto:            false,
 		ShowMascot:          true,
 	}
 }
@@ -281,8 +285,28 @@ func SplitCredentials(uri string) (stripped, username, password string, err erro
 
 // Store reads and writes settings.json and connections.json.
 type Store struct {
-	dir string
-	mu  sync.Mutex
+	dir      string
+	mu       sync.Mutex
+	onChange func()
+}
+
+// SetOnProfilesChanged registers fn to run (on its own goroutine) after a
+// connection is created, edited, moved to a folder or deleted. Connect times
+// and list order don't count.
+func (s *Store) SetOnProfilesChanged(fn func()) {
+	s.mu.Lock()
+	s.onChange = fn
+	s.mu.Unlock()
+}
+
+// writeProfiles saves the list after a change to a connection itself.
+// Callers hold s.mu.
+func (s *Store) writeProfiles(list []Profile) error {
+	err := writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+	if err == nil && s.onChange != nil {
+		go s.onChange()
+	}
+	return err
 }
 
 // NewStore returns a store rooted at dir.
@@ -394,7 +418,7 @@ func (s *Store) SaveProfile(p Profile) (Profile, error) {
 		}
 		list = append(list, p)
 	}
-	return p, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+	return p, s.writeProfiles(list)
 }
 
 // sortProfiles orders by the user's position, then name (unplaced last).
@@ -461,7 +485,7 @@ func (s *Store) SetProfileFolder(id, folder string) (Profile, error) {
 		if list[i].ID == id {
 			list[i].Folder = cleanFolder(folder)
 			list[i].UpdatedAt = time.Now().UTC()
-			return list[i], writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+			return list[i], s.writeProfiles(list)
 		}
 	}
 	return Profile{}, apperr.New(apperr.CodeNotFound, "Connection profile not found.")
@@ -518,7 +542,7 @@ func (s *Store) PutProfile(p Profile) (Profile, error) {
 				p.CreatedAt = list[i].CreatedAt
 			}
 			list[i] = p
-			return p, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+			return p, s.writeProfiles(list)
 		}
 	}
 	if p.CreatedAt.IsZero() {
@@ -528,7 +552,7 @@ func (s *Store) PutProfile(p Profile) (Profile, error) {
 		p.Position = maxPos(list) + 1
 	}
 	list = append(list, p)
-	return p, writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: list})
+	return p, s.writeProfiles(list)
 }
 
 func (s *Store) DeleteProfile(id string) error {
@@ -544,7 +568,7 @@ func (s *Store) DeleteProfile(id string) error {
 			out = append(out, p)
 		}
 	}
-	return writeJSON(s.path("connections.json"), profilesFile{Version: 1, Profiles: out})
+	return s.writeProfiles(out)
 }
 
 // NewID returns a random 16-hex-character identifier.

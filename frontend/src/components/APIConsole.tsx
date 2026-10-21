@@ -8,13 +8,12 @@ const AUTH_LABEL: Record<string, string> = {
   installation: 'Installation token',
   account: 'Account token',
   device: 'Installation token (X-Installation-Token, optional)',
-  admin: 'Admin session cookie',
 }
 
-/** Settings › API console (test mode only): every route of the web platform
- * API with its own Send button. Each request is editable before sending, and
- * {variables} in it are filled from the panel at the top, which responses
- * update (tokens, created IDs, the admin session). */
+/** Settings › API console (test mode only): every web platform route the app
+ * talks to, each with its own Send button (the admin dashboard's routes are
+ * not here). Each request is editable before sending, and {variables} in it
+ * are filled from the panel at the top, which responses update (tokens, IDs). */
 export function APIConsole() {
   const [state, setState] = useState<APIConsoleState | null>(null)
   const [filter, setFilter] = useState('')
@@ -91,7 +90,7 @@ export function APIConsole() {
       <h2>API console</h2>
       <p className="small muted">
         Sends requests to <span className="mono">{state.baseUrl}</span>, one at a time. <code>{'{name}'}</code> in a path, query or body is filled from the
-        variables below; responses fill them in too (tokens, IDs, the admin session). Every request also appears in Diagnostics › Requests.
+        variables below; responses fill them in too (tokens, IDs). Every request also appears in Diagnostics › Requests.
       </p>
 
       <details className="ac-vars" open={varsOpen} onToggle={(ev) => setVarsOpen((ev.target as HTMLDetailsElement).open)}>
@@ -143,7 +142,7 @@ export function APIConsole() {
                     <span className="mono small muted ac-path">{e.path}</span>
                   </button>
                   {res && <StatusPill res={res} />}
-                  <button className="primary" onClick={() => send(e)} disabled={sending !== null || e.multipart} aria-label={`Send ${e.name}`}>
+                  <button className="primary" onClick={() => send(e)} disabled={sending !== null} aria-label={`Send ${e.name}`}>
                     {sending === e.id ? <Spinner small /> : 'Send'}
                   </button>
                 </div>

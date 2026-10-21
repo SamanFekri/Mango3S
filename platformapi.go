@@ -18,28 +18,29 @@ import (
 
 const platformAPIUsage = `Usage: mango3s platform-api <command> [flags]
 
-Sends any request to the Mango3S web platform API, one at a time — the
-terminal version of Settings › API console.
+Sends any request the desktop app can make to the Mango3S web platform API,
+one at a time — the terminal version of Settings › API console. (The admin
+dashboard's routes are not included.)
 
 Commands:
   list [filter]          every endpoint (ID, method, path, auth)
   show <id>              an endpoint's example request
   call <id> [flags]      send it; flags override the example:
         --body JSON | --body @file.json   --query a=1&b=2
-        --path /v1/...   --method POST    --auth none|installation|account|device|admin
+        --path /v1/...   --method POST    --auth none|installation|account|device
         -v               also print headers
   vars                   the variables ({name} in paths, queries and bodies)
   set name=value ...     set variables (e.g. set email=ada@example.com password=...)
   reset                  start the variables over from this computer's registration
 
-Responses fill variables too (installation and account tokens, the admin
-session cookie, created IDs), so a flow can be walked step by step:
+Responses fill variables too (installation and account tokens, IDs), so a
+flow can be walked step by step:
 
   mango3s platform-api call installations.register
   mango3s platform-api call notifications.list
-  mango3s platform-api set adminUser=owner adminPassword=...
-  mango3s platform-api call admin.login
-  mango3s platform-api call admin.clients
+  mango3s platform-api set email=ada@example.com password=...
+  mango3s platform-api call account.login
+  mango3s platform-api call account.get
 
 Variables are kept in the system temp folder (Settings › Storage clears them).
 Global flags (before the command):
@@ -75,11 +76,7 @@ func runPlatformAPI(args []string) error {
 				group = e.Group
 				fmt.Printf("\n%s\n", group)
 			}
-			note := ""
-			if e.Multipart {
-				note = "  (file upload: dashboard only)"
-			}
-			fmt.Printf("  %-36s %-6s %-48s %s%s\n", e.ID, e.Method, e.Path, e.Auth, note)
+			fmt.Printf("  %-36s %-6s %-48s %s\n", e.ID, e.Method, e.Path, e.Auth)
 		}
 		return nil
 
@@ -152,7 +149,7 @@ func callEndpoint(baseURL string, console *update.Console, args []string) error 
 	query := fs.String("query", req.Query, "query string")
 	path := fs.String("path", req.Path, "path")
 	method := fs.String("method", req.Method, "HTTP method")
-	auth := fs.String("auth", req.Auth, "none, installation, account, device or admin")
+	auth := fs.String("auth", req.Auth, "none, installation, account or device")
 	verbose := fs.Bool("v", false, "print headers")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err

@@ -1,13 +1,24 @@
 package api
 
 import (
+	"crypto/ecdh"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 
 	"mango3s/internal/config"
+	"mango3s/internal/mongox"
 	"mango3s/internal/update"
 )
 
@@ -25,6 +36,8 @@ type fakeExtras struct {
 	accountTokens map[string]string       // ca_ token -> email
 	codes         map[string]string       // email -> code
 	installHeader []string                // X-Installation-Token values seen
+	transportKey  *ecdh.PrivateKey        // what sync requests are sealed to
+	plainSync     []string                // sync requests that arrived readable (must stay empty)
 }
 
 type fakeAccount struct {
@@ -73,7 +86,38 @@ func (p *fakePlatform) extraNoInstallToken(w http.ResponseWriter, r *http.Reques
 	if h := r.Header.Get("X-Installation-Token"); h != "" {
 		e.installHeader = append(e.installHeader, h)
 	}
+	if e.transportKey == nil {
+		e.transportKey, _ = ecdh.X25519().GenerateKey(rand.Reader)
+	}
+	// open reads an envelope the app sealed to the transport key.
+	open := func(raw any, aad string) []byte {
+		var env update.Envelope
+		b, _ := json.Marshal(raw)
+		if json.Unmarshal(b, &env) != nil || env.Kid != "fake-kid" {
+			return nil
+		}
+		plain, err := update.OpenWith(e.transportKey, env, aad)
+		if err != nil {
+			return nil
+		}
+		return plain
+	}
+	// sealedPassword opens a pull or wipe body.
+	sealedPassword := func(aad string) (password, responseKey string) {
+		if _, plain := body["password"]; plain {
+			e.plainSync = append(e.plainSync, r.URL.Path)
+		}
+		var v struct {
+			Password    string `json:"password"`
+			ResponseKey string `json:"responseKey"`
+		}
+		_ = json.Unmarshal(open(body["sealed"], aad), &v)
+		return v.Password, v.ResponseKey
+	}
 	switch strings.TrimPrefix(r.URL.Path, "/v1/account") {
+	case "/sync/transport-key":
+		writeJSON(w, 200, update.TransportKey{KeyID: "fake-kid", Algorithm: "x25519-hkdf-sha256-aes256gcm", PublicKey: base64.StdEncoding.EncodeToString(e.transportKey.PublicKey().Bytes())})
+		return true
 	case "/register":
 		if e.registrationOff {
 			apiError(w, 403, "registration_disabled", "New sign-ups are turned off right now.")
@@ -118,6 +162,18 @@ func (p *fakePlatform) extraNoInstallToken(w http.ResponseWriter, r *http.Reques
 		_ = json.Unmarshal(raw, &push)
 		res := update.SyncPushResult{Accepted: []string{}, Skipped: []string{}}
 		for _, it := range push.Items {
+			if it.Data != nil {
+				e.plainSync = append(e.plainSync, it.Key)
+			}
+			if it.Sealed != nil {
+				plain := open(it.Sealed, update.AADItem(it.Key))
+				if plain == nil {
+					apiError(w, 400, "invalid_envelope", "The encrypted request could not be opened.")
+					return true
+				}
+				data := string(plain)
+				it.Data, it.Sealed = &data, nil
+			}
 			if cur, ok := acct.items[it.Key]; ok && cur.UpdatedAt >= it.UpdatedAt {
 				res.Skipped = append(res.Skipped, it.Key)
 				continue
@@ -127,7 +183,8 @@ func (p *fakePlatform) extraNoInstallToken(w http.ResponseWriter, r *http.Reques
 		}
 		writeJSON(w, 200, res)
 	case "/sync/pull":
-		if str("password") != acct.password {
+		password, responseKey := sealedPassword(update.AADPull)
+		if password != acct.password {
 			apiError(w, 400, "wrong_password", "That password is not correct.")
 			return true
 		}
@@ -135,7 +192,22 @@ func (p *fakePlatform) extraNoInstallToken(w http.ResponseWriter, r *http.Reques
 		for _, it := range acct.items {
 			items = append(items, it)
 		}
-		writeJSON(w, 200, map[string]any{"items": items})
+		raw, _ := base64.StdEncoding.DecodeString(responseKey)
+		pub, err := ecdh.X25519().NewPublicKey(raw)
+		if err != nil {
+			apiError(w, 400, "validation_error", "A sealed pull needs a responseKey")
+			return true
+		}
+		answer, _ := json.Marshal(map[string]any{"items": items})
+		env, _ := update.SealTo(pub, answer, update.AADPullResponse)
+		writeJSON(w, 200, map[string]any{"sealed": env})
+	case "/sync/wipe":
+		if password, _ := sealedPassword(update.AADWipe); password != acct.password {
+			apiError(w, 400, "wrong_password", "That password is not correct.")
+			return true
+		}
+		acct.items = map[string]update.SyncItem{}
+		w.WriteHeader(204)
 	default:
 		w.WriteHeader(404)
 	}
@@ -348,10 +420,10 @@ func TestSignUpThenSyncConnectionsToASecondComputer(t *testing.T) {
 	if _, err := desktop.app.AccountSignIn("ada@example.com", pw); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := desktop.app.SyncRestore("nope"); decodeErr(t, err).Detail != "wrong_password" {
+	if _, err := desktop.app.SyncPull("nope"); decodeErr(t, err).Detail != "wrong_password" {
 		t.Fatalf("wrong password: %v", err)
 	}
-	rep, err = desktop.app.SyncRestore(pw)
+	rep, err = desktop.app.SyncPull(pw)
 	if err != nil || rep.Added != 1 {
 		t.Fatalf("restore: %+v, %v", rep, err)
 	}
@@ -373,7 +445,7 @@ func TestSignUpThenSyncConnectionsToASecondComputer(t *testing.T) {
 	if rep, err := laptop.app.SyncNow(); err != nil || rep.Deleted != 1 {
 		t.Fatalf("delete push: %+v, %v", rep, err)
 	}
-	if rep, err := desktop.app.SyncRestore(pw); err != nil || rep.Removed != 1 {
+	if rep, err := desktop.app.SyncPull(pw); err != nil || rep.Removed != 1 {
 		t.Fatalf("delete restore: %+v, %v", rep, err)
 	}
 	if _, err := desktop.app.store.GetProfile(prof.ID); err == nil {
@@ -413,5 +485,216 @@ func TestAccountActionsWaitForPrivacyAcceptance(t *testing.T) {
 	_, err := f.app.AccountSignIn("ada@example.com", "Correct-Horse-9")
 	if e := decodeErr(t, err); e.Detail != "privacy_required" {
 		t.Fatalf("err = %+v", e)
+	}
+}
+
+// A synced connection is a complete copy: settings, secrets, the contents of
+// its key files and the known_hosts lines for its SSH server, all sent sealed.
+func TestSyncCarriesEverythingAConnectionNeeds(t *testing.T) {
+	p := withFakePlatform(t)
+	laptopHome, desktopHome := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", laptopHome)
+	hostKey, _, _ := ed25519.GenerateKey(rand.Reader)
+	sshPub, _ := ssh.NewPublicKey(hostKey)
+	knownLine := knownhosts.Line([]string{knownhosts.Normalize("bastion.example:2222")}, sshPub)
+	if err := os.MkdirAll(filepath.Join(laptopHome, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(laptopHome, ".ssh", "known_hosts"), []byte(knownLine+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	keyFile, caFile := filepath.Join(laptopHome, ".ssh", "id_ed25519"), filepath.Join(laptopHome, "ca.pem")
+	_ = os.WriteFile(keyFile, []byte("KEY-1"), 0o600)
+	_ = os.WriteFile(caFile, []byte("CA-1"), 0o600)
+
+	const pw = "Correct-Horse-9"
+	laptop := newFixture(t)
+	if _, err := laptop.app.AccountStartSignUp("ada@example.com", pw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := laptop.app.AccountFinishSignUp("ada@example.com", "123456", pw); err != nil {
+		t.Fatal(err)
+	}
+	desktop := newFixture(t) // its data folder now holds the app's known_hosts
+	if _, err := desktop.app.AccountSignIn("ada@example.com", pw); err != nil {
+		t.Fatal(err)
+	}
+
+	prof, err := laptop.app.SaveProfile(ProfileInput{
+		Name: "prod", URI: "mongodb://bob:s3cret@db.internal:27017",
+		SSH:     config.SSHConfig{Enabled: true, Host: "bastion.example", Port: 2222, Username: "ada", AuthMethod: config.SSHAuthKey, PrivateKeyFile: keyFile},
+		TLS:     config.TLSConfig{Enabled: true, CAFile: caFile},
+		Secrets: map[string]SecretInput{config.SecretSSHPassphrase: {Value: "phrase"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep, err := laptop.app.SyncNow(); err != nil || rep.Uploaded != 1 || len(rep.Errors) != 0 {
+		t.Fatalf("push: %+v, %v", rep, err)
+	}
+
+	// The desktop has none of the laptop's files: both run on this disk, so
+	// hide the laptop's home while the desktop pulls.
+	onDesktop := func(fn func()) {
+		t.Helper()
+		t.Setenv("HOME", desktopHome)
+		if err := os.Rename(laptopHome, laptopHome+".away"); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			_ = os.Rename(laptopHome+".away", laptopHome)
+			t.Setenv("HOME", laptopHome)
+		}()
+		fn()
+	}
+	onDesktop(func() {
+		if rep, err := desktop.app.SyncPull(pw); err != nil || rep.Added != 1 {
+			t.Fatalf("pull: %+v, %v", rep, err)
+		}
+	})
+	got, err := desktop.app.store.GetProfile(prof.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got.SSH.PrivateKeyFile, filepath.Join(desktop.dir, syncedFilesDir)) {
+		t.Fatalf("key file not placed in the data folder: %s", got.SSH.PrivateKeyFile)
+	}
+	if data, _ := os.ReadFile(got.SSH.PrivateKeyFile); string(data) != "KEY-1" {
+		t.Fatalf("key file contents: %q", data)
+	}
+	if st, _ := os.Stat(got.SSH.PrivateKeyFile); st == nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("key file must be readable only by the user: %v", st)
+	}
+	if data, _ := os.ReadFile(got.TLS.CAFile); string(data) != "CA-1" {
+		t.Fatalf("CA contents: %q", data)
+	}
+	if v, _ := desktop.secrets.Get(config.SecretKey(prof.ID, config.SecretSSHPassphrase)); v != "phrase" {
+		t.Fatalf("passphrase not restored: %q", v)
+	}
+	if v, _ := desktop.secrets.Get(config.SecretKey(prof.ID, config.SecretPassword)); v != "s3cret" {
+		t.Fatalf("password not restored: %q", v)
+	}
+	onDesktop(func() {
+		if lines := mongox.KnownHostLines("bastion.example", 2222); len(lines) != 1 || lines[0] != knownLine {
+			t.Fatalf("SSH server key not trusted on the desktop: %v", lines)
+		}
+		if st := desktop.app.GetAccountState(); st.PendingChanges != 0 {
+			t.Fatalf("a pulled connection must not count as changed (pending %d)", st.PendingChanges)
+		}
+	})
+
+	// Editing only the key file is a change too.
+	_ = os.WriteFile(keyFile, []byte("KEY-2"), 0o600)
+	if st := laptop.app.GetAccountState(); st.PendingChanges != 1 {
+		t.Fatalf("pending after key edit = %d, want 1", st.PendingChanges)
+	}
+	if rep, err := laptop.app.SyncNow(); err != nil || rep.Uploaded != 1 {
+		t.Fatalf("push key edit: %+v, %v", rep, err)
+	}
+	if st := laptop.app.GetAccountState(); st.PendingChanges != 0 {
+		t.Fatalf("pending after pushing the key edit = %d", st.PendingChanges)
+	}
+	onDesktop(func() {
+		if rep, err := desktop.app.SyncPull(pw); err != nil || rep.Updated != 1 {
+			t.Fatalf("pull key edit: %+v, %v", rep, err)
+		}
+	})
+	got, _ = desktop.app.store.GetProfile(prof.ID)
+	if data, _ := os.ReadFile(got.SSH.PrivateKeyFile); string(data) != "KEY-2" {
+		t.Fatalf("key file after update: %q", data)
+	}
+
+	// A third computer that already has the same file at the same path keeps using it.
+	third := newFixture(t)
+	if _, err := third.app.AccountSignIn("ada@example.com", pw); err != nil {
+		t.Fatal(err)
+	}
+	if rep, err := third.app.SyncPull(pw); err != nil || rep.Added != 1 {
+		t.Fatalf("third pull: %+v, %v", rep, err)
+	}
+	if got, _ := third.app.store.GetProfile(prof.ID); got.SSH.PrivateKeyFile != keyFile {
+		t.Fatalf("an identical local file should be reused, got %s", got.SSH.PrivateKeyFile)
+	}
+
+	// A key file the connection needs but can't be read is reported; others still go.
+	if _, err := laptop.app.SaveProfile(ProfileInput{Name: "broken", URI: "mongodb://h:1",
+		SSH: config.SSHConfig{Enabled: true, Host: "h", Port: 22, Username: "u", AuthMethod: config.SSHAuthKey, PrivateKeyFile: filepath.Join(laptopHome, "missing")}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := laptop.app.SaveProfile(ProfileInput{Name: "fine", URI: "mongodb://h:2"}); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := laptop.app.SyncNow()
+	if err != nil || rep.Uploaded != 1 || len(rep.Errors) != 1 || !strings.Contains(rep.Errors[0], "broken") {
+		t.Fatalf("partial push: %+v, %v", rep, err)
+	}
+
+	p.mu.Lock()
+	plain := p.ext.plainSync
+	p.mu.Unlock()
+	if len(plain) != 0 {
+		t.Fatalf("sync data or passwords were sent readable: %v", plain)
+	}
+}
+
+func TestExcludedConnectionsStayLocalAndAutoPushFollowsChanges(t *testing.T) {
+	p := withFakePlatform(t)
+	const pw = "Correct-Horse-9"
+	f := newFixture(t)
+	f.app.update.acct.mu.Lock()
+	f.app.update.acct.pushWait = 10 * time.Millisecond
+	f.app.update.acct.mu.Unlock()
+	if _, err := f.app.AccountStartSignUp("ada@example.com", pw); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.AccountFinishSignUp("ada@example.com", "123456", pw); err != nil {
+		t.Fatal(err)
+	}
+	serverItems := func() int {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return len(p.ext.accounts["ada@example.com"].items)
+	}
+
+	private, err := f.app.SaveProfile(ProfileInput{Name: "private", URI: "mongodb://h:1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.mutateSettings(func(s *config.Settings) { s.SyncExclude = []string{private.ID} }); err != nil {
+		t.Fatal(err)
+	}
+	if st := f.app.GetAccountState(); st.PendingChanges != 0 {
+		t.Fatalf("an excluded connection must not be pending (%d)", st.PendingChanges)
+	}
+
+	// Manual by default: a change waits for Push.
+	if _, err := f.app.SaveProfile(ProfileInput{Name: "shared", URI: "mongodb://h:2"}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := serverItems(); n != 0 {
+		t.Fatalf("pushed without automatic sync: %d items", n)
+	}
+
+	if err := f.app.mutateSettings(func(s *config.Settings) { s.SyncAuto = true }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.SaveProfile(ProfileInput{Name: "another", URI: "mongodb://h:3"}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for serverItems() != 2 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if n := serverItems(); n != 2 {
+		t.Fatalf("automatic push after a change: %d items on the server, want 2 (not the excluded one)", n)
+	}
+
+	// Deleting an excluded connection sends no deletion.
+	if err := f.app.DeleteProfile(private.ID); err != nil {
+		t.Fatal(err)
+	}
+	if st := f.app.GetAccountState(); st.PendingChanges != 0 {
+		t.Fatalf("pending after deleting an excluded connection = %d", st.PendingChanges)
 	}
 }

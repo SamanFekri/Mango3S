@@ -94,7 +94,7 @@ const backend = vi.hoisted(() => ({
   accountRotateRecoveryKey: vi.fn(),
   accountDelete: vi.fn(),
   syncNow: vi.fn(),
-  syncRestore: vi.fn(),
+  syncPull: vi.fn(),
   syncWipe: vi.fn(),
 }))
 
@@ -164,7 +164,7 @@ beforeEach(() => {
     theme: 'dark', pageSize: 50, queryTimeoutSeconds: 60, confirmDeletes: true, defaultView: 'tree', editorFontSize: 13, logLevel: 'info',
     aiEnabled: true, aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiTimeoutSeconds: 180, claudeCodePath: '', claudeCodeModel: '', codexPath: '', codexModel: '',
     localUrl: 'http://localhost:11434', localApi: 'ollama', localModel: '', aiAllowSamples: false, schedulerEnabled: true,
-    autoUpdateEnabled: true, syncAuto: true,
+    autoUpdateEnabled: true, syncAuto: false,
   })
   backend.getUpdateStatus.mockResolvedValue({ connected: false, revoked: false, state: 'idle', currentVersion: '1.2.3' })
   backend.fetchNotifications.mockResolvedValue([])
@@ -941,30 +941,41 @@ describe('settings tabs and account', () => {
     expect(screen.queryByRole('button', { name: 'Forgot password?' })).toBeNull()
   })
 
-  it('syncs and restores when signed in; restoring asks for the password', async () => {
+  it('pushes and pulls when signed in; pulling asks for the password; manual by default with a connection picker', async () => {
     const signedIn = { ...signedOut, signedIn: true, email: 'ada@example.com', pendingChanges: 2, account: { clientId: 'c', email: 'ada@example.com', createdAt: '', recoveryKeyCreatedAt: null, machines: [{ machineId: 'abcdef123456', label: 'Ada-MBP', lastSeenAt: null }], sync: { enabled: true, itemCount: 3, lastSyncedAt: null, maxItems: 500, maxItemKb: 256 } } }
     backend.getAccountState.mockResolvedValue(signedIn)
     backend.refreshAccount.mockResolvedValue(signedIn)
     backend.syncNow.mockResolvedValue({ uploaded: 2, deleted: 0, added: 0, updated: 0, removed: 0, skipped: 0, errors: [] })
-    backend.syncRestore.mockResolvedValue({ uploaded: 0, deleted: 0, added: 1, updated: 0, removed: 0, skipped: 0, errors: [] })
+    backend.syncPull.mockResolvedValue({ uploaded: 0, deleted: 0, added: 1, updated: 0, removed: 0, skipped: 0, errors: [] })
+    backend.saveSettings.mockImplementation(async (s: unknown) => s)
     await openSettings()
     fireEvent.click(screen.getByRole('tab', { name: 'Account & sync' }))
     expect(await screen.findByText('ada@example.com')).toBeInTheDocument()
-    expect(screen.getByText(/2 changes not uploaded yet/)).toBeInTheDocument()
+    expect(screen.getByText(/2 changes not pushed yet/)).toBeInTheDocument()
     expect(screen.getByText('Ada-MBP')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Sync now/ }))
-    await waitFor(() => expect(backend.syncNow).toHaveBeenCalled())
-    expect(await screen.findByText('Connections synced')).toBeInTheDocument()
+    const mode = screen.getByRole('radiogroup', { name: 'When to push' })
+    expect(within(mode).getByLabelText(/Manual/)).toBeChecked()
+    fireEvent.click(within(mode).getByLabelText(/Automatic/))
+    await waitFor(() => expect(backend.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ syncAuto: true })))
 
-    fireEvent.click(screen.getByRole('button', { name: /Restore from account/ }))
-    const form = screen.getByRole('form', { name: 'Restore connections' })
-    const submit = within(form).getByRole('button', { name: /Restore connections/ })
+    fireEvent.click(screen.getByRole('button', { name: /Push now/ }))
+    await waitFor(() => expect(backend.syncNow).toHaveBeenCalled())
+    expect(await screen.findByText('Connections pushed')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Pull now/ }))
+    const form = screen.getByRole('form', { name: 'Pull connections' })
+    const submit = within(form).getByRole('button', { name: /Pull connections/ })
     expect(submit).toBeDisabled()
     fireEvent.change(within(form).getByLabelText('Account password'), { target: { value: 'Correct-Horse-9' } })
     fireEvent.click(submit)
-    await waitFor(() => expect(backend.syncRestore).toHaveBeenCalledWith('Correct-Horse-9'))
-    expect(await screen.findByText('Connections restored')).toBeInTheDocument()
+    await waitFor(() => expect(backend.syncPull).toHaveBeenCalledWith('Correct-Horse-9'))
+    expect(await screen.findByText('Connections pulled')).toBeInTheDocument()
+
+    // Every connection syncs until it is unticked.
+    fireEvent.click(screen.getByText(/Connections to sync: all \(1\)/))
+    fireEvent.click(screen.getByRole('checkbox', { name: profile.name }))
+    await waitFor(() => expect(backend.saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ syncExclude: [profile.id] })))
   })
 
   it('About shows the server links and the donation only when the admin turned it on', async () => {

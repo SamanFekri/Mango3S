@@ -2,6 +2,11 @@ package update
 
 import (
 	"context"
+	"crypto/ecdh"
+	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -53,11 +58,13 @@ type CodeSent struct {
 }
 
 // SyncItem is one synced thing (one connection). Data is nil for a deletion.
+// On upload SyncPush moves Data into Sealed, so only the envelope is sent.
 type SyncItem struct {
-	Key       string  `json:"key"`
-	Data      *string `json:"data"`
-	Deleted   bool    `json:"deleted"`
-	UpdatedAt string  `json:"updatedAt"`
+	Key       string    `json:"key"`
+	Data      *string   `json:"data"`
+	Sealed    *Envelope `json:"sealed,omitempty"`
+	Deleted   bool      `json:"deleted"`
+	UpdatedAt string    `json:"updatedAt"`
 }
 
 // SyncPushResult lists which items the server stored and which it already
@@ -164,23 +171,73 @@ func (c *Client) AccountDelete(ctx context.Context, token, password string) erro
 }
 
 // SyncPush uploads changed and deleted items (no password needed: the server
-// encrypts them to the account's public key). Newest updatedAt wins.
+// encrypts them to the account's public key). Newest updatedAt wins. Each
+// item's Data is sealed to the transport key and never sent readable.
 func (c *Client) SyncPush(ctx context.Context, token string, items []SyncItem) (SyncPushResult, error) {
 	var out SyncPushResult
-	err := c.accountCall(ctx, http.MethodPut, "/sync/items", token, map[string]any{"items": items}, &out)
+	err := c.withSealer(ctx, func(s *sealer) error {
+		sealed := make([]SyncItem, len(items))
+		for i, it := range items {
+			sealed[i] = it
+			if it.Data == nil || it.Deleted {
+				continue
+			}
+			env, err := s.seal([]byte(*it.Data), AADItem(it.Key))
+			if err != nil {
+				return err
+			}
+			sealed[i].Data, sealed[i].Sealed = nil, &env
+		}
+		return c.accountCall(ctx, http.MethodPut, "/sync/items", token, map[string]any{"items": sealed}, &out)
+	})
 	return out, err
 }
 
 // SyncPull downloads and decrypts every item; it needs the account password.
+// The password goes sealed, and the server seals the answer to a one-time key.
 func (c *Client) SyncPull(ctx context.Context, token, password string) ([]SyncItem, error) {
-	var out struct {
-		Items []SyncItem `json:"items"`
-	}
-	err := c.accountCall(ctx, http.MethodPost, "/sync/pull", token, map[string]string{"password": password}, &out)
-	return out.Items, err
+	var items []SyncItem
+	err := c.withSealer(ctx, func(s *sealer) error {
+		respond, err := ecdh.X25519().GenerateKey(rand.Reader)
+		if err != nil {
+			return err
+		}
+		body, err := s.sealedPassword(password, respond, AADPull)
+		if err != nil {
+			return err
+		}
+		var out struct {
+			Sealed *Envelope `json:"sealed"`
+		}
+		if err := c.accountCall(ctx, http.MethodPost, "/sync/pull", token, body, &out); err != nil {
+			return err
+		}
+		if out.Sealed == nil {
+			return errors.New("the server answered a sealed pull without sealing it")
+		}
+		plain, err := OpenWith(respond, *out.Sealed, AADPullResponse)
+		if err != nil {
+			return fmt.Errorf("the server's answer could not be opened: %w", err)
+		}
+		var answer struct {
+			Items []SyncItem `json:"items"`
+		}
+		if err := json.Unmarshal(plain, &answer); err != nil {
+			return err
+		}
+		items = answer.Items
+		return nil
+	})
+	return items, err
 }
 
 // SyncWipe erases everything synced to the account on the server.
 func (c *Client) SyncWipe(ctx context.Context, token, password string) error {
-	return c.accountCall(ctx, http.MethodPost, "/sync/wipe", token, map[string]string{"password": password}, nil)
+	return c.withSealer(ctx, func(s *sealer) error {
+		body, err := s.sealedPassword(password, nil, AADWipe)
+		if err != nil {
+			return err
+		}
+		return c.accountCall(ctx, http.MethodPost, "/sync/wipe", token, body, nil)
+	})
 }

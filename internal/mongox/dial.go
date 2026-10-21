@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -347,16 +346,12 @@ func loadKey(path, passphrase string) (ssh.Signer, error) {
 	return signer, nil
 }
 
-// hostKeyCallback accepts keys listed in ~/.ssh/known_hosts or the key the
-// user pinned after verifying its fingerprint. Unknown keys fail with
-// CodeSSHHostKey (Detail = fingerprint); changed keys fail hard.
+// hostKeyCallback accepts keys listed in ~/.ssh/known_hosts (or the app's
+// own known_hosts, see AppKnownHostsFile) or the key the user pinned after
+// verifying its fingerprint. Unknown keys fail with CodeSSHHostKey
+// (Detail = fingerprint); changed keys fail hard.
 func hostKeyCallback(pinned string) ssh.HostKeyCallback {
-	var known ssh.HostKeyCallback
-	if home, err := os.UserHomeDir(); err == nil {
-		if cb, err := knownhosts.New(filepath.Join(home, ".ssh", "known_hosts")); err == nil {
-			known = cb
-		}
-	}
+	known := knownHostsCallback()
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		fp := ssh.FingerprintSHA256(key)
 		if pinned != "" {

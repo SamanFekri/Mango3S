@@ -2088,6 +2088,7 @@ export namespace config {
 	    deviceFingerprint?: string;
 	    updateInstallationId?: string;
 	    syncAuto: boolean;
+	    syncExclude?: string[];
 	    showMascot: boolean;
 	    keymap?: Record<string, any>;
 	
@@ -2122,6 +2123,7 @@ export namespace config {
 	        this.deviceFingerprint = source["deviceFingerprint"];
 	        this.updateInstallationId = source["updateInstallationId"];
 	        this.syncAuto = source["syncAuto"];
+	        this.syncExclude = source["syncExclude"];
 	        this.showMascot = source["showMascot"];
 	        this.keymap = source["keymap"];
 	    }
@@ -5422,7 +5424,6 @@ export namespace update {
 	    body?: string;
 	    auth: string;
 	    writes: boolean;
-	    multipart?: boolean;
 	    description: string;
 	    captures?: Record<string, string>;
 	
@@ -5441,7 +5442,6 @@ export namespace update {
 	        this.body = source["body"];
 	        this.auth = source["auth"];
 	        this.writes = source["writes"];
-	        this.multipart = source["multipart"];
 	        this.description = source["description"];
 	        this.captures = source["captures"];
 	    }
