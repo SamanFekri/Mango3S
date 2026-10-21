@@ -1,6 +1,8 @@
 name: Build executables
 
 # Manual only: Actions › "Build executables" › Run workflow.
+# See docs/RELEASING.md for publishing to a GitHub Release and for building
+# macOS on your own Mac (self-hosted runner) instead of GitHub's macOS runners.
 on:
   workflow_dispatch:
     inputs:
@@ -10,11 +12,20 @@ on:
         default: all
         options:
           - all
+          - all-except-macos
+          - macos (both)
           - macos-arm64
           - macos-amd64
           - windows-amd64
           - windows-386
           - linux-amd64
+      mac_runner:
+        description: "Where macOS builds run: GitHub's macOS runners, or your own Mac registered as a self-hosted runner"
+        type: choice
+        default: github
+        options:
+          - github
+          - self-hosted
       version:
         description: "Version embedded in the binary (empty = productVersion from wails.json)"
         required: false
@@ -23,6 +34,22 @@ on:
         description: "Web platform the build checks in with for updates"
         required: false
         default: "https://mango3s.com"
+      release:
+        description: "Publish the files to a GitHub Release (created if missing, files replaced if present)"
+        type: boolean
+        default: false
+      tag:
+        description: "Release tag (empty = v<version>)"
+        required: false
+        default: ""
+      prerelease:
+        description: "Mark the release as a pre-release"
+        type: boolean
+        default: false
+      draft:
+        description: "Keep the release as a draft (not visible to the public until you publish it)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,27 +59,54 @@ env:
   NODE_VERSION: "22"
 
 jobs:
-  # Narrows the build matrix to the platform picked in the "target" input.
+  # Narrows the build matrix to the chosen platforms and picks the macOS runner.
   targets:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.select.outputs.matrix }}
+      version: ${{ steps.version.outputs.version }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: wails.json
+          sparse-checkout-cone-mode: false
+
+      - name: Resolve version
+        id: version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          version="$VERSION"
+          if [ -z "$version" ]; then
+            version=$(jq -r .info.productVersion wails.json)
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - id: select
         env:
           TARGET: ${{ inputs.target }}
+          # A runner label list: GitHub's macOS image, or any of your own Macs
+          # registered as a self-hosted runner (labels "self-hosted" + "macOS").
+          MAC_RUNNER: ${{ inputs.mac_runner == 'self-hosted' && '["self-hosted","macOS"]' || '"macos-latest"' }}
           # Ubuntu 24.04 ships WebKitGTK 4.1 only (same tag as the Dockerfile).
           ALL: |
             [
-              {"name": "macos-arm64",   "os": "macos-latest",   "platform": "darwin/arm64"},
-              {"name": "macos-amd64",   "os": "macos-latest",   "platform": "darwin/amd64"},
-              {"name": "windows-amd64", "os": "windows-latest", "platform": "windows/amd64"},
-              {"name": "windows-386",   "os": "windows-latest", "platform": "windows/386"},
-              {"name": "linux-amd64",   "os": "ubuntu-24.04",   "platform": "linux/amd64", "tags": "webkit2_41"}
+              {"name": "macos-arm64",   "os": "MAC",              "platform": "darwin/arm64"},
+              {"name": "macos-amd64",   "os": "MAC",              "platform": "darwin/amd64"},
+              {"name": "windows-amd64", "os": "\"windows-latest\"", "platform": "windows/amd64"},
+              {"name": "windows-386",   "os": "\"windows-latest\"", "platform": "windows/386"},
+              {"name": "linux-amd64",   "os": "\"ubuntu-24.04\"",   "platform": "linux/amd64", "tags": "webkit2_41"}
             ]
         run: |
-          matrix=$(jq -c --arg t "$TARGET" '{include: [.[] | select($t == "all" or .name == $t)]}' <<< "$ALL")
+          matrix=$(jq -c --arg t "$TARGET" --argjson mac "$MAC_RUNNER" '
+            {include: [.[]
+              | select($t == "all"
+                  or ($t == "all-except-macos" and (.name | startswith("macos") | not))
+                  or ($t == "macos (both)" and (.name | startswith("macos")))
+                  or .name == $t)
+              | .os = (if .os == "MAC" then $mac else (.os | fromjson) end)]}' <<< "$ALL")
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix" | jq .
 
   build:
     name: ${{ matrix.name }}
@@ -86,21 +140,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
-
-      - name: Resolve version
-        id: version
         run: |
-          version="${{ inputs.version }}"
-          if [ -z "$version" ]; then
-            version=$(node -pe "require('./wails.json').info.productVersion")
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build
         env:
           LDFLAGS: >-
-            -X mango3s/internal/api.Version=${{ steps.version.outputs.version }}
+            -X mango3s/internal/api.Version=${{ needs.targets.outputs.version }}
             -X mango3s/internal/api.PlatformBaseURL=${{ inputs.platform_base_url }}
         run: |
           args=(build -clean -platform "${{ matrix.platform }}" -ldflags "$LDFLAGS")
@@ -112,8 +159,8 @@ jobs:
       - name: Package
         id: package
         run: |
-          name="mango3s-${{ steps.version.outputs.version }}-${{ matrix.name }}"
-          mkdir -p dist
+          name="mango3s-${{ needs.targets.outputs.version }}-${{ matrix.name }}"
+          rm -rf dist && mkdir -p dist
           case "${{ runner.os }}" in
             macOS)
               # ditto keeps the .app bundle's symlinks and permissions intact.
@@ -127,6 +174,12 @@ jobs:
               tar -czf "dist/$name.tar.gz" -C build/bin mango3s
               ;;
           esac
+          # One checksum file per download, so releases built in several runs
+          # (or partly on your own Mac) never overwrite each other's sums.
+          cd dist
+          for f in *; do
+            if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
@@ -134,3 +187,46 @@ jobs:
           name: ${{ steps.package.outputs.name }}
           path: dist/*
           if-no-files-found: error
+
+  # Publishes everything this run built to a GitHub Release.
+  release:
+    name: GitHub Release
+    needs: [targets, build]
+    if: inputs.release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - run: ls -la dist
+
+      - name: Create or update the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag != '' && inputs.tag || format('v{0}', needs.targets.outputs.version) }}
+          name: Mango3S ${{ needs.targets.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.prerelease }}
+          draft: ${{ inputs.draft }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*
+          body: |
+            ## Downloads
+
+            | System | File |
+            |---|---|
+            | macOS, Apple Silicon (M1 and later) | `mango3s-${{ needs.targets.outputs.version }}-macos-arm64.zip` |
+            | macOS, Intel | `mango3s-${{ needs.targets.outputs.version }}-macos-amd64.zip` |
+            | Windows 64-bit | `mango3s-${{ needs.targets.outputs.version }}-windows-amd64.zip` |
+            | Windows 32-bit | `mango3s-${{ needs.targets.outputs.version }}-windows-386.zip` |
+            | Linux 64-bit | `mango3s-${{ needs.targets.outputs.version }}-linux-amd64.tar.gz` (needs `libwebkit2gtk-4.1`) |
+
+            Each file has a matching `.sha256` checksum.
+
+            **macOS:** the app isn't notarized yet. The first time, right-click Mango3S.app › Open › Open.
+            **Windows:** SmartScreen may warn about an unknown publisher: More info › Run anyway.

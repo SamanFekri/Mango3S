@@ -42,7 +42,7 @@ import (
 )
 
 // Version is set at build time with -ldflags "-X mango3s/internal/api.Version=...".
-var Version = "0.9.0-dev"
+var Version = "0.9.1-dev"
 
 // Deps are the collaborators of App.
 type Deps struct {

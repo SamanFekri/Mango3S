@@ -6,7 +6,7 @@ MYSQL_DSN ?= mango_reader:reader@tcp(localhost:3307)/shop
 # Version embedded in the binary (internal/api.Version) and the web admin
 # platform this build checks in with for updates/notifications
 # (internal/api.PlatformBaseURL) — see web/docs/API_CONTRACT.md.
-VERSION ?= $(shell node -pe "require('./wails.json').info.productVersion" 2>/dev/null || echo 0.9.0-dev)
+VERSION ?= $(shell node -pe "require('./wails.json').info.productVersion" 2>/dev/null || echo 0.9.1-dev)
 PLATFORM_BASE_URL ?= https://mango3s.com
 LDFLAGS := -X mango3s/internal/api.Version=$(VERSION) -X mango3s/internal/api.PlatformBaseURL=$(PLATFORM_BASE_URL)
 
