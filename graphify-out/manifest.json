@@ -1120,8 +1120,8 @@
     "semantic_hash": ""
   },
   "app/internal/sqlq/lexer.go": {
-    "mtime": 1792094636.9286728,
-    "ast_hash": "4528d9a08008b87280db60f086cb8c26",
+    "mtime": 1792572098.176753,
+    "ast_hash": "845e3d10d0900f139a5f3d6fb0105fa7",
     "semantic_hash": ""
   },
   "app/internal/sqlq/parse.go": {
@@ -1720,8 +1720,8 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/DownloadsView.vue": {
-    "mtime": 1792519782.5078056,
-    "ast_hash": "476e9ee8024ad62937024af09549b3c6",
+    "mtime": 1792571966.0237198,
+    "ast_hash": "b468fb81404b6a642bd68d69d962f4e0",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/InstallationsView.vue": {
@@ -1825,8 +1825,8 @@
     "semantic_hash": ""
   },
   "web/packages/contracts/src/enums.ts": {
-    "mtime": 1792438957.0656643,
-    "ast_hash": "249676392ef03af3f286e208994255fe",
+    "mtime": 1792571929.122211,
+    "ast_hash": "4c13df20b7f09a480f917c30f98f14b1",
     "semantic_hash": ""
   },
   "web/packages/contracts/src/index.ts": {
@@ -1885,8 +1885,8 @@
     "semantic_hash": ""
   },
   "app/README.md": {
-    "mtime": 1792561996.9643748,
-    "ast_hash": "0d5bc0832b1afd4ed6ef5963c66147a3",
+    "mtime": 1792572132.8449464,
+    "ast_hash": "d9a6de3967f091a80196440c47845337",
     "semantic_hash": ""
   },
   "app/docker-compose.yml": {
@@ -1895,8 +1895,8 @@
     "semantic_hash": ""
   },
   "app/docs/FEATURES.md": {
-    "mtime": 1792398898.8317103,
-    "ast_hash": "df033463d04d1909f000c242384b703a",
+    "mtime": 1792572098.1764238,
+    "ast_hash": "29142cc926cd102fef80a98e663ab1c5",
     "semantic_hash": ""
   },
   "app/docs/P2.md": {
@@ -1905,8 +1905,8 @@
     "semantic_hash": ""
   },
   "app/docs/ROADMAP.md": {
-    "mtime": 1792399393.6899085,
-    "ast_hash": "fca6a9073477d0ea44eee328d6300a84",
+    "mtime": 1792572098.1758668,
+    "ast_hash": "f7351c7f821759677ca04393025d2dc9",
     "semantic_hash": ""
   },
   "app/docs/UI.md": {
@@ -1985,8 +1985,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/tests/download-links.test.ts": {
-    "mtime": 1792420800.5238123,
-    "ast_hash": "4ebb510ebdf34d0f852456bd8de5c0ae",
+    "mtime": 1792571972.4645357,
+    "ast_hash": "5435f10c8e0f363d1906d566d3e80b7f",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/api/downloads.ts": {
@@ -1995,18 +1995,18 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/lib/platforms.ts": {
-    "mtime": 1792439799.9612625,
-    "ast_hash": "edd0412218a4342c530b2d7522772e26",
+    "mtime": 1792571929.1229248,
+    "ast_hash": "8c4b4a0fcc67c18e1f6fc785588af1fa",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/DownloadLinksView.vue": {
-    "mtime": 1792439881.065948,
-    "ast_hash": "e4ccc6f70f3c6195d2cf6fa719bd19e5",
+    "mtime": 1792571972.4607046,
+    "ast_hash": "f08dae35d83c286a443e12df11c77cec",
     "semantic_hash": ""
   },
   "web/apps/dashboard/tests/platforms.test.ts": {
-    "mtime": 1792439799.9615421,
-    "ast_hash": "dde7d0834827a31aef932f697e856350",
+    "mtime": 1792571984.8937356,
+    "ast_hash": "192665a1f6bae778c2a79ecd5f1eb686",
     "semantic_hash": ""
   },
   "web/packages/contracts/src/schemas/downloads.ts": {
@@ -2512,6 +2512,11 @@
   "app/docs/RELEASING.md": {
     "mtime": 1792570273.8941576,
     "ast_hash": "4428214b81a7232ac63585b219fef8d6",
+    "semantic_hash": ""
+  },
+  "app/docs/REFERENCE.md": {
+    "mtime": 1792572124.546466,
+    "ast_hash": "ca97c426e3ea0cb888d047246c6182d8",
     "semantic_hash": ""
   }
 }
