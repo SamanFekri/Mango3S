@@ -3,10 +3,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { backend, newOpId } from '../lib/backend'
 import { formatBytes, formatCount } from '../lib/format'
 import { toAppError, type AppError } from '../lib/errors'
-import type { IndexAdvice, IndexFinding, ProfileEntry, Profiling, QueryShape, SessionInfo, SQLDialect } from '../lib/types'
+import type { ExplainPlan, ExplainRequest, IndexAdvice, IndexFinding, ProfileEntry, Profiling, QueryShape, SessionInfo, ShardInfo, SQLDialect } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { ErrorBanner, Modal, Segmented, Spinner } from './common'
-import { emptyIndex } from './ManageDialogs'
+import { emptyIndex, ShardList } from './ManageDialogs'
+import { ExplainDialog } from './ExplainDialog'
 import { JobStatus } from './p2common'
 
 const LEVELS: { value: '0' | '1' | '2'; label: string; title: string }[] = [
@@ -74,6 +75,7 @@ export function ProfilerDialog({ conn, db, onClose }: { conn: SessionInfo; db: s
   return (
     <Modal title={`Query profiler: ${db}`} onClose={onClose} wide footer={<button onClick={onClose}>Close</button>}>
       <ErrorBanner error={error} onDismiss={() => setError(null)} />
+      {conn.topology === 'sharded' && <ShardProfilingNote conn={conn} />}
       {!p ? (
         !error && <Spinner />
       ) : (
@@ -275,6 +277,11 @@ export function IndexAdvisorDialog({ conn, db, coll, onClose }: { conn: SessionI
   const [open, setOpen] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
+  // Plans explained just before creating a suggested index, by shape, so
+  // "Compare plan" can show before and after.
+  const [before, setBefore] = useState<Record<string, { request: ExplainRequest; plan: ExplainPlan }>>({})
+  const [comparing, setComparing] = useState<{ request: ExplainRequest; plan: ExplainPlan } | null>(null)
+  const shapeKey = (s: QueryShape) => `${s.coll}|${s.op}|${s.shape}`
 
   const analyze = useCallback(async () => {
     setBusy(true)
@@ -320,7 +327,12 @@ export function IndexAdvisorDialog({ conn, db, coll, onClose }: { conn: SessionI
       ),
       confirmLabel: 'Create index',
     })
-    if (ok) await act(() => backend.createIndex(newOpId('index'), conn.id, db, s.coll, { ...emptyIndex(), keys: s.suggested! }), `Created index ${s.name}`)
+    if (!ok) return
+    // Explain the recorded query first (best effort), for "Compare plan" afterwards.
+    const request: ExplainRequest = { kind: 'command', connId: conn.id, db, command: s.example }
+    const plan = s.example ? await backend.explain(newOpId('explain'), request).catch(() => null) : null
+    await act(() => backend.createIndex(newOpId('index'), conn.id, db, s.coll, { ...emptyIndex(), keys: s.suggested! }), `Created index ${s.name}`)
+    if (plan) setBefore((b) => ({ ...b, [shapeKey(s)]: { request, plan } }))
   }
   const drop = async (f: IndexFinding) => {
     const ok = await confirm({
@@ -378,6 +390,14 @@ export function IndexAdvisorDialog({ conn, db, coll, onClose }: { conn: SessionI
   )
   return (
     <Modal title={`Index advisor: ${db}`} onClose={onClose} wide footer={<button onClick={onClose}>Close</button>}>
+      {comparing && (
+        <ExplainDialog
+          request={comparing.request}
+          compareWith={comparing.plan}
+          compareLabels={['Before the index', 'With the index']}
+          onClose={() => setComparing(null)}
+        />
+      )}
       <ErrorBanner error={error} onDismiss={() => setError(null)} />
       <div className="field-row">
         <label className="field">
@@ -457,6 +477,17 @@ export function IndexAdvisorDialog({ conn, db, coll, onClose }: { conn: SessionI
                             Create
                           </button>
                         )}
+                        {before[shapeKey(s)] && (
+                          <button
+                            className="small"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setComparing(before[shapeKey(s)]!)
+                            }}
+                          >
+                            Compare plan
+                          </button>
+                        )}
                         {!conn.readOnly && s.status === 'hidden' && s.servedBy && (
                           <button
                             className="small"
@@ -489,5 +520,26 @@ export function IndexAdvisorDialog({ conn, db, coll, onClose }: { conn: SessionI
         </>
       )}
     </Modal>
+  )
+}
+
+/** On a mongos the profiler only sees what the router does: profiling runs on
+ * each shard. Offers a direct connection to every shard. */
+function ShardProfilingNote({ conn }: { conn: SessionInfo }) {
+  const [shards, setShards] = useState<ShardInfo[] | null>(null)
+  useEffect(() => {
+    backend
+      .listShards(conn.id)
+      .then(setShards)
+      .catch(() => setShards([]))
+  }, [conn.id])
+  return (
+    <div className="note small">
+      <p>
+        This is a sharded cluster: queries are profiled on each shard, not on the router. Connect to a shard to see and change its profiler (the
+        connection uses the same credentials and isn't saved).
+      </p>
+      {shards && shards.length > 0 && <ShardList connId={conn.id} shards={shards} />}
+    </div>
   )
 }

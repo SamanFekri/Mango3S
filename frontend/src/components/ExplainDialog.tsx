@@ -5,6 +5,7 @@ import { formatCount, formatDuration } from '../lib/format'
 import type { ExplainPlan, ExplainRequest, ExplainStage } from '../lib/types'
 import { ErrorBanner, Modal, Segmented, Spinner } from './common'
 import { highlight } from './highlight'
+import { PlanTree, stageNames } from './PlanTree'
 
 const STAGE_HELP: Record<string, string> = {
   COLLSCAN: 'Reads every document in the collection',
@@ -76,15 +77,33 @@ function StageNode({ stage }: { stage: ExplainStage }) {
   )
 }
 
-/** Runs explain(executionStats) and visualizes the plan with diagnostics. */
-export function ExplainDialog({ request, onClose }: { request: ExplainRequest; onClose: () => void }) {
+type ExplainView = 'tree' | 'list' | 'raw' | 'compare'
+
+/** Runs explain(executionStats) and visualizes the plan with diagnostics.
+ * compareWith (e.g. the plan before an index was created) opens the Compare
+ * view; "Run again to compare" keeps the current plan as the earlier one. */
+export function ExplainDialog({
+  request,
+  onClose,
+  compareWith,
+  compareLabels = ['Before', 'After'],
+}: {
+  request: ExplainRequest
+  onClose: () => void
+  compareWith?: ExplainPlan
+  compareLabels?: [string, string]
+}) {
   const [plan, setPlan] = useState<ExplainPlan | null>(null)
+  const [before, setBefore] = useState<ExplainPlan | null>(compareWith ?? null)
+  const [labels, setLabels] = useState<[string, string]>(compareLabels)
   const [error, setError] = useState<AppError | null>(null)
-  const [view, setView] = useState<'visual' | 'raw'>('visual')
+  const [view, setView] = useState<ExplainView>(compareWith ? 'compare' : 'tree')
   const [opId] = useState(() => newOpId('explain'))
+  const [run, setRun] = useState(0)
 
   useEffect(() => {
     let cancelled = false
+    setPlan(null)
     backend
       .explain(opId, request)
       .then((p) => !cancelled && setPlan(p))
@@ -93,7 +112,15 @@ export function ExplainDialog({ request, onClose }: { request: ExplainRequest; o
       cancelled = true
       backend.cancel(opId).catch(() => undefined)
     }
-  }, [opId, request])
+  }, [opId, request, run])
+
+  const runAgain = () => {
+    if (!plan) return
+    setBefore(plan)
+    setLabels(['Earlier run', 'This run'])
+    setView('compare')
+    setRun((n) => n + 1)
+  }
 
   const s = plan?.summary
   return (
@@ -111,18 +138,25 @@ export function ExplainDialog({ request, onClose }: { request: ExplainRequest; o
               {plan.namespace} · {s.engine === 'sbe' ? 'slot-based engine' : s.engine === 'classic' ? 'classic engine' : 'engine unknown'}
             </span>
             <span className="spacer" />
+            <button className="small" onClick={runAgain} title="Keep this plan and explain again, e.g. after creating an index">
+              Run again to compare
+            </button>
             <Segmented
               label="Explain view"
               value={view}
               onChange={setView}
               options={[
-                { value: 'visual', label: 'Visual' },
-                { value: 'raw', label: 'Raw' },
+                { value: 'tree' as ExplainView, label: 'Tree' },
+                { value: 'list' as ExplainView, label: 'List' },
+                ...(before ? [{ value: 'compare' as ExplainView, label: 'Compare' }] : []),
+                { value: 'raw' as ExplainView, label: 'Raw' },
               ]}
             />
           </div>
           {view === 'raw' ? (
             <pre className="doc-text explain-raw">{highlight(plan.raw)}</pre>
+          ) : view === 'compare' && before ? (
+            <PlanComparison before={before} after={plan} labels={labels} />
           ) : (
             <>
               <div className="metrics">
@@ -164,10 +198,14 @@ export function ExplainDialog({ request, onClose }: { request: ExplainRequest; o
               {plan.root && (
                 <>
                   <h3>Winning plan {plan.pipeline.length > 0 && '(query layer)'}</h3>
-                  <p className="muted small">Read bottom-up: leaf stages produce documents for their parents.</p>
-                  <ul className="plan-tree">
-                    <StageNode stage={plan.root} />
-                  </ul>
+                  <p className="muted small">Read bottom-up: leaf stages produce documents for their parents.{view === 'tree' && ' Click a stage for its details.'}</p>
+                  {view === 'tree' ? (
+                    <PlanTree root={plan.root} />
+                  ) : (
+                    <ul className="plan-tree">
+                      <StageNode stage={plan.root} />
+                    </ul>
+                  )}
                 </>
               )}
             </>
@@ -175,5 +213,89 @@ export function ExplainDialog({ request, onClose }: { request: ExplainRequest; o
         </div>
       )}
     </Modal>
+  )
+}
+
+type Num = number | undefined
+
+function change(a: Num, b: Num, lowerIsBetter = true): { text: string; tone: string } {
+  if (a === undefined || b === undefined) return { text: '', tone: '' }
+  if (a === b) return { text: 'same', tone: '' }
+  const pct = a === 0 ? null : Math.round(((b - a) / a) * 100)
+  const better = lowerIsBetter ? b < a : b > a
+  return { text: pct === null ? (b > a ? 'up' : 'down') : `${pct > 0 ? '+' : ''}${pct}%`, tone: better ? 'better' : 'worse' }
+}
+
+/** Two plans side by side: the numbers with their change, what changed in the
+ * stages, and both trees. */
+export function PlanComparison({ before, after, labels }: { before: ExplainPlan; after: ExplainPlan; labels: [string, string] }) {
+  const a = before.summary
+  const b = after.summary
+  const rows: { label: string; a: Num; b: Num; fmt?: (n: number) => string; lowerIsBetter?: boolean }[] = [
+    { label: 'Execution time', a: a.executionTimeMs, b: b.executionTimeMs, fmt: formatDuration },
+    { label: 'Docs examined', a: a.docsExamined, b: b.docsExamined },
+    { label: 'Keys examined', a: a.keysExamined, b: b.keysExamined },
+    { label: 'Returned', a: a.nReturned, b: b.nReturned, lowerIsBetter: false },
+  ]
+  const fmt = (n: Num, f?: (n: number) => string) => (n === undefined ? '—' : f ? f(n) : formatCount(n))
+  const onlyA = stageNames(before.root).filter((n) => !stageNames(after.root).includes(n))
+  const onlyB = stageNames(after.root).filter((n) => !stageNames(before.root).includes(n))
+  const yesNo = (v: boolean) => (v ? 'yes' : 'no')
+  return (
+    <div className="plan-compare">
+      <table className="grid plan-compare-table">
+        <thead>
+          <tr>
+            <th />
+            <th>{labels[0]}</th>
+            <th>{labels[1]}</th>
+            <th>Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const c = change(r.a, r.b, r.lowerIsBetter ?? true)
+            return (
+              <tr key={r.label}>
+                <td>{r.label}</td>
+                <td className="mono">{fmt(r.a, r.fmt)}</td>
+                <td className="mono">{fmt(r.b, r.fmt)}</td>
+                <td className={`mono change-${c.tone}`}>{c.text}</td>
+              </tr>
+            )
+          })}
+          <tr>
+            <td>Index used</td>
+            <td className="mono">{a.indexesUsed.join(', ') || (a.collScan ? 'none (COLLSCAN)' : '—')}</td>
+            <td className="mono">{b.indexesUsed.join(', ') || (b.collScan ? 'none (COLLSCAN)' : '—')}</td>
+            <td className={a.collScan && !b.collScan ? 'change-better' : !a.collScan && b.collScan ? 'change-worse' : ''}>
+              {a.collScan && !b.collScan ? 'no more collection scan' : !a.collScan && b.collScan ? 'now scans the collection' : ''}
+            </td>
+          </tr>
+          <tr>
+            <td>In-memory sort</td>
+            <td>{yesNo(a.inMemorySort)}</td>
+            <td>{yesNo(b.inMemorySort)}</td>
+            <td className={a.inMemorySort && !b.inMemorySort ? 'change-better' : !a.inMemorySort && b.inMemorySort ? 'change-worse' : ''} />
+          </tr>
+        </tbody>
+      </table>
+      {(onlyA.length > 0 || onlyB.length > 0) && (
+        <p className="small">
+          Stages: {onlyA.length > 0 && <span className="mono change-worse">−{[...new Set(onlyA)].join(', −')} </span>}
+          {onlyB.length > 0 && <span className="mono change-better">+{[...new Set(onlyB)].join(', +')}</span>}
+        </p>
+      )}
+      <div className="plan-compare-trees">
+        <div>
+          <h3>{labels[0]}</h3>
+          {before.root ? <PlanTree root={before.root} label={`${labels[0]} plan`} /> : <p className="muted small">No query-layer plan.</p>}
+        </div>
+        <div>
+          <h3>{labels[1]}</h3>
+          {after.root ? <PlanTree root={after.root} label={`${labels[1]} plan`} /> : <p className="muted small">No query-layer plan.</p>}
+        </div>
+      </div>
+    </div>
   )
 }

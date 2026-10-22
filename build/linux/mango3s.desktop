@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Mango3S
+Comment=A desktop IDE for MongoDB
+Exec=/usr/bin/mango3s
+Icon=mango3s
+Terminal=false
+Categories=Development;Database;
+StartupWMClass=mango3s

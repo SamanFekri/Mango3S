@@ -175,6 +175,7 @@ func Run(ctx context.Context, cl *mongo.Client, o Options, log Logger) (Manifest
 	if len(nss) == 0 {
 		return m, errors.New("nothing to back up: no collection matches the selection")
 	}
+	recordShardKeys(ctx, cl, nss, log)
 	var total int64
 	for i := range nss {
 		if nss[i].Type != "view" {

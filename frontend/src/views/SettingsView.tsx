@@ -124,6 +124,10 @@ export function SettingsView({ tab }: { tab?: Tab }) {
                   <input type="checkbox" checked={form.showMascot !== false} onChange={(e) => set('showMascot', e.target.checked)} />
                   Show Mango, the mascot, in the explorer
                 </label>
+                <label className="check">
+                  <input type="checkbox" checked={!!form.schemaValidation} onChange={(e) => set('schemaValidation', e.target.checked)} />
+                  Suggest validation rules from the schema (adds "Create validation rules…" to the Schema tab)
+                </label>
                 <label className="field">
                   <span>Default result view</span>
                   <select

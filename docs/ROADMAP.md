@@ -28,16 +28,16 @@ Sizes:
 
 Change streams, replication lag and replica set status all need a replica set, and the current test server is a single standalone node. Several later features can't be tested until this phase is done.
 
-- [ ] **0.1 CI (M).** GitHub Actions workflow with three jobs:
+- [x] **0.1 CI (M).** Done: `.github/workflows/ci.yml` (unit and integration tests on every push; Linux and Windows builds; macOS on request because of runner cost). GitHub Actions workflow with three jobs:
   - `go vet`, Go unit tests with `-race`, vitest and the TypeScript check;
   - the integration suite against the docker-compose services;
   - `wails build` on macOS, Windows and Linux.
-- [ ] **0.2 More test servers (M).** New docker-compose profiles:
+- [x] **0.2 More test servers (M).** New docker-compose profiles:
   - `rs`: a single-node replica set on 27020;
   - `sharded`: a config server, 2 shards and a mongos on 27021.
 
   Integration suites skip when their server isn't running, as they already do for `MONGO_AUTH_URI`.
-- [ ] **0.3 Fix outdated docs (S).** `docs/P2.md` still says "no task dependencies or chains" (multi-step tasks now exist) and "Anthropic Claude only; no local models" (local models are now supported).
+- [x] **0.3 Fix outdated docs (S).** `docs/P2.md` still says "no task dependencies or chains" (multi-step tasks now exist) and "Anthropic Claude only; no local models" (local models are now supported).
 - [ ] **0.4 Split large frontend files (M).**
   - Move the explorer menus and dialog state out of `Sidebar.tsx` (748 lines) into `explorer/menus.ts` and `ExplorerDialogs.tsx`.
   - Move the editor and paging logic out of `CollectionView.tsx` (656 lines) into hooks.
@@ -45,7 +45,7 @@ Change streams, replication lag and replica set status all need a replica set, a
 
 ## Phase 1: Quick wins
 
-- [ ] **1.1 Validation rules from the schema explorer (S–M).**
+- [x] **1.1 Validation rules from the schema explorer (S–M).** Done as an option, off by default (Settings → General).
   - **Backend:** add `schema.ToJSONSchema(report, opts)` to `internal/schema`. It builds a `$jsonSchema` from the observed types and presence:
     - fields present in every sampled document become `required`;
     - mixed types become `bsonType: [..]`;
@@ -53,7 +53,7 @@ Change streams, replication lag and replica set status all need a replica set, a
   - **Options:** the presence threshold for `required`, and whether fields that weren't seen are rejected.
   - **UI:** a "Create validation rules…" button in the Schema tab. It opens the validation editor pre-filled, runs "Check existing documents", then saves.
   - **Tests:** a known dataset gives the expected schema; on a real server, the generated rule accepts every existing document.
-- [ ] **1.2 Visual explain plan (M).**
+- [x] **1.2 Visual explain plan (M).**
   - **Backend:** none needed; `internal/explain` already returns the stage tree with its statistics.
   - **UI:** an SVG tree with one box per stage, showing documents and keys examined and time. Collection scans are highlighted.
   - **Compare plans:** run explain twice (for example before and after an index) and show the two plans side by side with the differences.
@@ -72,7 +72,7 @@ Change streams, replication lag and replica set status all need a replica set, a
 
 ## Phase 2: Operations and administration
 
-- [ ] **2.1 Live server monitor (L).** Build it together with 4.1 (charts).
+- [x] **2.1 Live server monitor (L).** Build it together with 4.1 (charts).
   - **Backend:** new package `internal/monitor`.
     - A sampler job runs `serverStatus` every 1–5 seconds and computes rates: operations per second, network, cache, connections and queues. About 15 minutes of history is kept in memory.
     - On a replica set it also reads `replSetGetStatus`: member state, lag and oplog window.
@@ -102,7 +102,7 @@ Change streams, replication lag and replica set status all need a replica set, a
 
 ## Phase 3: Shell
 
-- [ ] **3.1 Run scripts with mongosh (M).** Do this first.
+- [x] **3.1 Run scripts with mongosh (M).** Do this first.
   - **Backend:**
     - Run scripts through the detected `mongosh`.
     - Pass credentials in a private temporary file or environment variables, as the backups do; never on the command line.
@@ -110,14 +110,14 @@ Change streams, replication lag and replica set status all need a replica set, a
   - **UI:** the shell tab gets a mode switch: "Built-in (paged, editable results)" or "mongosh (full JavaScript)".
   - **Limits:** SSH and proxy connections can't use it (the same limit as mongodump). When mongosh is missing, show how to install it.
   - **Tests:** with a password-protected server, run a script with variables, loops and `print`; the password must not appear in the output.
-- [ ] **3.2 Built-in JavaScript engine (XL).** Optional, later.
+- [x] **3.2 Built-in JavaScript engine (XL).** Optional, later.
   - Embed `goja` (MIT license) with a `db` object backed by the existing services.
   - Unlike 3.1, it keeps paged, editable results and works without mongosh installed.
   - Only needed if 3.1 isn't enough.
 
 ## Phase 4: Working with data
 
-- [ ] **4.1 Charts from results (L).**
+- [x] **4.1 Charts from results (L).** Done with a small built-in SVG chart component instead of uPlot (no new dependency).
   - **UI:** a Chart view next to Tree, Table and JSON.
     - Chart types: bar, line, area, pie, scatter and time series.
     - Pick the X and Y fields from the sampled fields.
@@ -126,7 +126,7 @@ Change streams, replication lag and replica set status all need a replica set, a
   - **Library:** charts can be saved with their query.
   - **Library choice:** a small bundled chart library (for example uPlot, MIT license), added to the third-party notices.
   - **Tests:** unit tests for the pipeline builder, UI tests for rendering.
-- [ ] **4.2 Change stream viewer (M).** Needs a replica set or sharded cluster.
+- [x] **4.2 Change stream viewer (M).** Needs a replica set or sharded cluster.
   - **Backend:** `internal/streams`.
     - Watch a collection, a database or the whole deployment, with an optional `$match` filter and the full document.
     - Events go to the UI in batches.
@@ -135,7 +135,7 @@ Change streams, replication lag and replica set status all need a replica set, a
   - **UI:** a live list showing operation type, key and changed fields as a diff, with pause, clear and export to JSON.
   - **Standalone server:** explains why change streams aren't available.
   - **Tests (on `rs`):** inserts, updates and deletes appear; pause and resume continues from the token.
-- [ ] **4.3 GridFS browser (M).**
+- [x] **4.3 GridFS browser (M).**
   - **Backend:** `internal/gridfs`, using the driver's `GridFSBucket`.
     - Find buckets from matching `*.files` / `*.chunks` pairs.
     - List files page by page.
@@ -144,7 +144,7 @@ Change streams, replication lag and replica set status all need a replica set, a
     - Delete (confirmed) and rename.
   - **UI:** a "GridFS buckets" folder in the explorer, plus a file browser tab.
   - **Tests:** a 50 MB upload and download comes back byte-identical; deleting a file removes its chunks.
-- [ ] **4.4 Test data generator (M).**
+- [x] **4.4 Test data generator (M).**
   - **Backend:** `internal/datagen`.
     - Generate from a schema report, or from a template with generator markers, for example `{ name: $name, email: $email, age: $int(18,90), created: $date("-1y","now") }`.
     - A seed makes the output repeatable.
@@ -156,7 +156,7 @@ Change streams, replication lag and replica set status all need a replica set, a
 
 ## Phase 5: Scale and cloud
 
-- [ ] **5.1 Sharding awareness (L).** Needs the `sharded` test server from 0.2.
+- [x] **5.1 Sharding awareness (L).** Needs the `sharded` test server from 0.2.
   - **Collection info:**
     - the shard key;
     - chunks per shard (from `config.chunks`);
@@ -192,7 +192,7 @@ Change streams, replication lag and replica set status all need a replica set, a
 - [ ] **6.2 Multiple windows (XL).** Deferred.
   - Wails v2 supports only one window, so this needs a migration to Wails v3.
   - Revisit when Wails v3 is stable.
-- [ ] **6.3 Windows and Linux (M).** Builds on the CI from 0.1.
+- [x] **6.3 Windows and Linux (M).** Done through CI: the Go suite and the OS credential store run on Windows and Linux; the build workflow makes a Windows installer, a .deb and a .dmg. Builds on the CI from 0.1.
   - Check the shortcuts.
   - Check the credential stores: Windows Credential Manager and the Linux secret service.
   - Check file dialogs and where tools are looked for.

@@ -1,11 +1,11 @@
-import type { QueryPayload, Stage } from './types'
+import type { ChartSpec, QueryPayload, Stage } from './types'
 
 /** Tabs of the Settings page (deep links open one of them). */
 export type SettingsSection = 'general' | 'ai' | 'mcp' | 'keymap' | 'account' | 'platform' | 'storage' | 'about' | 'api'
 
 export type TabKind =
   | 'welcome' | 'collection' | 'aggregation' | 'shell' | 'settings' | 'schema' | 'sql' | 'library'
-  | 'compare' | 'reschema' | 'mask' | 'migrate' | 'tasks' | 'connection'
+  | 'compare' | 'reschema' | 'mask' | 'migrate' | 'tasks' | 'connection' | 'monitor' | 'gridfs' | 'changes'
 
 /** Content a tab opens with, e.g. from a saved item or the history. */
 export interface TabInit {
@@ -18,6 +18,8 @@ export interface TabInit {
   section?: 'saved' | 'history' | 'backups'
   /** Settings tab: section to scroll to. */
   settingsSection?: SettingsSection
+  /** Collection tab: open the Chart view with this chart. */
+  chart?: ChartSpec
 }
 
 export interface Tab {
@@ -81,16 +83,22 @@ export function tabTitle(t: Omit<Tab, 'id' | 'title'>): string {
       return 'Tasks'
     case 'connection':
       return t.connName ?? 'Connection'
+    case 'monitor':
+      return `Monitor · ${t.connName ?? ''}`
+    case 'gridfs':
+      return `${t.coll ?? t.db ?? ''} · GridFS`
+    case 'changes':
+      return `Changes · ${t.coll ?? t.db ?? t.connName ?? ''}`
   }
 }
 
 function sameTarget(a: Omit<Tab, 'id' | 'title'>, b: Tab): boolean {
-  if (a.kind === 'connection') return b.kind === 'connection' && a.connId === b.connId
+  if (a.kind === 'connection' || a.kind === 'monitor') return b.kind === a.kind && a.connId === b.connId
   return a.kind === b.kind && a.connId === b.connId && a.db === b.db && a.coll === b.coll
 }
 
 /** Kinds that exist at most once (per connection for workspaces). */
-const SINGLETONS = new Set<TabKind>(['settings', 'welcome', 'library', 'tasks', 'connection'])
+const SINGLETONS = new Set<TabKind>(['settings', 'welcome', 'library', 'tasks', 'connection', 'monitor'])
 
 export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
   switch (action.type) {

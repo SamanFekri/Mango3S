@@ -4,6 +4,8 @@
 #   docker compose --profile auth up -d mongo-auth  # MongoDB with authentication on localhost:27018
 #   docker compose --profile test up --build --exit-code-from integration-tests
 #   docker compose --profile sql up -d postgres mysql   # relational sources for migration tests
+#   docker compose --profile rs up -d --wait mongo-rs   # single-node replica set on localhost:27020
+#   docker compose --profile sharded up -d --wait       # sharded cluster: mongos on localhost:27021
 #   docker compose --profile gui up --build app     # Linux + X11 only (experimental)
 #   docker compose down -v                          # stop and delete data
 name: mango3s
@@ -78,6 +80,80 @@ services:
       timeout: 5s
       retries: 30
 
+  # Single-node replica set (change streams, replication status). mongod listens
+  # on 27020 inside the container too, so the member address the server
+  # advertises (localhost:27020) works from the host:
+  #   mongodb://localhost:27020/?replicaSet=rs0
+  mongo-rs:
+    profiles: ["rs"]
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27020"]
+    ports:
+      - "${MONGO_RS_PORT:-27020}:27020"
+    volumes:
+      - mongo-rs-data:/data/db
+    healthcheck:
+      # Initiates the set on first run, then reports healthy once it has a primary.
+      test:
+        - CMD
+        - mongosh
+        - --port
+        - "27020"
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27020'}]}).ok }; db.hello().isWritablePrimary ? 1 : quit(1)"
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  # Sharded cluster: a config server, two single-node shards and a mongos on
+  # 27021 (connect to the mongos only): mongodb://localhost:27021
+  mongo-cfg:
+    profiles: ["sharded"]
+    image: mongo:8.0
+    command: ["mongod", "--configsvr", "--replSet", "cfg", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id: 'cfg', configsvr: true, members: [{_id: 0, host: 'mongo-cfg:27017'}]}).ok }; db.hello().isWritablePrimary ? 1 : quit(1)"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  mongo-shard1:
+    profiles: ["sharded"]
+    image: mongo:8.0
+    command: ["mongod", "--shardsvr", "--replSet", "shard1", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id: 'shard1', members: [{_id: 0, host: 'mongo-shard1:27017'}]}).ok }; db.hello().isWritablePrimary ? 1 : quit(1)"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  mongo-shard2:
+    profiles: ["sharded"]
+    image: mongo:8.0
+    command: ["mongod", "--shardsvr", "--replSet", "shard2", "--bind_ip_all", "--port", "27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id: 'shard2', members: [{_id: 0, host: 'mongo-shard2:27017'}]}).ok }; db.hello().isWritablePrimary ? 1 : quit(1)"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+  mongo-mongos:
+    profiles: ["sharded"]
+    image: mongo:8.0
+    command: ["mongos", "--configdb", "cfg/mongo-cfg:27017", "--bind_ip_all", "--port", "27017"]
+    ports:
+      - "${MONGO_SHARDED_PORT:-27021}:27017"
+    depends_on:
+      mongo-cfg: { condition: service_healthy }
+      mongo-shard1: { condition: service_healthy }
+      mongo-shard2: { condition: service_healthy }
+    healthcheck:
+      # Adds both shards on first run; healthy once the cluster has two shards.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "const n = db.adminCommand({listShards: 1}).shards.length; if (n < 2) { sh.addShard('shard1/mongo-shard1:27017'); sh.addShard('shard2/mongo-shard2:27017') }; db.adminCommand({listShards: 1}).shards.length === 2 ? 1 : quit(1)"]
+      interval: 5s
+      timeout: 15s
+      retries: 30
+      start_period: 5s
+
   integration-tests:
     profiles: ["test"]
     build:
@@ -107,4 +183,5 @@ services:
 volumes:
   mongo-data:
   mongo-auth-data:
+  mongo-rs-data:
   app-config:

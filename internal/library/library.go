@@ -12,6 +12,7 @@ import (
 
 	"mango3s/internal/aggregate"
 	"mango3s/internal/apperr"
+	"mango3s/internal/charts"
 	"mango3s/internal/config"
 )
 
@@ -21,10 +22,11 @@ const (
 	KindAggregation = "aggregation"
 	KindScript      = "script"
 	KindSQL         = "sql"
+	KindChart       = "chart"
 )
 
 func validKind(k string) bool {
-	return k == KindQuery || k == KindAggregation || k == KindScript || k == KindSQL
+	return k == KindQuery || k == KindAggregation || k == KindScript || k == KindSQL || k == KindChart
 }
 
 // QueryPayload is a saved find query.
@@ -46,7 +48,8 @@ type Item struct {
 	Coll        string            `json:"coll"`
 	Query       *QueryPayload     `json:"query,omitempty"`
 	Stages      []aggregate.Stage `json:"stages,omitempty"`
-	Text        string            `json:"text,omitempty"` // shell script or SQL
+	Text        string            `json:"text,omitempty"`  // shell script or SQL
+	Chart       *charts.Spec      `json:"chart,omitempty"` // a chart; Query holds its filter
 	CreatedAt   time.Time         `json:"createdAt"`
 	UpdatedAt   time.Time         `json:"updatedAt"`
 }
@@ -67,6 +70,13 @@ func (it Item) Validate() error {
 	case KindAggregation:
 		if len(it.Stages) == 0 {
 			return apperr.Invalid("A saved pipeline needs at least one stage.")
+		}
+	case KindChart:
+		if it.Chart == nil || strings.TrimSpace(it.Chart.X) == "" {
+			return apperr.Invalid("A saved chart needs a field for its x axis.")
+		}
+		if it.Coll == "" {
+			return apperr.Invalid("A saved chart belongs to a collection.")
 		}
 	default:
 		if strings.TrimSpace(it.Text) == "" {

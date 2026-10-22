@@ -12,6 +12,7 @@ import (
 
 	"mango3s/internal/aggregate"
 	"mango3s/internal/apperr"
+	"mango3s/internal/charts"
 	"mango3s/internal/codegen"
 	"mango3s/internal/explain"
 	"mango3s/internal/jobs"
@@ -42,13 +43,13 @@ func (a *App) ClearFinishedJobs() { a.jobs.ClearFinished() }
 func (a *App) ChooseImportFile() (string, error) {
 	// No extension filter: exports often have other or no extensions. Unknown
 	// extensions default to JSON and the wizard lets the user pick CSV/TSV.
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{Title: "Import documents"})
+	path, err := a.openFileDialog("file", runtime.OpenDialogOptions{Title: "Import documents"})
 	return path, a.encode("ChooseImportFile", err)
 }
 
 // ChooseExportFile opens a native save dialog. An empty result means canceled.
 func (a *App) ChooseExportFile(defaultName string) (string, error) {
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	path, err := a.saveFileDialog(runtime.SaveDialogOptions{
 		Title:           "Export documents",
 		DefaultFilename: filepath.Base(defaultName),
 	})
@@ -86,6 +87,13 @@ func (a *App) AnalyzeSchema(opID string, req schema.Request) (schema.Report, err
 	return call(a, "AnalyzeSchema", opID, func(ctx context.Context) (schema.Report, error) {
 		return a.schema.Analyze(ctx, req)
 	})
+}
+
+// SuggestValidator turns a schema report into a { $jsonSchema: … } validator
+// in mongosh syntax, for the validation editor (Settings › General ›
+// "Suggest validation rules from the schema" shows the button; off by default).
+func (a *App) SuggestValidator(r schema.Report, o schema.JSONSchemaOptions) string {
+	return mql.Pretty(schema.ToJSONSchema(r, o))
 }
 
 // ---- SQL -------------------------------------------------------------------
@@ -334,4 +342,12 @@ func (a *App) recordShell(connID, db, script string, res shell.Result, d time.Du
 	}
 	a.record(library.Entry{Kind: library.KindScript, ConnName: a.connName(connID), DB: db,
 		Summary: oneLine(script), Text: script}, d, err)
+}
+
+// RunChart groups a collection's matching documents for a chart, on the
+// server (Collection › Chart view).
+func (a *App) RunChart(opID string, r charts.Request) (charts.Data, error) {
+	return call(a, "RunChart", opID, func(ctx context.Context) (charts.Data, error) {
+		return a.charts.Run(ctx, r)
+	})
 }

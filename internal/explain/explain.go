@@ -74,6 +74,9 @@ type Request struct {
 	DB     string            `json:"db"`
 	Coll   string            `json:"coll"`
 	Stages []aggregate.Stage `json:"stages"`
+	// Command (kind "command") is a find, aggregate, count or distinct command
+	// in mongosh syntax, e.g. a profiled query from the index advisor.
+	Command string `json:"command,omitempty"`
 }
 
 // Service runs explain.
@@ -128,6 +131,16 @@ func (s *Service) Explain(ctx context.Context, req Request) (Plan, error) {
 		cmd = bson.D{{Key: "explain", Value: bson.D{
 			{Key: "aggregate", Value: req.Coll}, {Key: "pipeline", Value: pipe}, {Key: "cursor", Value: bson.D{}},
 		}}}
+	case "command":
+		inner, coll, f, so, write, err := commandToExplain(req.Command)
+		if err != nil {
+			return Plan{}, err
+		}
+		if write {
+			verbosity = "queryPlanner"
+		}
+		req.Coll, filter, sortDoc = coll, f, so
+		cmd = bson.D{{Key: "explain", Value: inner}}
 	default:
 		return Plan{}, apperr.Invalid("Unknown explain kind %q.", req.Kind)
 	}
@@ -521,4 +534,75 @@ func hasUnanchoredRegex(filter bson.D) bool {
 	}
 	visit(filter)
 	return found
+}
+
+// explainable lists, per command, the fields explain accepts. Everything
+// else in a profiled command (lsid, $db, $clusterTime, readConcern…) is
+// dropped.
+var explainable = map[string][]string{
+	"find":      {"filter", "projection", "sort", "skip", "limit", "hint", "collation", "min", "max", "let"},
+	"aggregate": {"pipeline", "hint", "collation", "let", "allowDiskUse"},
+	"count":     {"query", "limit", "skip", "hint", "collation"},
+	"distinct":  {"key", "query", "collation"},
+}
+
+// commandToExplain turns a command document into the command to explain,
+// and returns its collection and the filter and sort used for diagnostics.
+// write reports a pipeline with $out or $merge, which must only be planned.
+func commandToExplain(text string) (cmd bson.D, coll string, filter, sortDoc bson.D, write bool, err error) {
+	doc, err := mql.ParseDocument(text)
+	if err != nil {
+		return nil, "", nil, nil, false, apperr.Invalid("The command can't be read: %v", err)
+	}
+	if len(doc) == 0 {
+		return nil, "", nil, nil, false, apperr.Invalid("The command is empty.")
+	}
+	name := doc[0].Key
+	keep, ok := explainable[name]
+	if !ok {
+		return nil, "", nil, nil, false, apperr.Invalid("Only find, aggregate, count and distinct commands can be explained here, not %q.", name)
+	}
+	coll, _ = doc[0].Value.(string)
+	if coll == "" {
+		return nil, "", nil, nil, false, apperr.Invalid("The command names no collection.")
+	}
+	cmd = bson.D{{Key: name, Value: coll}}
+	for _, k := range keep {
+		if v, ok := mql.Lookup(doc, k); ok {
+			cmd = append(cmd, bson.E{Key: k, Value: v})
+		}
+	}
+	switch name {
+	case "find":
+		if v, ok := mql.Lookup(doc, "filter"); ok {
+			filter, _ = v.(bson.D)
+		}
+		if v, ok := mql.Lookup(doc, "sort"); ok {
+			sortDoc, _ = v.(bson.D)
+		}
+	case "aggregate":
+		cmd = append(cmd, bson.E{Key: "cursor", Value: bson.D{}})
+		pipe, _ := mql.Lookup(doc, "pipeline")
+		if arr, ok := pipe.(bson.A); ok {
+			for i, st := range arr {
+				sd, _ := st.(bson.D)
+				if i == 0 {
+					if m, ok := mql.Lookup(sd, "$match"); ok {
+						filter, _ = m.(bson.D)
+					}
+				}
+				if _, ok := mql.Lookup(sd, "$out"); ok {
+					write = true
+				}
+				if _, ok := mql.Lookup(sd, "$merge"); ok {
+					write = true
+				}
+			}
+		}
+	case "count", "distinct":
+		if v, ok := mql.Lookup(doc, "query"); ok {
+			filter, _ = v.(bson.D)
+		}
+	}
+	return cmd, coll, filter, sortDoc, write, nil
 }

@@ -29,6 +29,9 @@ import { SchemaView } from './views/SchemaView'
 import { SettingsView } from './views/SettingsView'
 import { ShellView } from './views/ShellView'
 import { SqlView } from './views/SqlView'
+import { MonitorView } from './views/MonitorView'
+import { GridFSView } from './views/GridFSView'
+import { ChangesView } from './views/ChangesView'
 import { WelcomeView } from './views/WelcomeView'
 
 class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -86,6 +89,12 @@ function TabContent({ tab }: { tab: Tab }) {
       return <TasksView />
     case 'connection':
       return <ConnectionView tab={tab} />
+    case 'monitor':
+      return <MonitorView tab={tab} />
+    case 'gridfs':
+      return <GridFSView tab={tab} />
+    case 'changes':
+      return <ChangesView tab={tab} />
   }
 }
 

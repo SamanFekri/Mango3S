@@ -1,0 +1,24 @@
+# Debian package for Linux (built by .github/workflows/build.yml with nfpm).
+# VERSION comes from the environment.
+name: mango3s
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: devel
+priority: optional
+maintainer: Mango3S <noreply@mango3s.com>
+description: A desktop IDE for MongoDB.
+homepage: https://mango3s.com
+license: GPL-3.0
+depends:
+  - libgtk-3-0 | libgtk-3-0t64
+  - libwebkit2gtk-4.1-0
+contents:
+  - src: build/bin/mango3s
+    dst: /usr/bin/mango3s
+    file_info:
+      mode: 0755
+  - src: build/linux/mango3s.desktop
+    dst: /usr/share/applications/mango3s.desktop
+  - src: build/appicon.png
+    dst: /usr/share/pixmaps/mango3s.png

@@ -283,7 +283,18 @@ func (a *App) CollectionDetails(connID, db, coll string) (manage.CollectionDetai
 		if err != nil {
 			return manage.CollectionDetails{}, err
 		}
-		return manage.Details(ctx, s.Client.Database(db), coll)
+		d, err := manage.Details(ctx, s.Client.Database(db), coll)
+		if err != nil {
+			return d, err
+		}
+		if s.Topology == "sharded" {
+			if sh, err := manage.CollectionShardingInfo(ctx, s.Client, db, coll); err == nil {
+				d.Sharding = sh
+			} else {
+				a.log.Debug("sharding info unavailable", "err", err)
+			}
+		}
+		return d, nil
 	})
 }
 
@@ -294,7 +305,18 @@ func (a *App) DatabaseDetails(connID, db string) (manage.DatabaseDetails, error)
 		if err != nil {
 			return manage.DatabaseDetails{}, err
 		}
-		return manage.DBDetails(ctx, s.Client.Database(db))
+		d, err := manage.DBDetails(ctx, s.Client.Database(db))
+		if err != nil {
+			return d, err
+		}
+		if s.Topology == "sharded" {
+			if sh, err := manage.DatabaseShardingInfo(ctx, s.Client, db); err == nil {
+				d.Sharding = sh
+			} else {
+				a.log.Debug("sharding info unavailable", "err", err)
+			}
+		}
+		return d, nil
 	})
 }
 

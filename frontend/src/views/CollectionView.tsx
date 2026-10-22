@@ -12,6 +12,7 @@ import { ImportWizard } from '../components/ImportWizard'
 import { QueryBuilder } from '../components/QueryBuilder'
 import type { FieldApi } from '../components/DocViews'
 import { ResultsView, type ViewMode } from '../components/ResultsView'
+import { ChartPanel } from '../components/ChartPanel'
 import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
 import { formatBytes, formatCount } from '../lib/format'
@@ -54,7 +55,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
     | null
   >(null)
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
-  const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'tree')
+  const [view, setView] = useState<ViewMode>(tab.init?.chart ? 'chart' : (settings?.defaultView ?? 'tree'))
   const [cellDirty, setCellDirty] = useState<string | null>(null)
   const filterEditor = useRef<EditorView | null>(null)
   const queryEditor = useRef<EditorView | null>(null)
@@ -524,6 +525,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
         onDismissError={() => setError(null)}
         view={view}
         onViewChange={setView}
+        chart={<ChartPanel connId={connId} db={db} coll={coll} filter={lastReq.current?.filter ?? filter} fields={fields} initial={tab.init?.chart} />}
         onPage={goto}
         pageSize={pageSize}
         onPageSize={(n) => {

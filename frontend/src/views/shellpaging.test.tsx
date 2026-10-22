@@ -11,7 +11,7 @@ const backend = vi.hoisted(() => ({
   sampleFields: vi.fn(async () => []),
 }))
 const app = vi.hoisted(() => ({ sessions: [], profiles: [], prompt: vi.fn(), toast: vi.fn(), toastError: vi.fn(), setTabDirty: vi.fn() }))
-vi.mock('../lib/backend', () => ({ backend }))
+vi.mock('../lib/backend', () => ({ backend, onMongoshLine: () => () => undefined }))
 vi.mock('../state/AppContext', () => ({ useApp: () => app, useTabDirty: () => undefined }))
 
 import { ShellView } from './ShellView'

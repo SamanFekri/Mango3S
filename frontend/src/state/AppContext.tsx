@@ -86,6 +86,8 @@ interface AppState {
   reorderProfiles: (ids: string[]) => Promise<void>
   sessions: SessionInfo[]
   connect: (profileId: string) => Promise<SessionInfo | null>
+  /** Opens a connection to one shard of a sharded cluster (same credentials, not saved). */
+  connectToShard: (connId: string, shardId: string) => Promise<SessionInfo | null>
   disconnect: (connId: string) => Promise<void>
   connecting: Set<string>
 
@@ -426,6 +428,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast, toastError],
   )
 
+  const connectToShard = useCallback(
+    async (connId: string, shardId: string) => {
+      try {
+        const info = await backend.connectToShard(connId, shardId)
+        setSessions((ss) => [...ss.filter((s) => s.id !== info.id), info].sort((a, b) => a.name.localeCompare(b.name)))
+        dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: info.id, connName: info.name } })
+        toast({ kind: 'success', title: `Connected to ${info.name}`, message: `MongoDB ${info.serverVersion} · ${info.topology}` })
+        return info
+      } catch (err) {
+        toastError(err, `Could not connect to shard ${shardId}`)
+        return null
+      }
+    },
+    [toast, toastError],
+  )
+
   const confirm = useCallback(
     (o: ConfirmOptions) => new Promise<boolean>((resolve) => setConfirmRequest({ ...o, resolve })),
     [],
@@ -522,6 +540,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reorderProfiles,
       sessions,
       connect,
+      connectToShard,
       disconnect,
       connecting,
       tabs,
@@ -566,7 +585,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setAccountState,
     }),
     [
-      settings, saveSettings, appInfo, profiles, reloadProfiles, reorderProfiles, sessions, connect, disconnect, connecting,
+      settings, saveSettings, appInfo, profiles, reloadProfiles, reorderProfiles, sessions, connect, connectToShard, disconnect, connecting,
       tabs, toast, toastError, toasts, dismissToast, confirm, confirmRequest, resolveConfirm, connectionManagerOpen,
       openConnectionManager, connectionManagerSelect, dirtyTabs, setTabDirty, closeTab, closeOtherTabs, shortcutsOpen, aboutOpen,
       connectionLog, closeConnectionLog, testConnection,

@@ -87,6 +87,11 @@ type Settings struct {
 	// never pushed, and pulls leave them alone.
 	SyncExclude []string `json:"syncExclude,omitempty"`
 
+	// SchemaValidation shows "Create validation rules…" in the Schema tab,
+	// which turns the analyzed schema into a $jsonSchema validator. Off by
+	// default; Settings › General turns it on.
+	SchemaValidation bool `json:"schemaValidation"`
+
 	// ShowMascot shows Mango, the animated mascot, at the bottom of the explorer.
 	ShowMascot bool `json:"showMascot"`
 

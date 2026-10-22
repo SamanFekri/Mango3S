@@ -101,28 +101,28 @@ func connArgs(p config.Profile, c mongox.Credentials) (*ToolArgs, error) {
 		return nil, err
 	}
 	p = p.Normalize()
-	u, err := url.Parse(p.URI)
-	if err != nil || (u.Scheme != "mongodb" && u.Scheme != "mongodb+srv") {
+	// Not net/url: it rejects several hosts, as in every replica set string.
+	u, err := config.ParseConnString(p.URI)
+	if err != nil {
 		return nil, errors.New("the connection string is not valid")
 	}
 	t := &ToolArgs{}
 	cfg := map[string]string{}
-	if u.User != nil {
+	if u.HasPass {
 		// Credentials embedded in the connection string stay in the config file.
-		if pw, ok := u.User.Password(); ok {
-			t.secrets = append(t.secrets, pw, url.QueryEscape(pw), url.PathEscape(pw))
-		}
+		pw, _ := url.PathUnescape(u.Password)
+		t.secrets = append(t.secrets, pw, u.Password, url.QueryEscape(pw), url.PathEscape(pw))
 	}
 	if p.Username != "" {
 		// The form's user wins over one in the URI, like BuildClientOptions.
-		u.User = nil
+		u.User, u.Password, u.HasPass = "", "", false
 		t.Args = append(t.Args, "--username="+p.Username)
 		if c.Password != "" {
 			cfg["password"] = c.Password
 			t.secrets = append(t.secrets, c.Password)
 		}
 	}
-	q := u.Query()
+	q := u.Query
 	if p.AuthSource != "" {
 		q.Del("authSource")
 		t.Args = append(t.Args, "--authenticationDatabase="+p.AuthSource)
@@ -153,7 +153,7 @@ func connArgs(p config.Profile, c mongox.Credentials) (*ToolArgs, error) {
 	if p.Advanced.ReadPreference != "" {
 		q.Set("readPreference", p.Advanced.ReadPreference)
 	}
-	u.RawQuery = q.Encode()
+	u.Query = q
 	cfg["uri"] = u.String()
 	f, err := os.CreateTemp("", "mango3s-tool-*.yaml")
 	if err != nil {

@@ -98,3 +98,34 @@ func TestOpenRespectsEnv(t *testing.T) {
 		t.Fatalf("%v %v", s, err)
 	}
 }
+
+// TestOSKeyringRoundTrip uses the real OS credential store: the macOS
+// Keychain, Windows Credential Manager or the Linux Secret Service. It runs
+// only when asked (MANGO3S_KEYRING_TEST=1), as CI does on each platform.
+func TestOSKeyringRoundTrip(t *testing.T) {
+	if os.Getenv("MANGO3S_KEYRING_TEST") != "1" {
+		t.Skip("set MANGO3S_KEYRING_TEST=1 to use the OS credential store")
+	}
+	t.Setenv(EnvBackend, "")
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Backend() != "keyring" {
+		t.Fatalf("the OS credential store was not usable; got the %q backend", s.Backend())
+	}
+	id := "test:" + t.Name()
+	t.Cleanup(func() { _ = s.Delete(id) })
+	if err := s.Set(id, "pässwörd with ünicode & symbols !@#"); err != nil {
+		t.Fatal(err)
+	}
+	if v, err := s.Get(id); err != nil || v != "pässwörd with ünicode & symbols !@#" {
+		t.Fatalf("got %q, %v", v, err)
+	}
+	if err := s.Delete(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Get(id); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("after delete: %v", err)
+	}
+}

@@ -52,6 +52,10 @@ type Namespace struct {
 	Indexes int    `json:"indexes"`
 	Gzip    bool   `json:"gzip"`
 	Error   string `json:"error,omitempty"`
+	// ShardKey is the collection's shard key (mongosh syntax) when it was
+	// backed up from a sharded cluster; a restore can shard it again.
+	ShardKey    string `json:"shardKey,omitempty"`
+	ShardUnique bool   `json:"shardUnique,omitempty"`
 }
 
 // Manifest is the Mango3S summary of a backup folder.

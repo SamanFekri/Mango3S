@@ -37,6 +37,8 @@ export interface Settings {
   syncExclude?: string[]
   /** Show Mango, the animated mascot, in the explorer. */
   showMascot: boolean
+  /** Schema tab › "Create validation rules…" (off by default). */
+  schemaValidation?: boolean
 }
 
 export type UpdateState =
@@ -812,15 +814,17 @@ export interface ExplainPlan {
 }
 
 export interface ExplainRequest {
-  kind: 'find' | 'aggregate'
+  /** "command": a find/aggregate/count/distinct command in mongosh syntax (e.g. from the index advisor). */
+  kind: 'find' | 'aggregate' | 'command'
   query?: QueryRequest
   connId?: string
   db?: string
   coll?: string
   stages?: Stage[]
+  command?: string
 }
 
-export type ItemKind = 'query' | 'aggregation' | 'script' | 'sql'
+export type ItemKind = 'query' | 'aggregation' | 'script' | 'sql' | 'chart'
 
 export interface QueryPayload {
   filter: string
@@ -840,8 +844,28 @@ export interface SavedItem {
   query?: QueryPayload
   stages?: Stage[]
   text?: string
+  /** A saved chart (its filter is in query). */
+  chart?: ChartSpec
   createdAt: string
   updatedAt: string
+}
+
+/** Collection › Chart view (internal/charts). */
+export interface ChartSpec {
+  kind: 'bar' | 'line' | 'area' | 'pie' | 'scatter' | 'timeseries'
+  x: string
+  y: string
+  agg: 'count' | 'sum' | 'avg' | 'min' | 'max'
+  dateUnit: '' | 'day' | 'week' | 'month' | 'year'
+  series: string
+  limit: number
+}
+
+export interface ChartData {
+  xKind: 'time' | 'number' | 'category'
+  points: { x: number | string; y: number; series?: string }[]
+  truncated: boolean
+  pipeline: string
 }
 
 export interface HistoryEntry {
@@ -1405,6 +1429,8 @@ export interface BuiltinRestoreOptions {
   skipOptions: boolean
   stopOnError: boolean
   bypassValidate: boolean
+  /** Shard collections again with the shard key in the manifest (sharded clusters). */
+  shardCollections?: boolean
 }
 
 export interface ToolRestoreOptions {
@@ -1442,6 +1468,9 @@ export interface BackupNamespace {
   gzip: boolean
   error?: string
   expected?: number
+  /** Shard key (mongosh syntax) when backed up from a sharded cluster. */
+  shardKey?: string
+  shardUnique?: boolean
 }
 
 export interface BackupManifest {
@@ -1586,6 +1615,31 @@ export interface CollectionDetails {
   capped: boolean
   sharded: boolean
   shell: string
+  /** Sharded clusters only. */
+  sharding?: CollectionSharding
+}
+
+export interface CollectionSharding {
+  key: string
+  unique: boolean
+  balancing: boolean
+  chunks: number
+  jumbo: number
+  byShard: { shard: string; chunks: number; jumbo: number }[]
+}
+
+export interface ShardInfo {
+  id: string
+  host: string
+  state: number
+  draining: boolean
+}
+
+export interface DatabaseSharding {
+  primary: string
+  shardedCollections: string[]
+  shards: ShardInfo[]
+  balancer: { mode: string; inBalancerRound: boolean; numBalancerRounds: number; problem?: string }
 }
 
 export interface DatabaseDetails {
@@ -1599,6 +1653,8 @@ export interface DatabaseDetails {
   avgObjSize: number
   fsUsedSize: number
   fsTotalSize: number
+  /** Sharded clusters only. */
+  sharding?: DatabaseSharding
 }
 
 export interface CopyOptions {
@@ -1611,6 +1667,8 @@ export interface CopyOptions {
   skipIndexes: boolean
   skipOptions: boolean
   views: boolean
+  /** Shard each copied collection on the target with its source shard key. */
+  shardCollections?: boolean
 }
 
 // ---- profiler & SQL export ------------------------------------------------------
@@ -1695,4 +1753,179 @@ export interface IndexAdvice {
   unused: IndexFinding[]
   redundant: IndexFinding[]
   notes: string[]
+}
+
+// ---- Server monitor (internal/monitor) ----
+
+export interface MonitorSample {
+  time: string
+  insert: number
+  query: number
+  update: number
+  delete: number
+  getmore: number
+  command: number
+  netIn: number
+  netOut: number
+  requests: number
+  connections: number
+  connectionsAvailable: number
+  queueReaders: number
+  queueWriters: number
+  activeReaders: number
+  activeWriters: number
+  cacheBytes: number
+  cacheMax: number
+  cacheDirty: number
+  residentMb: number
+  first: boolean
+}
+
+export interface MonitorSnapshot {
+  intervalSeconds: number
+  samples: MonitorSample[]
+  error?: string
+}
+
+export interface ReplicaMember {
+  name: string
+  state: string
+  health: boolean
+  self: boolean
+  optime?: string
+  lagSeconds?: number
+  pingMs?: number
+  uptime: number
+  syncSource?: string
+}
+
+export interface ServerOverview {
+  host: string
+  version: string
+  process: string
+  uptime: number
+  storageEngine: string
+  replication?: { set: string; members: ReplicaMember[] | null; oplogHours?: number; oplogSizeMb?: number; problem?: string }
+}
+
+export interface RunningOp {
+  opid: string
+  op: string
+  ns: string
+  seconds: number
+  client: string
+  appName: string
+  user: string
+  desc: string
+  command: string
+  planSummary: string
+  waitingForLock: boolean
+  active: boolean
+  shard?: string
+}
+
+export interface OpsFilter {
+  minSeconds: number
+  ns: string
+  client: string
+  all: boolean
+}
+
+// ---- GridFS (internal/gridfs) ----
+
+export interface GridFSBucket {
+  name: string
+  files: number
+  chunkBytes: number
+}
+
+export interface GridFSFile {
+  /** The _id in mongosh syntax. */
+  id: string
+  filename: string
+  length: number
+  chunkSize: number
+  uploadDate: string
+  contentType: string
+  metadata?: string
+}
+
+export interface GridFSPage {
+  files: GridFSFile[]
+  total: number
+  page: number
+}
+
+export interface GridFSListRequest {
+  connId: string
+  db: string
+  bucket: string
+  name: string
+  sort: 'uploadDate' | 'filename' | 'length'
+  page: number
+  pageSize: number
+}
+
+export interface GridFSPreview {
+  kind: 'image' | 'text' | 'none'
+  contentType: string
+  dataUrl?: string
+  text?: string
+  truncated: boolean
+  reason?: string
+}
+
+// ---- Shell › mongosh mode ----
+
+export interface MongoshAvailability {
+  available: boolean
+  path?: string
+  /** Why mongosh can't be used, and how to fix it. */
+  problem?: string
+}
+
+export interface MongoshResult {
+  exitCode: number
+  durationMs: number
+}
+
+// ---- Change streams (internal/streams) ----
+
+export interface ChangeEvent {
+  op: string
+  ns: string
+  key: string
+  time: string
+  updated?: string[]
+  removed?: string[]
+  document?: string
+  raw: string
+  /** Order in the viewer (set by the UI). */
+  seq?: number
+}
+
+export interface ChangeStreamRequest {
+  connId: string
+  db: string
+  coll: string
+  match: string
+  fullDocument: boolean
+  resumeToken: string
+}
+
+// ---- Test data generator (internal/datagen) ----
+
+export interface TestDataRequest {
+  connId: string
+  db: string
+  coll: string
+  template: string
+  seed: number
+  count: number
+}
+
+export interface TestDataPreview {
+  documents: { id: string; text: string; json: string }[]
+  existing: number
+  generators: { name: string; help: string; example: string }[]
 }

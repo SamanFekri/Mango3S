@@ -569,18 +569,18 @@ func BeforeClose(a *App) func(ctx context.Context) bool {
 // and macOS treats filters as a strict allow-list. An empty result means canceled.
 func (a *App) ChooseFile(kind, title string) (string, error) {
 	if kind == "folder" {
-		p, err := wruntime.OpenDirectoryDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
+		p, err := a.openDirectoryDialog(wruntime.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
 		return p, a.encode("ChooseFile", err)
 	}
 	// Hidden files are shown so ~/.ssh and dotfiles can be browsed.
-	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
+	p, err := a.openFileDialog(kind, wruntime.OpenDialogOptions{Title: title, ShowHiddenFiles: true})
 	return p, a.encode("ChooseFile", err)
 }
 
 // ExportTextFile asks where to save content (e.g. an exported keymap) and
 // writes it. An empty path means the user canceled.
 func (a *App) ExportTextFile(title, defaultName, content string) (string, error) {
-	path, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: title, DefaultFilename: defaultName})
+	path, err := a.saveFileDialog(wruntime.SaveDialogOptions{Title: title, DefaultFilename: defaultName})
 	if err != nil || path == "" {
 		return "", a.encode("ExportTextFile", err)
 	}
@@ -593,7 +593,7 @@ func (a *App) ExportTextFile(title, defaultName, content string) (string, error)
 // ImportTextFile asks for a file and returns its content (at most 1 MB).
 // An empty result means the user canceled.
 func (a *App) ImportTextFile(title string) (string, error) {
-	path, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: title})
+	path, err := a.openFileDialog("file", wruntime.OpenDialogOptions{Title: title})
 	if err != nil || path == "" {
 		return "", a.encode("ImportTextFile", err)
 	}

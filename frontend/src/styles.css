@@ -3777,3 +3777,275 @@ tr.clickable {
   max-height: 360px;
   overflow: auto;
 }
+
+/* ---------- Explain: plan tree and comparison ---------- */
+.plan-graph-scroll {
+  overflow: auto;
+  max-height: 460px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.plan-graph svg {
+  display: block;
+}
+.plan-edge {
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.plan-node {
+  cursor: pointer;
+}
+.plan-node rect {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.plan-node.tone-bad rect {
+  fill: var(--danger-soft);
+  stroke: var(--danger);
+}
+.plan-node.tone-warn rect {
+  stroke: var(--accent);
+}
+.plan-node.tone-good rect {
+  fill: var(--success-soft);
+  stroke: var(--success);
+}
+.plan-node.selected rect {
+  stroke-width: 3;
+}
+.plan-node-name {
+  font: 600 12px var(--font-mono);
+  fill: var(--text);
+}
+.plan-node-stat {
+  font: 11px var(--font-ui);
+  fill: var(--text-muted);
+}
+.plan-graph-details {
+  margin-top: 8px;
+}
+.plan-compare-table td:first-child {
+  color: var(--text-muted);
+}
+.change-better {
+  color: var(--success);
+}
+.change-worse {
+  color: var(--danger);
+}
+.plan-compare-trees {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.plan-compare-trees > div {
+  min-width: 0;
+}
+
+/* ---------- Charts ---------- */
+.chart {
+  margin: 0;
+  min-width: 0;
+  position: relative;
+}
+.chart-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.chart svg {
+  display: block;
+  overflow: visible;
+}
+.chart-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.chart-axis {
+  font: 10px var(--font-ui);
+  fill: var(--text-faint);
+}
+.chart-hover {
+  stroke: var(--text-faint);
+  stroke-dasharray: 3 3;
+}
+.chart-readout,
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 2px;
+}
+.chart-legend.vertical {
+  flex-direction: column;
+}
+.chart-readout i,
+.chart-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+.chart-pie {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+/* ---------- Server monitor ---------- */
+.monitor-view {
+  overflow: auto;
+}
+.monitor-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 18px 24px;
+  padding: 12px 14px;
+}
+.monitor-section {
+  padding: 4px 14px 12px;
+}
+.monitor-section h3 {
+  font-size: 13px;
+  margin: 10px 0 8px;
+}
+.monitor-ops tr {
+  cursor: pointer;
+}
+
+/* ---------- GridFS browser ---------- */
+.gridfs-body {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 12px 12px;
+}
+.gridfs-body > .table-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.gridfs-body tr {
+  cursor: pointer;
+}
+.gridfs-preview {
+  width: 340px;
+  flex: none;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+.gridfs-preview h3 {
+  font-size: 13px;
+  word-break: break-all;
+}
+.gridfs-image {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.gridfs-text {
+  max-height: 420px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.pager {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.note {
+  border: 1px solid var(--border);
+  background: var(--info-soft);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  margin-bottom: 10px;
+}
+.note p {
+  margin: 0 0 6px;
+}
+
+/* ---------- Shell › mongosh mode ---------- */
+.shell-engine-note {
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.mongosh-out {
+  white-space: pre-wrap;
+  max-height: 520px;
+  overflow: auto;
+}
+.shell-error-line {
+  color: var(--danger);
+}
+
+/* ---------- Collection › Chart view ---------- */
+.chart-panel {
+  padding: 10px 12px;
+}
+.chart-controls {
+  flex-wrap: wrap;
+}
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+/* ---------- Change stream viewer ---------- */
+.changes-options {
+  padding: 0 12px;
+  align-items: flex-end;
+}
+.changes-options .field {
+  flex: 1;
+  max-width: 640px;
+}
+.changes-table tr {
+  cursor: pointer;
+}
+.op-badge {
+  font: 600 11px var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.op-insert {
+  color: var(--success);
+}
+.op-update,
+.op-replace {
+  color: var(--accent);
+}
+.op-delete,
+.op-drop,
+.op-invalidate {
+  color: var(--danger);
+}
+.changes-raw {
+  margin: 8px 12px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+/* ---------- Test data generator ---------- */
+.testdata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.testdata textarea {
+  width: 100%;
+}
+.testdata-preview {
+  max-height: 520px;
+  overflow: auto;
+}

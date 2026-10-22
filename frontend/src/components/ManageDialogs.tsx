@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { backend, newOpId } from '../lib/backend'
 import { formatBytes, formatCount } from '../lib/format'
 import { toAppError, type AppError } from '../lib/errors'
-import type { CollectionDetails, CreateCollectionOptions, DatabaseDetails, IndexDetail, IndexOptions, RestoreMode, SessionInfo, Validation, ValidationReport } from '../lib/types'
+import type { CollectionDetails, CollectionSharding, CreateCollectionOptions, DatabaseDetails, ShardInfo, IndexDetail, IndexOptions, RestoreMode, SessionInfo, Validation, ValidationReport } from '../lib/types'
 import { useApp } from '../state/AppContext'
 import { ErrorBanner, Modal, Segmented, Spinner } from './common'
 import { ConfirmInput, JobStatus } from './p2common'
@@ -303,6 +303,7 @@ function Overview({ d }: { d: CollectionDetails }) {
           ))}
         </tbody>
       </table>
+      {d.sharding && <CollectionShardingView sh={d.sharding} />}
       <h4>Options</h4>
       <pre className="job-log">{d.options || '{}'}</pre>
       <h4>Recreate with</h4>
@@ -788,10 +789,12 @@ export function CopyDialog({ conn, db, coll, onClose }: { conn: SessionInfo; db:
   const [skipIndexes, setSkipIndexes] = useState(false)
   const [skipOptions, setSkipOptions] = useState(false)
   const [views, setViews] = useState(true)
+  const [shardColls, setShardColls] = useState(false)
   const [confirm, setConfirm] = useState('')
   const [jobId, setJobId] = useState<string | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const target = sessions.find((s) => s.id === dst)
+  const canShard = conn.topology === 'sharded' && target?.topology === 'sharded'
   const run = async () => {
     setError(null)
     try {
@@ -799,7 +802,7 @@ export function CopyDialog({ conn, db, coll, onClose }: { conn: SessionInfo; db:
         {
           srcConn: conn.id,
           dstConn: dst,
-          options: { srcDb: db, collections: coll ? [coll] : [], dstDb: dstDb.trim(), dstColl: coll ? dstColl.trim() : '', mode, filter: filter.trim(), skipIndexes, skipOptions, views },
+          options: { srcDb: db, collections: coll ? [coll] : [], dstDb: dstDb.trim(), dstColl: coll ? dstColl.trim() : '', mode, filter: filter.trim(), skipIndexes, skipOptions, views, shardCollections: canShard && shardColls },
         },
         confirm,
       )
@@ -875,6 +878,11 @@ export function CopyDialog({ conn, db, coll, onClose }: { conn: SessionInfo; db:
         <label className="check">
           <input type="checkbox" checked={!skipOptions} onChange={(e) => setSkipOptions(!e.target.checked)} /> Copy options and validation
         </label>
+        {canShard && (
+          <label className="check">
+            <input type="checkbox" checked={shardColls} onChange={(e) => setShardColls(e.target.checked)} /> Shard copied collections with their source shard key
+          </label>
+        )}
         {!coll && (
           <label className="check">
             <input type="checkbox" checked={views} onChange={(e) => setViews(e.target.checked)} /> Copy views
@@ -926,6 +934,124 @@ export function DatabaseInfoDialog({ conn, db, onClose }: { conn: SessionInfo; d
           </tbody>
         </table>
       )}
+      {d?.sharding && (
+        <>
+          <h4>Sharding</h4>
+          <table className="grid compact">
+            <tbody>
+              <tr>
+                <th>Primary shard</th>
+                <td className="mono">{d.sharding.primary || '—'}</td>
+              </tr>
+              <tr>
+                <th>Sharded collections</th>
+                <td className="mono">{d.sharding.shardedCollections.join(', ') || 'none'}</td>
+              </tr>
+              <tr>
+                <th>Balancer</th>
+                <td>
+                  {d.sharding.balancer.problem
+                    ? d.sharding.balancer.problem
+                    : `${d.sharding.balancer.mode === 'off' ? 'off' : 'on'}${d.sharding.balancer.inBalancerRound ? ', balancing now' : ''} · ${formatCount(d.sharding.balancer.numBalancerRounds)} rounds`}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <ShardList connId={conn.id} shards={d.sharding.shards} />
+        </>
+      )}
     </Modal>
+  )
+}
+
+function CollectionShardingView({ sh }: { sh: CollectionSharding }) {
+  return (
+    <>
+      <h4>Sharding</h4>
+      <table className="grid compact">
+        <tbody>
+          <tr>
+            <th>Shard key</th>
+            <td className="mono">
+              {sh.key}
+              {sh.unique && ' (unique)'}
+            </td>
+          </tr>
+          <tr>
+            <th>Chunks</th>
+            <td>
+              {formatCount(sh.chunks)}
+              {sh.jumbo > 0 && <span className="warning-text"> · {formatCount(sh.jumbo)} jumbo (too big to move)</span>}
+            </td>
+          </tr>
+          <tr>
+            <th>Balancing</th>
+            <td>{sh.balancing ? 'on' : 'off for this collection'}</td>
+          </tr>
+        </tbody>
+      </table>
+      {sh.byShard.length > 0 && (
+        <table className="grid compact" aria-label="Chunks per shard">
+          <thead>
+            <tr>
+              <th>Shard</th>
+              <th>Chunks</th>
+              <th>Jumbo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sh.byShard.map((r) => (
+              <tr key={r.shard}>
+                <td className="mono">{r.shard}</td>
+                <td>{formatCount(r.chunks)}</td>
+                <td className={r.jumbo ? 'warning-text' : ''}>{formatCount(r.jumbo)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  )
+}
+
+/** The cluster's shards, each with a button that connects straight to it. */
+export function ShardList({ connId, shards }: { connId: string; shards: ShardInfo[] }) {
+  const { connectToShard } = useApp()
+  const [busy, setBusy] = useState<string | null>(null)
+  return (
+    <table className="grid compact" aria-label="Shards">
+      <thead>
+        <tr>
+          <th>Shard</th>
+          <th>Hosts</th>
+          <th />
+        </tr>
+      </thead>
+      <tbody>
+        {shards.map((sh) => (
+          <tr key={sh.id}>
+            <td className="mono">
+              {sh.id}
+              {sh.draining && <span className="warning-text small"> draining</span>}
+            </td>
+            <td className="mono small">{sh.host}</td>
+            <td>
+              <button
+                className="small"
+                disabled={busy !== null}
+                onClick={async () => {
+                  setBusy(sh.id)
+                  await connectToShard(connId, sh.id)
+                  setBusy(null)
+                }}
+                aria-label={`Connect to shard ${sh.id}`}
+              >
+                {busy === sh.id ? <Spinner small /> : 'Connect'}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   )
 }

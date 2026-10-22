@@ -6,6 +6,7 @@ export const KIND_LABELS: Record<ItemKind, string> = {
   aggregation: 'Pipeline',
   script: 'Shell script',
   sql: 'SQL',
+  chart: 'Chart',
 }
 
 /** Kinds that need a collection to open. */
@@ -31,6 +32,9 @@ export function openAction(item: SavedItem | HistoryEntry, session: SessionInfo,
       return { type: 'open', tab: { ...base, kind: 'shell', init: { ...init, text: item.text } } }
     case 'sql':
       return { type: 'open', tab: { ...base, kind: 'sql', init: { ...init, text: item.text } } }
+    case 'chart':
+      if (!item.coll) return 'This chart has no collection.'
+      return { type: 'open', tab: { ...base, kind: 'collection', coll: item.coll, init: { ...init, query: item.query, chart: 'chart' in item ? item.chart : undefined } } }
   }
 }
 

@@ -9,6 +9,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"mango3s/internal/manage"
+	"mango3s/internal/mql"
 )
 
 // CopyOptions copies collections between databases, on the same or another
@@ -23,6 +26,9 @@ type CopyOptions struct {
 	SkipIndexes bool     `json:"skipIndexes"`
 	SkipOptions bool     `json:"skipOptions"`
 	Views       bool     `json:"views"`
+	// ShardCollections shards each copied collection on the target cluster
+	// with its source shard key (both must be sharded clusters).
+	ShardCollections bool `json:"shardCollections"`
 }
 
 // CopyReport lists the per-collection outcome.
@@ -150,6 +156,17 @@ func copyOne(ctx context.Context, src, dst *mongo.Client, o CopyOptions, filter 
 	}
 	if isView {
 		return nil
+	}
+	if o.ShardCollections {
+		key, unique, _, _, err := manage.ShardKeyOf(ctx, src, ns.DB, ns.Coll)
+		if err != nil {
+			return fmt.Errorf("read the source shard key: %w", err)
+		}
+		if key != nil {
+			if err := shardTarget(ctx, dst, o.DstDB, to, mql.Compact(key), unique, log); err != nil {
+				return err
+			}
+		}
 	}
 	var specs []bson.D
 	if !o.SkipIndexes {

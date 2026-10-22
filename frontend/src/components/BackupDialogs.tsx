@@ -1,3 +1,4 @@
+import { useApp } from '../state/AppContext'
 import { useEffect, useMemo, useState } from 'react'
 import { backend } from '../lib/backend'
 import { formatBytes, formatCount } from '../lib/format'
@@ -251,6 +252,7 @@ export function BackupDialog({ conn, db, coll, onClose }: { conn: SessionInfo; d
 /** Restore a backup folder (built-in or mongodump) or a mongodump archive. */
 export function RestoreDialog({ conn, db, onClose }: { conn: SessionInfo; db?: string; onClose: () => void }) {
   const { tools, canRestore } = useBackupTools(conn.id)
+  const { confirm: confirmDialog } = useApp()
   const [engine, setEngine] = useState<BackupEngine>('builtin')
   const [dir, setDir] = useState('')
   const [inspection, setInspection] = useState<BackupInspection | null>(null)
@@ -261,6 +263,7 @@ export function RestoreDialog({ conn, db, onClose }: { conn: SessionInfo; db?: s
   const [skipOptions, setSkipOptions] = useState(false)
   const [stopOnError, setStopOnError] = useState(false)
   const [bypass, setBypass] = useState(false)
+  const [shardColls, setShardColls] = useState(false)
   const [archive, setArchive] = useState('')
   const [gzip, setGzip] = useState(true)
   const [nsInclude, setNsInclude] = useState(db ? `${db}.*` : '')
@@ -299,8 +302,35 @@ export function RestoreDialog({ conn, db, onClose }: { conn: SessionInfo; db?: s
   const srcDbs = useMemo(() => [...new Set(inspection?.entries.map((e) => e.db) ?? [])], [inspection])
   const drop = engine === 'builtin' ? mode === 'drop' : !dryRun && mode === 'drop'
 
+  const sharded = (inspection?.entries ?? []).filter((e) => e.shardKey && picked.has(`${e.db}.${e.coll}`))
+  const canShard = engine === 'builtin' && conn.topology === 'sharded' && sharded.length > 0
+
   const start = async () => {
     setError(null)
+    if (canShard && shardColls) {
+      const ok = await confirmDialog({
+        title: 'Shard the restored collections',
+        message: (
+          <>
+            <p>Before loading their data, these collections will be sharded on {conn.name} with the key they had when they were backed up:</p>
+            <ul className="small">
+              {sharded.map((e) => (
+                <li key={`${e.db}.${e.coll}`}>
+                  <code>
+                    {e.db}.{e.coll}
+                  </code>{' '}
+                  on <code>{e.shardKey}</code>
+                  {e.shardUnique && ' (unique)'}
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">Sharding a collection can't be undone without dropping it. The target databases must allow sharding.</p>
+          </>
+        ),
+        confirmLabel: 'Shard and restore',
+      })
+      if (!ok) return
+    }
     try {
       const include = inspection?.entries.filter((e) => picked.has(`${e.db}.${e.coll}`)).map((e) => `${e.db}.${e.coll}`) ?? []
       const renames = srcDbs.filter((d) => targets[d] && targets[d] !== d).map((d) => ({ from: `${d}.*`, to: `${targets[d].trim()}.*` }))
@@ -317,6 +347,7 @@ export function RestoreDialog({ conn, db, onClose }: { conn: SessionInfo; db?: s
             skipOptions,
             stopOnError,
             bypassValidate: bypass,
+            shardCollections: canShard && shardColls,
           },
           tool: {
             archive,
@@ -535,6 +566,12 @@ export function RestoreDialog({ conn, db, onClose }: { conn: SessionInfo; db?: s
           <label className="check">
             <input type="checkbox" checked={stopOnError} onChange={(e) => setStopOnError(e.target.checked)} /> Stop at the first error
           </label>
+          {canShard && (
+            <label className="check">
+              <input type="checkbox" checked={shardColls} onChange={(e) => setShardColls(e.target.checked)} /> Shard collections again with their saved shard
+              keys ({sharded.length})
+            </label>
+          )}
         </div>
       </fieldset>
       {drop && !jobId && <ConfirmInput text={conn.name} value={confirm} onChange={setConfirm} action="Drop the target collections" />}

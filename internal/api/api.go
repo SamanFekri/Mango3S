@@ -22,27 +22,32 @@ import (
 	"mango3s/internal/aggregate"
 	"mango3s/internal/ai"
 	"mango3s/internal/apperr"
+	"mango3s/internal/charts"
 	"mango3s/internal/config"
 	"mango3s/internal/documents"
 	"mango3s/internal/explain"
 	"mango3s/internal/explorer"
+	"mango3s/internal/gridfs"
 	"mango3s/internal/jobs"
+	"mango3s/internal/jsengine"
 	"mango3s/internal/library"
 	"mango3s/internal/logging"
 	"mango3s/internal/model"
 	"mango3s/internal/mongox"
+	"mango3s/internal/monitor"
 	"mango3s/internal/mql"
 	"mango3s/internal/query"
 	"mango3s/internal/recent"
 	"mango3s/internal/schema"
 	"mango3s/internal/secrets"
 	"mango3s/internal/shell"
+	"mango3s/internal/streams"
 	"mango3s/internal/transfer"
 	"mango3s/internal/transform"
 )
 
 // Version is set at build time with -ldflags "-X mango3s/internal/api.Version=...".
-var Version = "0.9.1-dev"
+var Version = "0.9.3-dev"
 
 // Deps are the collaborators of App.
 type Deps struct {
@@ -81,6 +86,7 @@ type App struct {
 	recent      *recent.Store
 	unsavedWork atomic.Bool          // set by the UI; the window asks before quitting
 	emitStep    func(ConnectionStep) // connection log events (nil until the UI starts)
+	emitMongosh func(MongoshLine)    // mongosh script output (nil until the UI starts)
 
 	update *updateState // platform check-in: auto-update + notifications (see update.go)
 
@@ -95,6 +101,13 @@ type App struct {
 	aiOverride ai.Provider
 
 	ops *opRegistry
+
+	// Phases 2–5 (docs/ROADMAP.md)
+	monitor *monitor.Service
+	gridfs  *gridfs.Service
+	js      *jsengine.Runner
+	charts  *charts.Service
+	streams *streams.Service
 }
 
 // New constructs the facade and its services.
@@ -122,6 +135,11 @@ func New(d Deps) *App {
 		update:   newUpdateState(),
 	}
 	a.transfer = transfer.New(d.Conns, a.jobs)
+	a.monitor = monitor.New(d.Conns, nil)
+	a.gridfs = gridfs.New(d.Conns)
+	a.js = jsengine.New(d.Conns, 50)
+	a.charts = charts.New(d.Conns)
+	a.streams = streams.New(d.Conns)
 	a.p2 = newP2(a)
 	a.registerTaskTypes()
 	a.registerChainTask()
@@ -150,6 +168,7 @@ func NewLifecycle(a *App) Lifecycle { return Lifecycle{app: a} }
 func (l Lifecycle) Startup(ctx context.Context) {
 	l.app.ctx = ctx
 	l.app.emitStep = func(st ConnectionStep) { runtime.EventsEmit(ctx, "conn:step", st) }
+	l.app.emitMongosh = func(line MongoshLine) { runtime.EventsEmit(ctx, "mongosh:line", line) }
 	// Push job progress to the UI; the frontend listens for "jobs:update".
 	l.app.jobs.SetEmitter(func(j jobs.Job) { runtime.EventsEmit(ctx, "jobs:update", j) })
 	if l.app.currentSettings().SchedulerEnabled {
@@ -159,12 +178,23 @@ func (l Lifecycle) Startup(ctx context.Context) {
 	}
 	l.app.startUpdateTicker(ctx)
 	l.app.startPlatformTrace()
+	l.app.streams.SetSink(streams.Sink{
+		Events: func(id string, ev []streams.Event, token string) {
+			runtime.EventsEmit(ctx, "stream:events", StreamEvents{ID: id, Events: ev, ResumeToken: token})
+		},
+		State: func(st streams.State) { runtime.EventsEmit(ctx, "stream:state", st) },
+	})
+	l.app.monitor.SetEmit(func(connID string, s monitor.Sample) {
+		runtime.EventsEmit(ctx, "monitor:sample", MonitorEvent{ConnID: connID, Sample: s})
+	})
 	l.app.log.Info("Mango3S started", "version", Version)
 }
 
 // Shutdown cancels running operations and closes all connections.
 func (l Lifecycle) Shutdown(ctx context.Context) {
 	l.app.ops.cancelAll()
+	l.app.monitor.StopAll()
+	l.app.streams.StopAll()
 	l.app.p2.scheduler.Stop()
 	l.app.jobs.Shutdown(5 * time.Second)
 	c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -417,6 +447,7 @@ func (a *App) ensureConnected(ctx context.Context, profileID string) (*mongox.Se
 func (a *App) Disconnect(connID string) error {
 	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 	defer cancel()
+	a.monitor.Stop(connID)
 	return a.encode("Disconnect", a.conns.Disconnect(ctx, connID))
 }
 

@@ -102,6 +102,10 @@ export function ChooseFile(arg1, arg2) {
   return window['go']['api']['App']['ChooseFile'](arg1, arg2);
 }
 
+export function ChooseGridFSUploadFile() {
+  return window['go']['api']['App']['ChooseGridFSUploadFile']();
+}
+
 export function ChooseImportFile() {
   return window['go']['api']['App']['ChooseImportFile']();
 }
@@ -162,6 +166,10 @@ export function Connect(arg1) {
   return window['go']['api']['App']['Connect'](arg1);
 }
 
+export function ConnectToShard(arg1, arg2) {
+  return window['go']['api']['App']['ConnectToShard'](arg1, arg2);
+}
+
 export function ConnectWithLog(arg1, arg2) {
   return window['go']['api']['App']['ConnectWithLog'](arg1, arg2);
 }
@@ -200,6 +208,10 @@ export function DatabaseDetails(arg1, arg2) {
 
 export function DeleteDocuments(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['DeleteDocuments'](arg1, arg2, arg3, arg4);
+}
+
+export function DeleteGridFSFile(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['DeleteGridFSFile'](arg1, arg2, arg3, arg4);
 }
 
 export function DeleteItem(arg1) {
@@ -322,6 +334,10 @@ export function GetMCPInfo() {
   return window['go']['api']['App']['GetMCPInfo']();
 }
 
+export function GetMongoshAvailability(arg1) {
+  return window['go']['api']['App']['GetMongoshAvailability'](arg1);
+}
+
 export function GetPlatformChecks() {
   return window['go']['api']['App']['GetPlatformChecks']();
 }
@@ -340,6 +356,10 @@ export function GetPrivacyPolicy() {
 
 export function GetProfiling(arg1, arg2) {
   return window['go']['api']['App']['GetProfiling'](arg1, arg2);
+}
+
+export function GetServerOverview(arg1) {
+  return window['go']['api']['App']['GetServerOverview'](arg1);
 }
 
 export function GetSettings() {
@@ -386,6 +406,10 @@ export function IntrospectSQL(arg1) {
   return window['go']['api']['App']['IntrospectSQL'](arg1);
 }
 
+export function KillOperation(arg1, arg2, arg3) {
+  return window['go']['api']['App']['KillOperation'](arg1, arg2, arg3);
+}
+
 export function ListBackups() {
   return window['go']['api']['App']['ListBackups']();
 }
@@ -402,8 +426,20 @@ export function ListConnections() {
   return window['go']['api']['App']['ListConnections']();
 }
 
+export function ListCurrentOps(arg1, arg2) {
+  return window['go']['api']['App']['ListCurrentOps'](arg1, arg2);
+}
+
 export function ListDatabases(arg1) {
   return window['go']['api']['App']['ListDatabases'](arg1);
+}
+
+export function ListGridFSBuckets(arg1, arg2) {
+  return window['go']['api']['App']['ListGridFSBuckets'](arg1, arg2);
+}
+
+export function ListGridFSFiles(arg1) {
+  return window['go']['api']['App']['ListGridFSFiles'](arg1);
 }
 
 export function ListHistory(arg1, arg2, arg3) {
@@ -440,6 +476,10 @@ export function ListProfiles() {
 
 export function ListSaved(arg1) {
   return window['go']['api']['App']['ListSaved'](arg1);
+}
+
+export function ListShards(arg1) {
+  return window['go']['api']['App']['ListShards'](arg1);
 }
 
 export function ListTaskRuns(arg1, arg2) {
@@ -502,6 +542,10 @@ export function PreviewConnectionImport(arg1, arg2) {
   return window['go']['api']['App']['PreviewConnectionImport'](arg1, arg2);
 }
 
+export function PreviewGridFSFile(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['PreviewGridFSFile'](arg1, arg2, arg3, arg4);
+}
+
 export function PreviewImport(arg1) {
   return window['go']['api']['App']['PreviewImport'](arg1);
 }
@@ -518,6 +562,10 @@ export function PreviewSync(arg1, arg2) {
   return window['go']['api']['App']['PreviewSync'](arg1, arg2);
 }
 
+export function PreviewTestData(arg1) {
+  return window['go']['api']['App']['PreviewTestData'](arg1);
+}
+
 export function QueryToShell(arg1) {
   return window['go']['api']['App']['QueryToShell'](arg1);
 }
@@ -532,6 +580,10 @@ export function RefreshAccount() {
 
 export function RenameCollection(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
   return window['go']['api']['App']['RenameCollection'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+}
+
+export function RenameGridFSFile(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['App']['RenameGridFSFile'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function ReorderProfiles(arg1) {
@@ -564,6 +616,18 @@ export function RollbackMigration(arg1, arg2) {
 
 export function RunAggregation(arg1, arg2) {
   return window['go']['api']['App']['RunAggregation'](arg1, arg2);
+}
+
+export function RunChart(arg1, arg2) {
+  return window['go']['api']['App']['RunChart'](arg1, arg2);
+}
+
+export function RunJavaScript(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['RunJavaScript'](arg1, arg2, arg3, arg4);
+}
+
+export function RunMongosh(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['RunMongosh'](arg1, arg2, arg3, arg4);
 }
 
 export function RunPlatformCheck(arg1) {
@@ -658,6 +722,10 @@ export function StartBackup(arg1) {
   return window['go']['api']['App']['StartBackup'](arg1);
 }
 
+export function StartChangeStream(arg1, arg2) {
+  return window['go']['api']['App']['StartChangeStream'](arg1, arg2);
+}
+
 export function StartCompare(arg1) {
   return window['go']['api']['App']['StartCompare'](arg1);
 }
@@ -674,12 +742,24 @@ export function StartExport(arg1) {
   return window['go']['api']['App']['StartExport'](arg1);
 }
 
+export function StartGridFSDownload(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['App']['StartGridFSDownload'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function StartGridFSUpload(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['StartGridFSUpload'](arg1, arg2, arg3, arg4);
+}
+
 export function StartImport(arg1) {
   return window['go']['api']['App']['StartImport'](arg1);
 }
 
 export function StartMigration(arg1) {
   return window['go']['api']['App']['StartMigration'](arg1);
+}
+
+export function StartMonitor(arg1, arg2) {
+  return window['go']['api']['App']['StartMonitor'](arg1, arg2);
 }
 
 export function StartRenameDatabase(arg1, arg2, arg3, arg4) {
@@ -702,8 +782,24 @@ export function StartSync(arg1, arg2) {
   return window['go']['api']['App']['StartSync'](arg1, arg2);
 }
 
+export function StartTestData(arg1) {
+  return window['go']['api']['App']['StartTestData'](arg1);
+}
+
 export function StartTransform(arg1, arg2) {
   return window['go']['api']['App']['StartTransform'](arg1, arg2);
+}
+
+export function StopChangeStream(arg1) {
+  return window['go']['api']['App']['StopChangeStream'](arg1);
+}
+
+export function StopMonitor(arg1) {
+  return window['go']['api']['App']['StopMonitor'](arg1);
+}
+
+export function SuggestValidator(arg1, arg2) {
+  return window['go']['api']['App']['SuggestValidator'](arg1, arg2);
 }
 
 export function SyncNow() {
@@ -728,6 +824,10 @@ export function TestConnection(arg1) {
 
 export function TestConnectionWithLog(arg1, arg2) {
   return window['go']['api']['App']['TestConnectionWithLog'](arg1, arg2);
+}
+
+export function TestDataTemplateFromSchema(arg1, arg2, arg3) {
+  return window['go']['api']['App']['TestDataTemplateFromSchema'](arg1, arg2, arg3);
 }
 
 export function TestPlatformConnection(arg1) {

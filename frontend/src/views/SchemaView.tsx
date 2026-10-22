@@ -6,6 +6,7 @@ import { formatCount, formatDuration } from '../lib/format'
 import type { Tab } from '../lib/tabs'
 import type { SchemaField, SchemaReport, TypeStat } from '../lib/types'
 import { useApp } from '../state/AppContext'
+import { ValidationFromSchema } from '../components/ValidationFromSchema'
 
 const TYPE_COLORS: Record<string, string> = {
   string: 'var(--tok-str)',
@@ -80,8 +81,10 @@ function FieldRow({ f, expanded, onToggle, hasChildren }: { f: SchemaField; expa
 }
 
 export function SchemaView({ tab }: { tab: Tab }) {
-  const { toastError } = useApp()
+  const { toastError, settings, sessions } = useApp()
   const connId = tab.connId!
+  const readOnly = sessions.find((x) => x.id === connId)?.readOnly ?? false
+  const [validating, setValidating] = useState(false)
   const db = tab.db!
   const coll = tab.coll!
   const opId = `schema-${tab.id}`
@@ -197,6 +200,11 @@ export function SchemaView({ tab }: { tab: Tab }) {
             <button className="small ghost" onClick={copyAsJSON}>
               Copy report
             </button>
+            {settings?.schemaValidation && !readOnly && report.sampled > 0 && (
+              <button className="small" onClick={() => setValidating(true)}>
+                Create validation rules…
+              </button>
+            )}
           </div>
           {report.sampled === 0 ? (
             <div className="empty-state">No documents matched; nothing to analyze.</div>
@@ -234,6 +242,7 @@ export function SchemaView({ tab }: { tab: Tab }) {
               </table>
             </div>
           )}
+          {validating && <ValidationFromSchema connId={connId} db={db} coll={coll} report={report} onClose={() => setValidating(false)} />}
           <p className="muted small">
             Statistics describe a random sample ($sample). Fields inside arrays of documents are listed under the array (e.g.{' '}
             <code>items.sku</code>); "Present" counts documents that contain the field at least once.

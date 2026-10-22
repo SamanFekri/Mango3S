@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent, RefObject } from 'react'
+import type { MouseEvent as ReactMouseEvent, ReactNode, RefObject } from 'react'
 import { bsonType, copyText, getAt, isContainer, isPlainObject } from '../lib/docTree'
 import type { AppError } from '../lib/errors'
 import { SHORTCUT_BY_ID, isTextTarget, shortcutHint } from '../lib/shortcuts'
@@ -11,7 +11,7 @@ import { AddFieldDialog, ContextMenu, DocumentViewer, RenameFieldDialog, type Me
 import { ResultsNotice, TableView, TreeView, useCellEditing, type CellRef, type FieldApi } from './DocViews'
 import { highlight } from './highlight'
 
-export type ViewMode = 'tree' | 'json' | 'table'
+export type ViewMode = 'tree' | 'json' | 'table' | 'chart'
 
 export interface ResultsViewProps {
   page: Page | null
@@ -20,6 +20,8 @@ export interface ResultsViewProps {
   onDismissError?: () => void
   view: ViewMode
   onViewChange: (v: ViewMode) => void
+  /** The Chart view's content; the Chart option appears when it's given. */
+  chart?: ReactNode
   onPage: (page: number) => void
   pageSize: number
   onPageSize?: (n: number) => void
@@ -267,6 +269,7 @@ export function ResultsView(props: ResultsViewProps) {
             { value: 'tree', label: 'Tree', title: `Tree view (${shortcutHint('results.tree')})` },
             { value: 'table', label: 'Table', title: `Table view (${shortcutHint('results.table')})` },
             { value: 'json', label: 'JSON', title: `JSON view (${shortcutHint('results.json')})` },
+            ...(props.chart ? [{ value: 'chart' as ViewMode, label: 'Chart', title: 'Chart every matching document' }] : []),
           ]}
         />
         {view === 'table' && (
@@ -309,6 +312,10 @@ export function ResultsView(props: ResultsViewProps) {
         <Pager label="Pagination" page={page} loading={loading} onPage={(n) => void leaveEdit(() => onPage(n))} />
       </div>
 
+      {view === 'chart' && props.chart ? (
+        <div className="results-body">{props.chart}</div>
+      ) : (
+        <>
       <ErrorBanner error={error} onDismiss={props.onDismissError} />
       {page?.notice && <div className="info-banner">{page.notice}</div>}
       {ce.notice && <ResultsNotice text={ce.notice} onDismiss={() => ce.setNotice(null)} />}
@@ -388,6 +395,8 @@ export function ResultsView(props: ResultsViewProps) {
             }
           />
         </div>
+      )}
+        </>
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems()} onClose={() => setMenu(null)} />}
       {dialog?.kind === 'view' && (

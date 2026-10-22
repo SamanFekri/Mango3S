@@ -208,3 +208,29 @@ func TestProfileOrder(t *testing.T) {
 		t.Fatal("unknown profile")
 	}
 }
+
+func TestShardURI(t *testing.T) {
+	for _, c := range []struct{ base, host, want string }{
+		{"mongodb://router:27017/?appName=x&directConnection=true", "shard1/a:27017,b:27017", "mongodb://a:27017,b:27017/?appName=x&replicaSet=shard1"},
+		{"mongodb://router:27017", "c:27018", "mongodb://c:27018/"},
+		{"mongodb+srv://cluster.example.com/shop?retryWrites=true", "rs1/h1:27017", "mongodb://h1:27017/shop?authSource=admin&replicaSet=rs1&retryWrites=true&tls=true"},
+	} {
+		got, err := ShardURI(c.base, c.host)
+		if err != nil || got != c.want {
+			t.Errorf("ShardURI(%q, %q) = %q, %v; want %q", c.base, c.host, got, err, c.want)
+		}
+	}
+}
+
+func TestParseConnStringMultiHost(t *testing.T) {
+	cs, err := ParseConnString("mongodb://ada:p%40ss@a:27017,b:27017/shop?replicaSet=rs0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cs.User != "ada" || cs.Password != "p%40ss" || cs.Hosts != "a:27017,b:27017" || cs.Path != "/shop" || cs.Query.Get("replicaSet") != "rs0" {
+		t.Fatalf("%+v", cs)
+	}
+	if got := cs.String(); got != "mongodb://ada:p%40ss@a:27017,b:27017/shop?replicaSet=rs0" {
+		t.Fatalf("round trip: %s", got)
+	}
+}

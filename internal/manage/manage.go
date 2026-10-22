@@ -658,6 +658,8 @@ type CollectionDetails struct {
 	Capped     bool              `json:"capped"`
 	Sharded    bool              `json:"sharded"`
 	Shell      string            `json:"shell"` // the command to recreate it
+	// Sharding is the shard key and chunk distribution (sharded clusters only).
+	Sharding *CollectionSharding `json:"sharding,omitempty"`
 }
 
 // Details reads a collection's options, metadata and statistics.
@@ -722,6 +724,8 @@ type DatabaseDetails struct {
 	AvgObjSize  int64 `json:"avgObjSize"`
 	FSUsed      int64 `json:"fsUsedSize"`
 	FSTotal     int64 `json:"fsTotalSize"`
+	// Sharding is the primary shard, shards and balancer (sharded clusters only).
+	Sharding *DatabaseSharding `json:"sharding,omitempty"`
 }
 
 // DBDetails runs dbStats.

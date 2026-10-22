@@ -2,15 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CompletionContext, CompletionResult } from '@codemirror/autocomplete'
 import type { EditorView, KeyBinding } from '@codemirror/view'
 import { CodeEditor, selectionOrAll } from '../components/CodeEditor'
-import { Spinner } from '../components/common'
+import { Segmented, Spinner } from '../components/common'
 import { highlight } from '../components/highlight'
-import { backend } from '../lib/backend'
+import { backend, onMongoshLine } from '../lib/backend'
 import { toAppError } from '../lib/errors'
 import { formatDuration } from '../lib/format'
 import { timeAgo } from '../lib/library'
 import { currentCollection, historyStep, shellCompletions } from '../lib/shellComplete'
 import type { Tab } from '../lib/tabs'
-import type { HistoryEntry, ShellOutput } from '../lib/types'
+import type { HistoryEntry, MongoshAvailability, ShellOutput } from '../lib/types'
 import { shortcutHint } from '../lib/shortcuts'
 import { useApp, useTabDirty } from '../state/AppContext'
 import { useShortcut } from '../state/shortcuts'
@@ -19,7 +19,11 @@ interface Entry {
   id: number
   db: string
   outputs: ShellOutput[]
+  /** A mongosh run: its output lines as they arrive, then how it ended. */
+  mongosh?: { script: string; lines: { stream: string; text: string }[]; done: boolean; exitCode?: number; durationMs?: number; error?: string }
 }
+
+type Engine = 'builtin' | 'js' | 'mongosh'
 
 const STARTER = `// Cmd/Ctrl+Enter runs everything, or just the selected text.
 // F5 runs the whole script, F6 the statement at the cursor, F9 the selection.
@@ -66,6 +70,26 @@ export function ShellView({ tab }: { tab: Tab }) {
   const out = useRef<HTMLDivElement>(null)
   const seq = useRef(0)
   const opId = `shell-${tab.id}`
+  // Built-in: paged, editable results. mongosh: full JavaScript through the installed mongosh.
+  const [engine, setEngine] = useState<Engine>('builtin')
+  const [mongosh, setMongosh] = useState<MongoshAvailability | null>(null)
+  useEffect(() => {
+    if (engine !== 'mongosh' || mongosh) return
+    backend
+      .getMongoshAvailability(connId)
+      .then(setMongosh)
+      .catch((err) => setMongosh({ available: false, problem: toAppError(err).message }))
+  }, [engine, mongosh, connId])
+  const mongoshRun = useRef<number | null>(null)
+  useEffect(
+    () =>
+      onMongoshLine((l) => {
+        if (l.opId !== opId || mongoshRun.current === null) return
+        const id = mongoshRun.current
+        setOutputs((list) => list.map((e) => (e.id === id && e.mongosh ? { ...e, mongosh: { ...e.mongosh, lines: [...e.mongosh.lines, { stream: l.stream, text: l.text }].slice(-5000) } } : e)))
+      }),
+    [opId],
+  )
 
   // Completion context: collections of the current db and fields per collection.
   const collections = useRef<string[]>([])
@@ -168,8 +192,24 @@ export function ShellView({ tab }: { tab: Tab }) {
     const id = seq.current
     runs.current = [code, ...runs.current.filter((r) => r !== code)].slice(0, 50)
     histIndex.current = -1
+    if (engine === 'mongosh') {
+      mongoshRun.current = id
+      setOutputs((h) => [...h.slice(-49), { id, db, outputs: [], mongosh: { script: code, lines: [], done: false } }])
+      try {
+        const res = await backend.runMongosh(opId, connId, db, code)
+        setOutputs((list) => list.map((e) => (e.id === id && e.mongosh ? { ...e, mongosh: { ...e.mongosh, done: true, exitCode: res.exitCode, durationMs: res.durationMs } } : e)))
+      } catch (err) {
+        const msg = toAppError(err).message
+        setOutputs((list) => list.map((e) => (e.id === id && e.mongosh ? { ...e, mongosh: { ...e.mongosh, done: true, error: msg } } : e)))
+      } finally {
+        mongoshRun.current = null
+        setRunning(false)
+        loadHistory()
+      }
+      return
+    }
     try {
-      const res = await backend.runShell(opId, connId, db, code)
+      const res = engine === 'js' ? await backend.runJavaScript(opId, connId, db, code) : await backend.runShell(opId, connId, db, code)
       setOutputs((h) => [...h.slice(-49), { id, db, outputs: res.outputs }])
       setDb(res.currentDb)
     } catch (err) {
@@ -249,6 +289,16 @@ export function ShellView({ tab }: { tab: Tab }) {
             <input className="db-input mono" value={db} onChange={(e) => setDb(e.target.value)} aria-label="Current database" spellCheck={false} />
           </label>
         </div>
+        <Segmented
+          label="Shell engine"
+          value={engine}
+          onChange={(v) => !running && setEngine(v)}
+          options={[
+            { value: 'builtin' as Engine, label: 'Built-in' },
+            { value: 'js' as Engine, label: 'JavaScript' },
+            { value: 'mongosh' as Engine, label: 'mongosh' },
+          ]}
+        />
         <span className="spacer" />
         <button className={showHistory ? 'small active' : 'small ghost'} onClick={() => setShowHistory((s) => !s)} aria-pressed={showHistory}>
           History
@@ -264,11 +314,35 @@ export function ShellView({ tab }: { tab: Tab }) {
             <Spinner small /> Cancel
           </button>
         ) : (
-          <button className="primary" onClick={() => void run()} title={`Run the selection or everything (${shortcutHint('query.run')}); F5 runs all, F6 the statement at the cursor, F9 the selection`}>
+          <button
+            className="primary"
+            disabled={engine === 'mongosh' && !mongosh?.available}
+            onClick={() => void run()}
+            title={`Run the selection or everything (${shortcutHint('query.run')}); F5 runs all, F6 the statement at the cursor, F9 the selection`}>
             ▶ Run
           </button>
         )}
       </div>
+      {engine === 'js' && (
+        <div className="shell-engine-note small">
+          JavaScript runs inside Mango3S: variables, loops, functions, <code>db.coll.find()</code> cursors with <code>forEach</code>/<code>map</code>/
+          <code>toArray</code>, <code>print</code>/<code>printjson</code>. The last value is shown (documents up to 50); no mongosh needed.
+        </div>
+      )}
+      {engine === 'mongosh' && (
+        <div className="shell-engine-note small">
+          {!mongosh ? (
+            <Spinner small />
+          ) : mongosh.available ? (
+            <>
+              Full JavaScript (variables, loops, functions) through <span className="mono">{mongosh.path}</span>. Results are printed text, not paged or
+              editable; use <code>print()</code> / <code>printjson()</code>. The connection's password is passed privately, never on the command line.
+            </>
+          ) : (
+            <span className="warning-text">{mongosh.problem}</span>
+          )}
+        </div>
+      )}
       <div className={showHistory ? 'shell-layout with-history' : 'shell-layout'}>
         <div className="shell-split">
           <CodeEditor
@@ -286,6 +360,35 @@ export function ShellView({ tab }: { tab: Tab }) {
           <div className="shell-output" ref={out} aria-live="polite">
             {outputs.length === 0 && <div className="empty-state">Output appears here.</div>}
             {outputs.map((entry) =>
+              entry.mongosh ? (
+                <div key={entry.id} className={`shell-entry ${entry.mongosh.error || (entry.mongosh.exitCode ?? 0) !== 0 ? 'error' : ''}`}>
+                  <div className="shell-stmt">
+                    <span className="prompt">{entry.db}&gt;</span> <code>{entry.mongosh.script.split('\n')[0]}</code>
+                    <span className="badge">mongosh</span>
+                    <span className="spacer" />
+                    {!entry.mongosh.done ? (
+                      <Spinner small />
+                    ) : (
+                      entry.mongosh.durationMs !== undefined && (
+                        <span className="muted small">
+                          {formatDuration(entry.mongosh.durationMs)}
+                          {entry.mongosh.exitCode ? ` · exit code ${entry.mongosh.exitCode}` : ''}
+                        </span>
+                      )
+                    )}
+                  </div>
+                  <pre className="doc-text mongosh-out" aria-label="mongosh output">
+                    {entry.mongosh.lines.map((l, i) => (
+                      <span key={i} className={l.stream === 'stderr' ? 'shell-error-line' : undefined}>
+                        {l.text}
+                        {'\n'}
+                      </span>
+                    ))}
+                  </pre>
+                  {entry.mongosh.error && <pre className="shell-error">{entry.mongosh.error}</pre>}
+                  {entry.mongosh.done && !entry.mongosh.error && entry.mongosh.lines.length === 0 && <div className="muted small">(no output)</div>}
+                </div>
+              ) : (
               entry.outputs.map((o, i) => (
                 <div key={`${entry.id}-${i}`} className={`shell-entry ${o.kind}`}>
                   <div className="shell-stmt">
@@ -327,7 +430,8 @@ export function ShellView({ tab }: { tab: Tab }) {
                     <pre className={o.kind === 'error' ? 'shell-error' : 'doc-text'}>{o.kind === 'error' ? o.text : highlight(o.text ?? '')}</pre>
                   )}
                 </div>
-              )),
+              ))
+              ),
             )}
           </div>
         </div>

@@ -103,6 +103,24 @@ import type {
   PlatformNotification,
   PlatformInfo,
   PlatformCheck,
+  TestDataPreview,
+  TestDataRequest,
+  ChangeEvent,
+  ChangeStreamRequest,
+  ChartData,
+  ChartSpec,
+  MongoshAvailability,
+  MongoshResult,
+  ShardInfo,
+  GridFSBucket,
+  GridFSListRequest,
+  GridFSPage,
+  GridFSPreview,
+  MonitorSample,
+  MonitorSnapshot,
+  OpsFilter,
+  RunningOp,
+  ServerOverview,
   APIConsoleState,
   APIRequest,
   APIResponse,
@@ -246,6 +264,8 @@ export const backend = {
   analyzeIndexes: (opId: string, conn: string, db: string, o: { coll: string; minMillis: number; limit: number }) =>
     wrap<IndexAdvice>(a.AnalyzeIndexes(opId, conn, db, o)),
   startSQLExport: (r: { connId: string; db: string; coll: string; path: string; options: SQLExportOptions }) => wrap<Job>(a.StartSQLExport(r)),
+  /** A $jsonSchema validator (mongosh syntax) built from a schema report. */
+  suggestValidator: (report: SchemaReport, opts: { requiredPercent: number; rejectUnknown: boolean }) => wrap<string>(a.SuggestValidator(report, opts)),
   analyzeSchema: (opId: string, req: { connId: string; db: string; coll: string; sampleSize: number; filter: string }) =>
     wrap<SchemaReport>(a.AnalyzeSchema(opId, req)),
   translateSQL: (sql: string) => wrap<SQLTranslation>(a.TranslateSQL(sql)),
@@ -341,6 +361,48 @@ export const backend = {
   resetAPIConsole: () => wrap<Record<string, string>>(a.ResetAPIConsole()),
   sendAPIRequest: (req: APIRequest) => wrap<APIResponse>(a.SendAPIRequest(req)),
 
+  // Server monitor: live rates, replica set state, running operations.
+  startMonitor: (connId: string, intervalSeconds: number) => wrap<MonitorSnapshot>(a.StartMonitor(connId, intervalSeconds)),
+  stopMonitor: (connId: string) => wrap<void>(a.StopMonitor(connId)),
+  getServerOverview: (connId: string) => wrap<ServerOverview>(a.GetServerOverview(connId)),
+  listCurrentOps: (connId: string, f: OpsFilter) => wrap<RunningOp[]>(a.ListCurrentOps(connId, f)),
+  killOperation: (connId: string, opid: string, confirm: string) => wrap<void>(a.KillOperation(connId, opid, confirm)),
+
+  /** Runs the script as JavaScript in the built-in engine (no mongosh); cancel(opId) stops it. */
+  runJavaScript: (opId: string, connId: string, db: string, script: string) => wrap<ShellResult>(a.RunJavaScript(opId, connId, db, script)),
+  /** Groups a collection for the Chart view, on the server. */
+  runChart: (opId: string, req: { connId: string; db: string; coll: string; filter: string; spec: ChartSpec }) => wrap<ChartData>(a.RunChart(opId, req)),
+
+  // Test data generator.
+  testDataTemplateFromSchema: (connId: string, db: string, coll: string) => wrap<string>(a.TestDataTemplateFromSchema(connId, db, coll)),
+  previewTestData: (r: TestDataRequest) => wrap<TestDataPreview>(a.PreviewTestData(r)),
+  startTestData: (r: TestDataRequest) => wrap<Job>(a.StartTestData(r)),
+
+  // Change stream viewer.
+  startChangeStream: (id: string, r: ChangeStreamRequest) => wrap<void>(a.StartChangeStream(id, r)),
+  stopChangeStream: (id: string) => wrap<void>(a.StopChangeStream(id)),
+
+  // Shell › mongosh mode.
+  getMongoshAvailability: (connId: string) => wrap<MongoshAvailability>(a.GetMongoshAvailability(connId)),
+  /** Output arrives as "mongosh:line" events tagged with opId; cancel(opId) stops the run. */
+  runMongosh: (opId: string, connId: string, db: string, script: string) => wrap<MongoshResult>(a.RunMongosh(opId, connId, db, script)),
+
+  // Sharded clusters.
+  listShards: (connId: string) => wrap<ShardInfo[]>(a.ListShards(connId)),
+  connectToShard: (connId: string, shardId: string) => wrap<SessionInfo>(a.ConnectToShard(connId, shardId)),
+
+  // GridFS browser.
+  listGridFSBuckets: (connId: string, db: string) => wrap<GridFSBucket[]>(a.ListGridFSBuckets(connId, db)),
+  listGridFSFiles: (r: GridFSListRequest) => wrap<GridFSPage>(a.ListGridFSFiles(r)),
+  previewGridFSFile: (connId: string, db: string, bucket: string, id: string) => wrap<GridFSPreview>(a.PreviewGridFSFile(connId, db, bucket, id)),
+  chooseGridFSUploadFile: () => wrap<string>(a.ChooseGridFSUploadFile()),
+  startGridFSUpload: (connId: string, db: string, bucket: string, path: string) => wrap<Job>(a.StartGridFSUpload(connId, db, bucket, path)),
+  /** Asks where to save first; an empty job ID means the user canceled. */
+  startGridFSDownload: (connId: string, db: string, bucket: string, id: string, filename: string) =>
+    wrap<Job>(a.StartGridFSDownload(connId, db, bucket, id, filename)),
+  renameGridFSFile: (connId: string, db: string, bucket: string, id: string, name: string) => wrap<void>(a.RenameGridFSFile(connId, db, bucket, id, name)),
+  deleteGridFSFile: (connId: string, db: string, bucket: string, id: string) => wrap<void>(a.DeleteGridFSFile(connId, db, bucket, id)),
+
   // Storage: what Mango3S keeps on disk, and clearing logs, caches and temp files.
   getStorageUsage: () => wrap<StorageUsage>(a.GetStorageUsage()),
   clearStorage: (ids: string[]) => wrap<StorageCleanResult>(a.ClearStorage(ids)),
@@ -393,6 +455,42 @@ export function onJobUpdate(cb: (j: Job) => void): () => void {
 export function onUpdateStatus(cb: (s: UpdateStatus) => void): () => void {
   try {
     return EventsOn('update:status', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Subscribes to change-stream batches ("stream:events"). */
+export function onStreamEvents(cb: (e: { id: string; events: ChangeEvent[]; resumeToken: string }) => void): () => void {
+  try {
+    return EventsOn('stream:events', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Subscribes to change-stream state changes ("stream:state"). */
+export function onStreamState(cb: (s: { id: string; running: boolean; error?: string; resumeToken?: string }) => void): () => void {
+  try {
+    return EventsOn('stream:state', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Subscribes to mongosh output lines ("mongosh:line"). */
+export function onMongoshLine(cb: (l: { opId: string; stream: string; text: string }) => void): () => void {
+  try {
+    return EventsOn('mongosh:line', cb)
+  } catch {
+    return () => undefined
+  }
+}
+
+/** Subscribes to server-monitor samples ("monitor:sample"), pushed only while a Monitor tab is open. */
+export function onMonitorSample(cb: (e: { connId: string; sample: MonitorSample }) => void): () => void {
+  try {
+    return EventsOn('monitor:sample', cb)
   } catch {
     return () => undefined
   }

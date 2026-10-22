@@ -13,6 +13,8 @@ const backend = vi.hoisted(() => ({
   createIndex: vi.fn(),
   modifyIndex: vi.fn(),
   dropIndex: vi.fn(),
+  explain: vi.fn(),
+  cancel: vi.fn(),
 }))
 const app = vi.hoisted(() => ({ toast: vi.fn(), confirm: vi.fn(), jobs: [] }))
 vi.mock('../lib/backend', () => ({ backend, newOpId: (p: string) => `${p}-1` }))
@@ -29,7 +31,21 @@ beforeEach(() => {
     { ts: '2026-10-19T08:00:00Z', op: 'query', ns: 'shop.orders', millis: 250, planSummary: 'COLLSCAN', keysExamined: 0, docsExamined: 5000, nreturned: 3, command: '{"find": "orders"}', client: '', user: '', appName: 'api' },
   ])
   backend.startSQLExport.mockResolvedValue({ id: 'j1' })
+  backend.cancel.mockResolvedValue(true)
+  backend.explain.mockImplementation(async () => (backend.createIndex.mock.calls.length ? afterPlan : beforePlan))
 })
+
+const stage = (name: string, docs: number, keys: number, children: unknown[] = []) => ({ name, details: [], docsExamined: docs, keysExamined: keys, nReturned: 3, children })
+const plan = (root: unknown, docs: number, keys: number, collScan: boolean, ms: number) => ({
+  namespace: 'shop.orders',
+  root,
+  pipeline: [],
+  diagnostics: [],
+  raw: '{}',
+  summary: { executionTimeMs: ms, nReturned: 3, docsExamined: docs, keysExamined: keys, indexesUsed: collScan ? [] : ['status_1_created_-1_age_1'], collScan, inMemorySort: collScan, covered: false, rejectedPlans: 0, engine: 'classic' },
+})
+const beforePlan = plan(stage('SORT', 0, 0, [stage('COLLSCAN', 5000, 0)]), 5000, 0, true, 200)
+const afterPlan = plan(stage('FETCH', 3, 0, [stage('IXSCAN', 0, 3)]), 3, 3, false, 2)
 
 describe('ProfilerDialog', () => {
   it('lists slow operations and shows the command', async () => {
@@ -103,6 +119,16 @@ describe('IndexAdvisorDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
     await waitFor(() => expect(backend.createIndex).toHaveBeenCalledWith('index-1', 'c1', 'shop', 'orders', expect.objectContaining({ keys: '{ status: 1, created: -1, age: 1 }' })))
+    // The recorded query was explained before the index existed…
+    expect(backend.explain).toHaveBeenCalledWith('explain-1', expect.objectContaining({ kind: 'command', connId: 'c1', db: 'shop' }))
+    expect(backend.explain.mock.invocationCallOrder[0]).toBeLessThan(backend.createIndex.mock.invocationCallOrder[0]!)
+    // …so Compare plan shows before and after.
+    fireEvent.click(await screen.findByRole('button', { name: 'Compare plan' }))
+    expect(await screen.findByText('no more collection scan')).toHaveClass('change-better')
+    expect(screen.getByText('-100%')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Before the index plan' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Stage COLLSCAN' })).toHaveClass('tone-bad')
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[0]!)
     fireEvent.click(screen.getByRole('button', { name: 'Unhide' }))
     await waitFor(() => expect(backend.modifyIndex).toHaveBeenCalledWith('c1', 'shop', 'orders', 'sku_1', { hidden: false }))
 

@@ -547,3 +547,126 @@ func (p Profile) DisplayHosts() string {
 	}
 	return p.URI
 }
+
+// ShardURI turns a mongos connection string into one for a single shard, from
+// the shard's host string as listShards reports it ("set/a:27017,b:27017", or
+// "a:27017" for a standalone shard). Authentication, TLS and other options are
+// kept; a mongodb+srv:// string becomes mongodb:// with the TLS and auth
+// source it implied.
+func ShardURI(base, shardHost string) (string, error) {
+	scheme, rest, ok := strings.Cut(strings.TrimSpace(base), "://")
+	if !ok || (scheme != "mongodb" && scheme != "mongodb+srv") {
+		return "", apperr.Invalid("The connection string must start with mongodb:// or mongodb+srv://")
+	}
+	set, hosts, hasSet := strings.Cut(shardHost, "/")
+	if !hasSet {
+		hosts, set = set, ""
+	}
+	if strings.TrimSpace(hosts) == "" {
+		return "", apperr.Invalid("The shard has no hosts.")
+	}
+	path := "/"
+	query := ""
+	if i := strings.IndexAny(rest, "/?"); i >= 0 {
+		tail := rest[i:]
+		if q := strings.IndexByte(tail, '?'); q >= 0 {
+			path, query = tail[:q], tail[q+1:]
+		} else {
+			path = tail
+		}
+	}
+	if path == "" {
+		path = "/"
+	}
+	vals, err := url.ParseQuery(query)
+	if err != nil {
+		return "", apperr.Invalid("The connection string's options can't be read: %v", err)
+	}
+	for _, k := range []string{"replicaSet", "directConnection", "srvServiceName", "srvMaxHosts", "loadBalanced"} {
+		vals.Del(k)
+	}
+	if scheme == "mongodb+srv" {
+		if vals.Get("tls") == "" && vals.Get("ssl") == "" {
+			vals.Set("tls", "true")
+		}
+		if vals.Get("authSource") == "" {
+			vals.Set("authSource", "admin")
+		}
+	}
+	if set != "" {
+		vals.Set("replicaSet", set)
+	}
+	out := "mongodb://" + hosts + path
+	if enc := vals.Encode(); enc != "" {
+		out += "?" + enc
+	}
+	return out, nil
+}
+
+// ConnString is a MongoDB connection string split into its parts. Unlike
+// net/url it accepts several hosts ("a:27017,b:27017").
+type ConnString struct {
+	Scheme   string // mongodb | mongodb+srv
+	User     string // percent-encoded user name, "" for none
+	Password string // percent-encoded password
+	HasPass  bool
+	Hosts    string // as written, e.g. "a:27017,b:27017"
+	Path     string // "/" or "/db"
+	Query    url.Values
+}
+
+// ParseConnString splits a connection string.
+func ParseConnString(uri string) (ConnString, error) {
+	scheme, rest, ok := strings.Cut(strings.TrimSpace(uri), "://")
+	if !ok || (scheme != "mongodb" && scheme != "mongodb+srv") {
+		return ConnString{}, apperr.Invalid("The connection string must start with mongodb:// or mongodb+srv://")
+	}
+	authority, tail := rest, ""
+	if i := strings.IndexAny(rest, "/?"); i >= 0 {
+		authority, tail = rest[:i], rest[i:]
+	}
+	path, query, _ := strings.Cut(tail, "?")
+	cs := ConnString{Scheme: scheme, Path: path}
+	if at := strings.LastIndex(authority, "@"); at >= 0 {
+		cs.Hosts = authority[at+1:]
+		cs.User, cs.Password, cs.HasPass = strings.Cut(authority[:at], ":")
+	} else {
+		cs.Hosts = authority
+	}
+	if cs.Hosts == "" {
+		return ConnString{}, apperr.Invalid("The connection string has no host.")
+	}
+	q, err := url.ParseQuery(query)
+	if err != nil {
+		return ConnString{}, apperr.Invalid("The connection string's options can't be read: %v", err)
+	}
+	cs.Query = q
+	return cs, nil
+}
+
+// String puts the connection string back together.
+func (c ConnString) String() string {
+	out := c.Scheme + "://"
+	if c.User != "" {
+		out += c.User
+		if c.HasPass {
+			out += ":" + c.Password
+		}
+		out += "@"
+	}
+	path := c.Path
+	if path == "" {
+		path = "/"
+	}
+	out += c.Hosts + path
+	if enc := c.Query.Encode(); enc != "" {
+		out += "?" + enc
+	}
+	return out
+}
+
+// EscapeUserinfo percent-encodes a user name or password for a connection
+// string (every reserved character, including "@", ":" and "/").
+func EscapeUserinfo(s string) string {
+	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
+}

@@ -174,3 +174,22 @@ func TestSuggestIndexAndRegex(t *testing.T) {
 		t.Fatal("regex detection")
 	}
 }
+
+func TestCommandToExplainKeepsOnlyExplainableFields(t *testing.T) {
+	cmd, coll, filter, sortDoc, write, err := commandToExplain(`{find: "orders", filter: {status: "A"}, sort: {created: -1}, limit: 5, lsid: {id: 1}, $db: "shop", readConcern: {level: "local"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coll != "orders" || write || mql.Compact(filter) != `{"status": "A"}` || mql.Compact(sortDoc) != `{"created": -1}` {
+		t.Fatalf("coll %q filter %s sort %s write %v", coll, mql.Compact(filter), mql.Compact(sortDoc), write)
+	}
+	if got := mql.Compact(cmd); got != `{"find": "orders", "filter": {"status": "A"}, "sort": {"created": -1}, "limit": 5}` {
+		t.Fatalf("cmd = %s", got)
+	}
+	if _, _, _, _, write, _ := commandToExplain(`{aggregate: "o", pipeline: [{$match: {a: 1}}, {$out: "x"}]}`); !write {
+		t.Fatal("$out must be planned only")
+	}
+	if _, _, _, _, _, err := commandToExplain(`{delete: "o", deletes: []}`); err == nil {
+		t.Fatal("write commands are refused")
+	}
+}

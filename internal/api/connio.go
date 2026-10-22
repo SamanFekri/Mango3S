@@ -41,7 +41,7 @@ func (a *App) exportConnections(ids []string, includeSecrets bool, passphrase st
 	if len(list) == 1 {
 		name = safeFileName(list[0].Name) + ".mango3s-connection.json"
 	}
-	path, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: "Export connections", DefaultFilename: name})
+	path, err := a.saveFileDialog(wruntime.SaveDialogOptions{Title: "Export connections", DefaultFilename: name})
 	if err != nil || path == "" {
 		return ConnectionExport{}, err
 	}
@@ -154,7 +154,7 @@ type ImportOutcome struct {
 
 // ChooseConnectionsFile opens a file picker for a connections file.
 func (a *App) ChooseConnectionsFile() (string, error) {
-	p, err := wruntime.OpenFileDialog(a.ctx, wruntime.OpenDialogOptions{Title: "Import connections", ShowHiddenFiles: true})
+	p, err := a.openFileDialog("file", wruntime.OpenDialogOptions{Title: "Import connections", ShowHiddenFiles: true})
 	return p, a.encode("ChooseConnectionsFile", err)
 }
 

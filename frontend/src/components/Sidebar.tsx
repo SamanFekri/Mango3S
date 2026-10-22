@@ -1,3 +1,4 @@
+import { TestDataDialog } from './TestDataDialog'
 import { AppBuddy } from './AppBuddy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
@@ -32,13 +33,23 @@ interface MenuState {
 
 type Loadable<T> = { loading: boolean; error?: string; data?: T }
 
-type GroupKind = 'collections' | 'views' | 'system'
+type GroupKind = 'collections' | 'views' | 'system' | 'gridfs'
 /** Folders under each database. */
 const GROUPS: { kind: GroupKind; label: string; match: (c: CollectionInfo) => boolean }[] = [
   { kind: 'collections', label: 'Collections', match: (c) => !c.system && c.type !== 'view' },
   { kind: 'views', label: 'Views', match: (c) => !c.system && c.type === 'view' },
   { kind: 'system', label: 'System', match: (c) => c.system },
 ]
+
+/** GridFS buckets: "<name>.files" collections with a matching "<name>.chunks". */
+export function gridfsBuckets(colls: CollectionInfo[]): string[] {
+  const names = new Set(colls.map((c) => c.name))
+  return colls
+    .map((c) => c.name)
+    .filter((n) => n.endsWith('.files') && n.length > 6 && names.has(`${n.slice(0, -6)}.chunks`))
+    .map((n) => n.slice(0, -6))
+    .sort()
+}
 
 export function Sidebar() {
   const { sessions, profiles, reorderProfiles, connect, connecting, disconnect, dispatchTabs, openConnectionManager, confirm, toast, toastError } =
@@ -51,7 +62,7 @@ export function Sidebar() {
   const [createFor, setCreateFor] = useState<{ conn: SessionInfo; db?: string } | null>(null)
   const [transfer, setTransfer] = useState<{ kind: 'import' | 'export'; conn: SessionInfo; db: string; coll?: string } | null>(null)
   const [manage, setManage] = useState<{
-    kind: 'info' | 'copy' | 'rename' | 'profiler' | 'sql' | 'advisor'
+    kind: 'info' | 'copy' | 'rename' | 'profiler' | 'sql' | 'advisor' | 'datagen'
     conn: SessionInfo
     db: string
     coll?: string
@@ -259,6 +270,8 @@ export function Sidebar() {
     { label: 'Open workspace', action: () => dispatchTabs({ type: 'open', tab: { kind: 'connection', connId: s.id, connName: s.name } }) },
     { label: 'Refresh', action: () => loadDbs(s.id), shortcut: 'view.refresh' },
     { label: 'Open shell', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name } }), shortcut: 'tab.shell' },
+    { label: 'Server monitor', action: () => dispatchTabs({ type: 'open', tab: { kind: 'monitor', connId: s.id, connName: s.name } }) },
+    { label: 'Watch changes', action: () => dispatchTabs({ type: 'open', tab: { kind: 'changes', connId: s.id, connName: s.name }, reuse: true }) },
     { label: 'SQL query', action: () => dispatchTabs({ type: 'open', tab: { kind: 'sql', connId: s.id, connName: s.name, db: 'test' } }), shortcut: 'tab.sql' },
     { label: 'Create database…', action: () => setCreateFor({ conn: s }), disabled: s.readOnly },
     { label: 'Migrate from SQL…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'migrate', connId: s.id, connName: s.name, db: '' } }), disabled: s.readOnly },
@@ -285,6 +298,8 @@ export function Sidebar() {
     { label: 'Database statistics…', action: () => setManage({ kind: 'info', conn: s, db }) },
     { label: 'Query profiler…', action: () => setManage({ kind: 'profiler', conn: s, db }) },
     { label: 'Index advisor…', action: () => setManage({ kind: 'advisor', conn: s, db }) },
+    { label: 'Watch changes', action: () => dispatchTabs({ type: 'open', tab: { kind: 'changes', connId: s.id, connName: s.name, db }, reuse: true }) },
+    { label: 'GridFS buckets…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'gridfs', connId: s.id, connName: s.name, db }, reuse: true }) },
     { label: 'Copy database…', action: () => setManage({ kind: 'copy', conn: s, db }) },
     { label: 'Rename database…', action: () => setManage({ kind: 'rename', conn: s, db }), disabled: s.readOnly },
     { label: 'Open shell here', action: () => dispatchTabs({ type: 'open', tab: { kind: 'shell', connId: s.id, connName: s.name, db } }), shortcut: 'tab.shell' },
@@ -304,6 +319,7 @@ export function Sidebar() {
       { label: 'Open in new tab', action: () => dispatchTabs({ type: 'open', tab: { kind: 'collection', ...t } }) },
       { label: 'Aggregation editor', action: () => dispatchTabs({ type: 'open', tab: { kind: 'aggregation', ...t } }) },
       { label: 'Schema', action: () => dispatchTabs({ type: 'open', tab: { kind: 'schema', ...t }, reuse: true }) },
+      { label: 'Watch changes', action: () => dispatchTabs({ type: 'open', tab: { kind: 'changes', ...t }, reuse: true }) },
       { label: 'Export…', action: () => setTransfer({ kind: 'export', conn: s, db, coll: coll.name }) },
       { label: 'Export to SQL…', action: () => setManage({ kind: 'sql', conn: s, db, coll: coll.name }) },
       { label: 'Back up collection…', action: () => setBackupFor({ kind: 'backup', conn: s, db, coll: coll.name }) },
@@ -311,6 +327,7 @@ export function Sidebar() {
       { label: 'Reschema…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'reschema', ...t } }), disabled: view },
       { label: 'Mask data…', action: () => dispatchTabs({ type: 'open', tab: { kind: 'mask', ...t } }), disabled: view },
       { label: 'Import…', action: () => setTransfer({ kind: 'import', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
+      { label: 'Generate test data…', action: () => setManage({ kind: 'datagen', conn: s, db, coll: coll.name }), disabled: s.readOnly || view },
       { label: 'Collection info…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name }) },
       { label: 'Indexes…', action: () => setManage({ kind: 'info', conn: s, db, coll: coll.name, tab: 'indexes' }), disabled: view },
       { label: 'Index advisor…', action: () => setManage({ kind: 'advisor', conn: s, db, coll: coll.name }), disabled: view },
@@ -328,6 +345,7 @@ export function Sidebar() {
     | { key: string; level: number; kind: 'db'; s: SessionInfo; db: DatabaseInfo }
     | { key: string; level: number; kind: 'group'; s: SessionInfo; db: string; group: GroupKind; count: number }
     | { key: string; level: number; kind: 'coll'; s: SessionInfo; db: string; coll: CollectionInfo }
+    | { key: string; level: number; kind: 'bucket'; s: SessionInfo; db: string; bucket: string }
     | { key: string; level: number; kind: 'note'; text: string; error?: boolean; loading?: boolean }
   const rows: Row[] = []
   for (const s of orderedSessions) {
@@ -353,6 +371,12 @@ export function Sidebar() {
         rows.push({ key: `g:${gk}`, level: 2, kind: 'group', s, db: db.name, group: g.kind, count: list.length })
         if (!isGroupOpen(gk, g.kind) && !f) continue
         for (const coll of list) rows.push({ key: `k:${dk}/${coll.name}`, level: 3, kind: 'coll', s, db: db.name, coll })
+      }
+      const buckets = gridfsBuckets(c?.data ?? []).filter((b) => !f || b.toLowerCase().includes(f) || db.name.toLowerCase().includes(f))
+      if (buckets.length) {
+        const gk = `${dk}/gridfs`
+        rows.push({ key: `g:${gk}`, level: 2, kind: 'group', s, db: db.name, group: 'gridfs', count: buckets.length })
+        if (isGroupOpen(gk, 'gridfs') || f) for (const b of buckets) rows.push({ key: `b:${dk}/${b}`, level: 3, kind: 'bucket', s, db: db.name, bucket: b })
       }
     }
   }
@@ -407,6 +431,9 @@ export function Sidebar() {
         break
       case 'coll':
         openCollection(r.s, r.db, r.coll.name)
+        break
+      case 'bucket':
+        dispatchTabs({ type: 'open', tab: { kind: 'gridfs', connId: r.s.id, connName: r.s.name, db: r.db, coll: r.bucket }, reuse: true })
         break
     }
   }
@@ -601,13 +628,22 @@ export function Sidebar() {
           }
           if (r.kind === 'group') {
             const open = isGroupOpen(`${r.s.id}/${r.db}/${r.group}`, r.group) || !!f
-            const g = GROUPS.find((x) => x.kind === r.group)!
+            const label = r.group === 'gridfs' ? 'GridFS buckets' : GROUPS.find((x) => x.kind === r.group)!.label
             return (
               <div key={r.key} {...rowProps(r)} className={`${cls} tree-group`} onClick={() => activate(r)}>
                 <span className={open ? 'caret open' : 'caret'} />
                 <FolderIcon open={open} />
-                <span className="tree-label">{g.label}</span>
+                <span className="tree-label">{label}</span>
                 <span className="tree-meta">{r.count}</span>
+              </div>
+            )
+          }
+          if (r.kind === 'bucket') {
+            return (
+              <div key={r.key} {...rowProps(r)} className={cls} onClick={() => activate(r)} title={`${r.db} · GridFS bucket ${r.bucket}`}>
+                <FolderIcon open={false} />
+                <span className="tree-label">{r.bucket}</span>
+                <span className="tree-meta">GridFS</span>
               </div>
             )
           }
@@ -730,6 +766,7 @@ export function Sidebar() {
       {manage?.kind === 'advisor' && <IndexAdvisorDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
       {manage?.kind === 'profiler' && <ProfilerDialog conn={manage.conn} db={manage.db} onClose={() => setManage(null)} />}
       {manage?.kind === 'sql' && manage.coll && <SqlExportDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
+      {manage?.kind === 'datagen' && manage.coll && <TestDataDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
       {manage?.kind === 'copy' && <CopyDialog conn={manage.conn} db={manage.db} coll={manage.coll} onClose={() => setManage(null)} />}
       {manage?.kind === 'rename' && manage.coll && (
         <RenameCollectionDialog

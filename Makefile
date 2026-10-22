@@ -6,7 +6,7 @@ MYSQL_DSN ?= mango_reader:reader@tcp(localhost:3307)/shop
 # Version embedded in the binary (internal/api.Version) and the web admin
 # platform this build checks in with for updates/notifications
 # (internal/api.PlatformBaseURL) — see web/docs/API_CONTRACT.md.
-VERSION ?= $(shell node -pe "require('./wails.json').info.productVersion" 2>/dev/null || echo 0.9.1-dev)
+VERSION ?= $(shell node -pe "require('./wails.json').info.productVersion" 2>/dev/null || echo 0.9.3-dev)
 PLATFORM_BASE_URL ?= https://mango3s.com
 LDFLAGS := -X mango3s/internal/api.Version=$(VERSION) -X mango3s/internal/api.PlatformBaseURL=$(PLATFORM_BASE_URL)
 
@@ -16,7 +16,7 @@ LDFLAGS := -X mango3s/internal/api.Version=$(VERSION) -X mango3s/internal/api.Pl
 PLATFORM_URL ?=
 PLATFORM_ENV := $(if $(PLATFORM_URL),MANGO3S_PLATFORM_URL=$(PLATFORM_URL))
 
-.PHONY: notices dev platform-check platform-api build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down docker-build docker-test bindings mcp
+.PHONY: notices dev platform-check platform-api build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down rs-up sharded-up docker-build docker-test bindings mcp
 
 dev: ## Run the app with hot reload in test mode: request log + API console (Settings › Diagnostics)
 	$(PLATFORM_ENV) MANGO3S_TEST_MODE=1 $(WAILS) dev -ldflags "$(LDFLAGS)"
@@ -59,6 +59,12 @@ mongo-down:
 
 sql-up: ## Start PostgreSQL (:5433) and MySQL (:3307) with the seeded shop schema
 	docker compose --profile sql up -d --wait postgres mysql
+
+rs-up: ## Start a single-node replica set on localhost:27020 (change streams, replication)
+	docker compose --profile rs up -d --wait mongo-rs
+
+sharded-up: ## Start a sharded cluster (config server, 2 shards, mongos on localhost:27021)
+	docker compose --profile sharded up -d --wait
 
 sql-down:
 	docker compose --profile sql down

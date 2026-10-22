@@ -22,6 +22,7 @@ import (
 	"mango3s/internal/explain"
 	"mango3s/internal/jobs"
 	"mango3s/internal/library"
+	"mango3s/internal/manage"
 	"mango3s/internal/mongox"
 	"mango3s/internal/mql"
 	"mango3s/internal/query"
@@ -334,6 +335,53 @@ func TestSchemaOnRealData(t *testing.T) {
 	rep, err = schema.New(e.mgr).Analyze(e.ctx, schema.Request{ConnID: e.conn, DB: e.db, Coll: "orders", SampleSize: 50, Filter: `{status: "pending"}`})
 	if err != nil || rep.Sampled != 50 {
 		t.Fatalf("filtered: %d %v", rep.Sampled, err)
+	}
+}
+
+// The validator generated from a full sample accepts every existing document,
+// even when unknown fields are rejected.
+func TestValidatorFromSchemaAcceptsExistingDocuments(t *testing.T) {
+	e := setup(t)
+	coll := seedDocs(t, e, "orders_validated", representative(400))
+	rep, err := schema.New(e.mgr).Analyze(e.ctx, schema.Request{ConnID: e.conn, DB: e.db, Coll: "orders_validated", SampleSize: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range []schema.JSONSchemaOptions{{}, {RejectUnknown: true}} {
+		v := mql.Pretty(schema.ToJSONSchema(rep, o))
+		r, err := manage.CheckValidator(e.ctx, coll, v)
+		if err != nil {
+			t.Fatalf("%+v: %v\n%s", o, err, v)
+		}
+		if r.Checked != 400 || r.Failing != 0 {
+			t.Fatalf("%+v: %d of %d documents fail the generated rule (%v)\n%s", o, r.Failing, r.Checked, r.Sample, v)
+		}
+	}
+}
+
+// A profiled command (with the session fields the profiler records) can be
+// explained before and after an index, as the index advisor's Compare plan does.
+func TestExplainCommandBeforeAndAfterIndex(t *testing.T) {
+	e := setup(t)
+	c := seedDocs(t, e, "orders_cmd", representative(2000))
+	ex := explain.New(e.mgr)
+	cmd := `{find: "orders_cmd", filter: {status: "shipped"}, sort: {createdAt: -1}, limit: 10, lsid: {id: UUID("123e4567-e89b-12d3-a456-426614174000")}, $db: "` + e.db + `"}`
+	before, err := ex.Explain(e.ctx, explain.Request{Kind: "command", ConnID: e.conn, DB: e.db, Command: cmd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !before.Summary.CollScan {
+		t.Fatalf("before: %+v", before.Summary)
+	}
+	if _, err := c.Indexes().CreateOne(e.ctx, mongo.IndexModel{Keys: bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: -1}}}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := ex.Explain(e.ctx, explain.Request{Kind: "command", ConnID: e.conn, DB: e.db, Command: cmd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Summary.CollScan || *after.Summary.DocsExamined >= *before.Summary.DocsExamined {
+		t.Fatalf("after: %+v (before %+v)", after.Summary, before.Summary)
 	}
 }
 

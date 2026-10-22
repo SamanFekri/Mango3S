@@ -156,6 +156,29 @@ jobs:
           fi
           wails "${args[@]}"
 
+      # Installers: Windows x64 (NSIS), Linux (.deb). The macOS .dmg is made below.
+      - name: Install NSIS
+        if: matrix.platform == 'windows/amd64'
+        run: |
+          if ! command -v makensis >/dev/null; then
+            choco install nsis -y --no-progress
+            echo "C:\Program Files (x86)\NSIS" >> "$GITHUB_PATH"
+          fi
+      - name: Windows installer
+        if: matrix.platform == 'windows/amd64'
+        env:
+          LDFLAGS: >-
+            -X mango3s/internal/api.Version=${{ needs.targets.outputs.version }}
+            -X mango3s/internal/api.PlatformBaseURL=${{ inputs.platform_base_url }}
+        run: wails build -platform windows/amd64 -nsis -ldflags "$LDFLAGS"
+      - name: Linux package (.deb)
+        if: runner.os == 'Linux'
+        env:
+          VERSION: ${{ needs.targets.outputs.version }}
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.41.1
+          nfpm package --config build/linux/nfpm.yaml --packager deb --target build/bin/
+
       - name: Package
         id: package
         run: |
@@ -165,13 +188,22 @@ jobs:
             macOS)
               # ditto keeps the .app bundle's symlinks and permissions intact.
               ditto -c -k --keepParent build/bin/Mango3S.app "dist/$name.zip"
+              # Disk image with an Applications shortcut to drag the app onto.
+              stage=$(mktemp -d)
+              cp -R build/bin/Mango3S.app "$stage/"
+              ln -s /Applications "$stage/Applications"
+              hdiutil create -volname "Mango3S" -srcfolder "$stage" -ov -format UDZO "dist/$name.dmg"
               ;;
             Windows)
               7z a "dist/$name.zip" ./build/bin/mango3s.exe
+              if [ -f build/bin/Mango3S-amd64-installer.exe ]; then
+                cp build/bin/Mango3S-amd64-installer.exe "dist/$name-setup.exe"
+              fi
               ;;
             Linux)
               # tar keeps the executable bit, which upload-artifact would drop.
               tar -czf "dist/$name.tar.gz" -C build/bin mango3s
+              cp build/bin/*.deb "dist/$name.deb"
               ;;
           esac
           # One checksum file per download, so releases built in several runs
@@ -220,11 +252,11 @@ jobs:
 
             | System | File |
             |---|---|
-            | macOS, Apple Silicon (M1 and later) | `mango3s-${{ needs.targets.outputs.version }}-macos-arm64.zip` |
-            | macOS, Intel | `mango3s-${{ needs.targets.outputs.version }}-macos-amd64.zip` |
-            | Windows 64-bit | `mango3s-${{ needs.targets.outputs.version }}-windows-amd64.zip` |
+            | macOS, Apple Silicon (M1 and later) | `mango3s-${{ needs.targets.outputs.version }}-macos-arm64.dmg` (or `.zip`) |
+            | macOS, Intel | `mango3s-${{ needs.targets.outputs.version }}-macos-amd64.dmg` (or `.zip`) |
+            | Windows 64-bit | `mango3s-${{ needs.targets.outputs.version }}-windows-amd64-setup.exe` (installer) or `.zip` |
             | Windows 32-bit | `mango3s-${{ needs.targets.outputs.version }}-windows-386.zip` |
-            | Linux 64-bit | `mango3s-${{ needs.targets.outputs.version }}-linux-amd64.tar.gz` (needs `libwebkit2gtk-4.1`) |
+            | Linux 64-bit | `mango3s-${{ needs.targets.outputs.version }}-linux-amd64.deb` (Debian/Ubuntu) or `.tar.gz` (needs `libwebkit2gtk-4.1`) |
 
             Each file has a matching `.sha256` checksum.
 

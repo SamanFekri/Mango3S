@@ -244,6 +244,6 @@ func (a *App) StartRestoreBackup(r RestoreRequest, confirm string) (jobs.Job, er
 
 // ChooseSaveFile opens a native save dialog. An empty result means canceled.
 func (a *App) ChooseSaveFile(title, defaultName string) (string, error) {
-	path, err := wruntime.SaveFileDialog(a.ctx, wruntime.SaveDialogOptions{Title: title, DefaultFilename: filepath.Base(defaultName)})
+	path, err := a.saveFileDialog(wruntime.SaveDialogOptions{Title: title, DefaultFilename: filepath.Base(defaultName)})
 	return path, a.encode("ChooseSaveFile", err)
 }

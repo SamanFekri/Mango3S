@@ -16,19 +16,23 @@ import {explain} from '../models';
 import {compare} from '../models';
 import {model} from '../models';
 import {documents} from '../models';
+import {monitor} from '../models';
 import {syncer} from '../models';
 import {transform} from '../models';
 import {dump} from '../models';
 import {migrate} from '../models';
 import {backup} from '../models';
 import {recent} from '../models';
+import {gridfs} from '../models';
 import {library} from '../models';
 import {jobs} from '../models';
 import {masking} from '../models';
 import {shell} from '../models';
 import {aggregate} from '../models';
 import {transfer} from '../models';
+import {charts} from '../models';
 import {mcpserver} from '../models';
+import {streams} from '../models';
 
 export function AcceptPrivacyPolicy(arg1:number):Promise<update.PrivacyPolicy>;
 
@@ -80,6 +84,8 @@ export function ChooseExportFile(arg1:string):Promise<string>;
 
 export function ChooseFile(arg1:string,arg2:string):Promise<string>;
 
+export function ChooseGridFSUploadFile():Promise<string>;
+
 export function ChooseImportFile():Promise<string>;
 
 export function ChooseSaveFile(arg1:string,arg2:string):Promise<string>;
@@ -110,6 +116,8 @@ export function CollectionStats(arg1:string,arg2:string,arg3:string):Promise<exp
 
 export function Connect(arg1:string):Promise<mongox.SessionInfo>;
 
+export function ConnectToShard(arg1:string,arg2:string):Promise<mongox.SessionInfo>;
+
 export function ConnectWithLog(arg1:string,arg2:string):Promise<mongox.SessionInfo>;
 
 export function ConnectionCapabilities():Promise<Record<string, Array<api.Capability>>>;
@@ -129,6 +137,8 @@ export function CreateView(arg1:string,arg2:string,arg3:string,arg4:string,arg5:
 export function DatabaseDetails(arg1:string,arg2:string):Promise<manage.DatabaseDetails>;
 
 export function DeleteDocuments(arg1:string,arg2:string,arg3:string,arg4:Array<string>):Promise<number>;
+
+export function DeleteGridFSFile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function DeleteItem(arg1:string):Promise<void>;
 
@@ -190,6 +200,8 @@ export function GetField(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Ar
 
 export function GetMCPInfo():Promise<api.MCPInfo>;
 
+export function GetMongoshAvailability(arg1:string):Promise<api.MongoshAvailability>;
+
 export function GetPlatformChecks():Promise<Array<update.ProbeCheck>>;
 
 export function GetPlatformDebug():Promise<api.PlatformDebug>;
@@ -199,6 +211,8 @@ export function GetPlatformInfo():Promise<update.AppInfo>;
 export function GetPrivacyPolicy():Promise<update.PrivacyPolicy>;
 
 export function GetProfiling(arg1:string,arg2:string):Promise<manage.Profiling>;
+
+export function GetServerOverview(arg1:string):Promise<monitor.Overview>;
 
 export function GetSettings():Promise<config.Settings>;
 
@@ -222,6 +236,8 @@ export function InspectBackup(arg1:string):Promise<dump.Inspection>;
 
 export function IntrospectSQL(arg1:migrate.Source):Promise<Array<migrate.Table>>;
 
+export function KillOperation(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function ListBackups():Promise<Array<backup.Info>>;
 
 export function ListCollectionHistory(arg1:string):Promise<Array<recent.Entry>>;
@@ -230,7 +246,13 @@ export function ListCollections(arg1:string,arg2:string):Promise<Array<explorer.
 
 export function ListConnections():Promise<Array<mongox.SessionInfo>>;
 
+export function ListCurrentOps(arg1:string,arg2:monitor.OpsFilter):Promise<Array<monitor.Op>>;
+
 export function ListDatabases(arg1:string):Promise<Array<explorer.DatabaseInfo>>;
+
+export function ListGridFSBuckets(arg1:string,arg2:string):Promise<Array<gridfs.Bucket>>;
+
+export function ListGridFSFiles(arg1:gridfs.ListRequest):Promise<gridfs.Page>;
 
 export function ListHistory(arg1:string,arg2:string,arg3:number):Promise<Array<library.Entry>>;
 
@@ -249,6 +271,8 @@ export function ListProfile(arg1:string,arg2:string,arg3:manage.ProfileQuery):Pr
 export function ListProfiles():Promise<Array<config.Profile>>;
 
 export function ListSaved(arg1:string):Promise<Array<library.Item>>;
+
+export function ListShards(arg1:string):Promise<Array<manage.Shard>>;
 
 export function ListTaskRuns(arg1:string,arg2:number):Promise<Array<scheduler.Run>>;
 
@@ -280,6 +304,8 @@ export function PreviewBulkWrite(arg1:api.BulkWriteRequest):Promise<api.BulkPrev
 
 export function PreviewConnectionImport(arg1:string,arg2:string):Promise<api.ImportPreview>;
 
+export function PreviewGridFSFile(arg1:string,arg2:string,arg3:string,arg4:string):Promise<gridfs.Preview>;
+
 export function PreviewImport(arg1:transfer.ImportOptions):Promise<transfer.Preview>;
 
 export function PreviewMask(arg1:api.TransformRequest):Promise<api.TransformPreview>;
@@ -288,6 +314,8 @@ export function PreviewReschema(arg1:api.TransformRequest):Promise<api.Transform
 
 export function PreviewSync(arg1:string,arg2:syncer.Options):Promise<syncer.Preview>;
 
+export function PreviewTestData(arg1:api.TestDataRequest):Promise<api.TestDataPreview>;
+
 export function QueryToShell(arg1:query.Request):Promise<string>;
 
 export function RecordCollectionOpened(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -295,6 +323,8 @@ export function RecordCollectionOpened(arg1:string,arg2:string,arg3:string):Prom
 export function RefreshAccount():Promise<api.AccountState>;
 
 export function RenameCollection(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean,arg7:string):Promise<void>;
+
+export function RenameGridFSFile(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function ReorderProfiles(arg1:Array<string>):Promise<Array<config.Profile>>;
 
@@ -311,6 +341,12 @@ export function RevokeTask(arg1:string):Promise<scheduler.Task>;
 export function RollbackMigration(arg1:string,arg2:string):Promise<migrate.Run>;
 
 export function RunAggregation(arg1:string,arg2:aggregate.Request):Promise<model.Page>;
+
+export function RunChart(arg1:string,arg2:charts.Request):Promise<charts.Data>;
+
+export function RunJavaScript(arg1:string,arg2:string,arg3:string,arg4:string):Promise<shell.Result>;
+
+export function RunMongosh(arg1:string,arg2:string,arg3:string,arg4:string):Promise<api.MongoshResult>;
 
 export function RunPlatformCheck(arg1:string):Promise<update.ProbeStep>;
 
@@ -358,6 +394,8 @@ export function SetValidation(arg1:string,arg2:string,arg3:string,arg4:manage.Va
 
 export function StartBackup(arg1:api.BackupRequest):Promise<jobs.Job>;
 
+export function StartChangeStream(arg1:string,arg2:streams.Request):Promise<void>;
+
 export function StartCompare(arg1:compare.Options):Promise<jobs.Job>;
 
 export function StartCompareDatabases(arg1:compare.DBOptions):Promise<jobs.Job>;
@@ -366,9 +404,15 @@ export function StartCopy(arg1:api.CopyRequest,arg2:string):Promise<jobs.Job>;
 
 export function StartExport(arg1:transfer.ExportOptions):Promise<jobs.Job>;
 
+export function StartGridFSDownload(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<jobs.Job>;
+
+export function StartGridFSUpload(arg1:string,arg2:string,arg3:string,arg4:string):Promise<jobs.Job>;
+
 export function StartImport(arg1:transfer.ImportOptions):Promise<jobs.Job>;
 
 export function StartMigration(arg1:migrate.Request):Promise<jobs.Job>;
+
+export function StartMonitor(arg1:string,arg2:number):Promise<monitor.Snapshot>;
 
 export function StartRenameDatabase(arg1:string,arg2:string,arg3:string,arg4:string):Promise<jobs.Job>;
 
@@ -380,7 +424,15 @@ export function StartSQLExport(arg1:api.SQLExportRequest):Promise<jobs.Job>;
 
 export function StartSync(arg1:string,arg2:string):Promise<jobs.Job>;
 
+export function StartTestData(arg1:api.TestDataRequest):Promise<jobs.Job>;
+
 export function StartTransform(arg1:string,arg2:string):Promise<jobs.Job>;
+
+export function StopChangeStream(arg1:string):Promise<void>;
+
+export function StopMonitor(arg1:string):Promise<void>;
+
+export function SuggestValidator(arg1:schema.Report,arg2:schema.JSONSchemaOptions):Promise<string>;
 
 export function SyncNow():Promise<api.SyncReport>;
 
@@ -393,6 +445,8 @@ export function TestAI(arg1:string):Promise<string>;
 export function TestConnection(arg1:api.ProfileInput):Promise<mongox.TestResult>;
 
 export function TestConnectionWithLog(arg1:string,arg2:api.ProfileInput):Promise<mongox.TestResult>;
+
+export function TestDataTemplateFromSchema(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function TestPlatformConnection(arg1:boolean):Promise<update.ProbeReport>;
 

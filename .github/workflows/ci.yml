@@ -1,0 +1,188 @@
+name: CI
+
+# Every push and pull request: unit tests and checks, the integration suite
+# against real servers (docker-compose), and a build on Linux and Windows.
+# macOS is built by "Build executables" (manual), because macOS runners are
+# billed at 10x on private repositories; tick `macos` below to include it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: "Also build on macOS"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WAILS_VERSION: v2.16.0
+  NODE_VERSION: "22"
+
+jobs:
+  unit:
+    name: Unit tests and checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install GTK/WebKit headers (the main package links Wails)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+      - name: Frontend dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - name: TypeScript check
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Frontend tests (vitest)
+        run: npm test
+        working-directory: frontend
+      - name: go vet
+        run: go vet -tags webkit2_41 ./...
+      - name: Go unit tests (race detector)
+        env:
+          MANGO3S_SECRET_BACKEND: memory
+        run: go test -tags webkit2_41 -race -count=1 ./...
+
+  integration:
+    name: Integration tests (real servers)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Start MongoDB, with auth, a replica set, a sharded cluster, PostgreSQL and MySQL
+        run: docker compose --profile auth --profile sql --profile rs --profile sharded up -d --wait mongo mongo-auth mongo-rs mongo-mongos postgres mysql
+      - name: Install the MongoDB Database Tools and mongosh
+        run: |
+          curl -fsSL https://pgp.mongodb.com/server-8.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+          echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools mongodb-mongosh
+      - name: Integration suite
+        env:
+          MANGO3S_SECRET_BACKEND: memory
+          MONGO_URI: mongodb://localhost:27017
+          MONGO_AUTH_URI: mongodb://admin:change-me@localhost:27018/?authSource=admin
+          MONGO_RS_URI: mongodb://localhost:27020/?replicaSet=rs0
+          MONGO_SHARDED_URI: mongodb://localhost:27021
+          PG_DSN: postgres://mango_reader:reader@localhost:5433/shop?sslmode=disable
+          MYSQL_DSN: mango_reader:reader@tcp(localhost:3307)/shop
+        run: go test -tags integration -count=1 -v ./internal/integration/...
+      - name: Server logs on failure
+        if: failure()
+        run: docker compose --profile auth --profile sql --profile rs --profile sharded logs --tail 200
+
+  # Windows and Linux: the whole Go suite on the real OS, and the OS credential
+  # store (Windows Credential Manager, the Linux Secret Service).
+  platform:
+    name: Platform checks (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows, os: windows-latest }
+          - { name: linux, os: ubuntu-24.04 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Linux libraries and a Secret Service
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config gnome-keyring dbus-x11
+      - name: Go tests
+        env:
+          MANGO3S_SECRET_BACKEND: memory
+        run: go test -tags webkit2_41 -count=1 ./...
+      - name: OS credential store (Windows)
+        if: runner.os == 'Windows'
+        env:
+          MANGO3S_KEYRING_TEST: "1"
+        run: go test -count=1 -run TestOSKeyringRoundTrip -v ./internal/secrets
+      - name: OS credential store (Linux Secret Service)
+        if: runner.os == 'Linux'
+        run: |
+          dbus-run-session -- sh -c 'echo "" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && MANGO3S_KEYRING_TEST=1 go test -count=1 -run TestOSKeyringRoundTrip -v ./internal/secrets'
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux, os: ubuntu-24.04, platform: linux/amd64, tags: webkit2_41 }
+          - { name: windows, os: windows-latest, platform: windows/amd64 }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: wails build
+        run: |
+          args=(build -clean -platform "${{ matrix.platform }}")
+          if [ -n "${{ matrix.tags }}" ]; then args+=(-tags "${{ matrix.tags }}"); fi
+          wails "${args[@]}"
+
+  build-macos:
+    name: Build (macos)
+    needs: unit
+    if: github.event_name == 'workflow_dispatch' && inputs.macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - run: wails build -clean -platform darwin/universal

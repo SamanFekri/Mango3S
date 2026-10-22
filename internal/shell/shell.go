@@ -262,6 +262,10 @@ var readOnlyCommands = map[string]bool{
 	"top": true, "validate": true, "datasize": true, "getlog": true,
 }
 
+// ReadOnlyCommand reports whether runCommand may run name on a read-only
+// connection (shared with the JavaScript engine).
+func ReadOnlyCommand(name string) bool { return readOnlyCommands[strings.ToLower(name)] }
+
 func (e *executor) dbMethod(ctx context.Context, db string, m segment) (Output, error) {
 	d := e.sess.Client.Database(db)
 	switch m.name {

@@ -138,6 +138,7 @@ func Inspect(dir string) (Inspection, error) {
 			if ns, ok := expected[e.DB+"."+e.Coll]; ok {
 				e.Expected = ns.Count
 				e.Count = ns.Count
+				e.ShardKey, e.ShardUnique = ns.ShardKey, ns.ShardUnique
 			}
 			in.Entries = append(in.Entries, *e)
 		}
@@ -248,6 +249,10 @@ type RestoreOptions struct {
 	SkipOptions    bool      `json:"skipOptions"`    // don't create collections with saved options (validators, collation, capped…)
 	StopOnError    bool      `json:"stopOnError"`    // stop at the first failed collection
 	BypassValidate bool      `json:"bypassValidate"` // bypassDocumentValidation
+	// ShardCollections shards each restored collection that was sharded when
+	// it was backed up (the key is in the manifest), before loading its data.
+	// Only on a sharded cluster; the UI asks for confirmation.
+	ShardCollections bool `json:"shardCollections"`
 }
 
 // Target returns the namespace an entry restores into.
@@ -429,6 +434,11 @@ func restoreOne(ctx context.Context, cl *mongo.Client, o RestoreOptions, e Entry
 	}
 	if isView {
 		return nil
+	}
+	if o.ShardCollections && e.ShardKey != "" {
+		if err := shardTarget(ctx, cl, tdb, tcoll, e.ShardKey, e.ShardUnique, log); err != nil {
+			return err
+		}
 	}
 	if e.DataFile != "" {
 		if err := loadData(ctx, db.Collection(tcoll), o, e.DataFile, res, log); err != nil {

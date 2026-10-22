@@ -177,3 +177,17 @@ func TestToolArgsKeepSecretsOffTheCommandLine(t *testing.T) {
 		t.Fatal("ssh accepted")
 	}
 }
+
+// Replica set connection strings list several hosts, which net/url rejects.
+func TestToolArgsAcceptSeveralHosts(t *testing.T) {
+	p := config.Profile{Name: "rs", URI: "mongodb://a:27017,b:27017,c:27017/?replicaSet=rs0", Username: "ada"}
+	ta, err := DumpArgs(p, mongox.Credentials{Password: "pw"}, ToolDump{Archive: filepath.Join(t.TempDir(), "a.archive"), DB: "shop"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ta.Cleanup()
+	b, _ := os.ReadFile(ta.config)
+	if !strings.Contains(string(b), `mongodb://a:27017,b:27017,c:27017/`) || !strings.Contains(string(b), "replicaSet=rs0") {
+		t.Fatalf("config file:\n%s", b)
+	}
+}
