@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="200" viewBox="0 0 880 200" role="img" aria-label="Explain: a query goes from COLLSCAN, 1,204 ms, to IXSCAN, 4 ms, after creating an index">
+  <!-- Animated README card: explain shows the slow part, one click adds the index.
+       An 8 s loop: slow plan, button press, fast plan. -->
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .slow { animation: slow 8s infinite; }
+    .fast { opacity: 0; animation: fast 8s infinite; }
+    .btn { animation: press 8s infinite; transform-origin: 760px 150px; }
+    .bar { animation: bar 8s infinite; transform-origin: 40px 0; }
+    @keyframes slow { 0%, 42% { opacity: 1; transform: translateY(0); } 46%, 96% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
+    @keyframes fast { 0%, 45% { opacity: 0; transform: translateY(8px); } 50%, 94% { opacity: 1; transform: translateY(0); } 98%, 100% { opacity: 0; } }
+    @keyframes press { 0%, 38% { transform: scale(1); } 41% { transform: scale(0.9); } 44%, 100% { transform: scale(1); } }
+    @keyframes bar { 0%, 44% { transform: scaleX(1); } 50%, 94% { transform: scaleX(0.02); } 100% { transform: scaleX(1); } }
+  </style>
+  <rect width="880" height="200" rx="20" fill="#17191d"/>
+  <rect x="16" y="16" width="848" height="168" rx="14" fill="#1e2126" stroke="#2f343b"/>
+
+  <text x="40" y="54" font-size="15" fill="#a2abb7">Explain · db.orders.find(</text>
+  <text class="mono" x="205" y="54" font-size="15" fill="#e4e7eb">{ <tspan fill="#c39bff">status</tspan>: <tspan fill="#8fd18f">"paid"</tspan> }</text>
+  <text x="369" y="54" font-size="15" fill="#a2abb7">)</text>
+
+  <!-- Time bar: full when slow, almost empty when fast -->
+  <rect x="40" y="70" width="800" height="8" rx="4" fill="#262a30"/>
+  <rect class="bar" x="40" y="70" width="800" height="8" rx="4" fill="#f08c2a"/>
+
+  <g class="slow">
+    <rect x="40" y="96" width="176" height="44" rx="10" fill="rgba(240,96,90,0.14)"/>
+    <text class="mono" x="56" y="127" font-size="24" font-weight="800" fill="#f0605a">COLLSCAN</text>
+    <text class="mono" x="236" y="126" font-size="20" fill="#ffb3ae">48,210 docs read · 1,204 ms</text>
+    <text x="40" y="166" font-size="14" fill="#a2abb7">Reads every document. An index on status would fix it.</text>
+  </g>
+  <g class="fast">
+    <rect x="40" y="96" width="140" height="44" rx="10" fill="rgba(76,187,108,0.16)"/>
+    <text class="mono" x="56" y="127" font-size="24" font-weight="800" fill="#4cbb6c">IXSCAN</text>
+    <text class="mono" x="200" y="126" font-size="20" fill="#b6ecc5">312 docs read · 4 ms</text>
+    <text x="40" y="166" font-size="14" fill="#a2abb7">Uses the index { status: 1 }. 300× faster.</text>
+  </g>
+
+  <g class="btn">
+    <rect x="690" y="130" width="140" height="40" rx="10" fill="#f08c2a"/>
+    <text x="760" y="156" font-size="15" font-weight="700" fill="#1b1206" text-anchor="middle">Create index</text>
+  </g>
+</svg>
