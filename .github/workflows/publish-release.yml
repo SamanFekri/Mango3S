@@ -1,0 +1,176 @@
+name: Publish release
+
+# Puts built files on a GitHub Release (created if missing; files with the same
+# name are replaced, others are kept). Two ways in:
+#   - called by build.yml after its builds, with that run's files;
+#   - run by hand with the ID of an earlier "Build executables" run, to
+#     publish what it built without building again.
+# Platforms that didn't build are reported as a warning; the rest are still
+# published. See docs/RELEASING.md.
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      tag:
+        type: string
+        required: true
+      draft:
+        type: boolean
+        default: false
+      expected:
+        description: "JSON list of the platform names this run tried to build"
+        type: string
+        default: "[]"
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID of the Build executables run to publish (the number in its URL: …/actions/runs/<ID>)"
+        required: true
+      tag:
+        description: "Release tag (empty = v<version from the file names>)"
+        required: false
+        default: ""
+      draft:
+        description: "Keep the release as a draft (not visible to the public until you publish it)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  PLATFORMS: macos-arm64 macos-amd64 windows-amd64 windows-386 linux-amd64
+
+jobs:
+  publish:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Download this run's files
+        if: inputs.run_id == ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mango3s-*
+          path: dist
+          merge-multiple: true
+
+      - name: Download run ${{ inputs.run_id }}'s files
+        if: inputs.run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mango3s-*
+          path: dist
+          merge-multiple: true
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Check what was built
+        id: info
+        env:
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ inputs.tag }}
+          RUN_ID: ${{ inputs.run_id }}
+          EXPECTED: ${{ inputs.expected || '[]' }}
+        run: |
+          shopt -s nullglob
+          files=(dist/mango3s-*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No files to publish: every platform build failed (or run $RUN_ID has no files, or they expired)."
+            exit 1
+          fi
+          ls -la dist
+
+          # Platforms present, from file names: mango3s-<version>-<platform>.<ext>
+          present=""
+          for p in $PLATFORMS; do
+            if ls dist | grep -q -- "-$p\."; then present="$present $p"; fi
+          done
+          if [ -z "$VERSION" ]; then
+            VERSION=$(ls dist | head -1 | sed -E 's/^mango3s-(.+)-(macos|windows|linux)-[a-z0-9]+(-setup)?\..*$/\1/')
+          fi
+          [ -n "$TAG" ] || TAG="v$VERSION"
+          # A version with a suffix (0.9.4-beta.1) is a pre-release.
+          case "$VERSION" in *-*) pre=true ;; *) pre=false ;; esac
+          # The commit the files were built from, for a new tag.
+          sha="$GITHUB_SHA"
+          if [ -n "$RUN_ID" ]; then
+            sha=$(gh api "repos/$REPO/actions/runs/$RUN_ID" -q .head_sha)
+          fi
+
+          failed=$(jq -r --arg present "$present" '[.[] | select(. as $p | ($present | split(" ") | index($p)) | not)] | join(" ")' <<< "$EXPECTED")
+          if [ -n "$failed" ]; then
+            echo "::warning::Not built in this run, so not published: $failed. The other platforms are published."
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "prerelease=$pre"
+            echo "sha=$sha"
+            echo "failed=$failed"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.info.outputs.tag }}
+          name: Mango3S ${{ steps.info.outputs.version }}
+          target_commitish: ${{ steps.info.outputs.sha }}
+          prerelease: ${{ steps.info.outputs.prerelease }}
+          draft: ${{ inputs.draft }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*
+          body: |
+            ## Downloads
+
+            | System | Download |
+            |---|---|
+            | macOS, Apple Silicon (M1 and later) | `mango3s-${{ steps.info.outputs.version }}-macos-arm64.dmg` (or `.zip`) |
+            | macOS, Intel | `mango3s-${{ steps.info.outputs.version }}-macos-amd64.dmg` (or `.zip`) |
+            | Windows 64-bit | `mango3s-${{ steps.info.outputs.version }}-windows-amd64-setup.exe` (installer), or the portable `.exe` / `.zip` |
+            | Windows 32-bit | `mango3s-${{ steps.info.outputs.version }}-windows-386.exe` (portable) or `.zip` |
+            | Linux 64-bit | `mango3s-${{ steps.info.outputs.version }}-linux-amd64.deb` (Debian/Ubuntu) or `.tar.gz` (needs `libwebkit2gtk-4.1`) |
+
+            Each file has a matching `.sha256` checksum.
+
+            **macOS:** open the `.dmg` and drag Mango3S into Applications. The app isn't notarized yet, so the first time, right-click Mango3S › Open › Open.
+            **Windows:** SmartScreen may warn about an unknown publisher: More info › Run anyway.
+
+      # Lists every platform the release still has no files for, counting
+      # earlier runs too, with how to fill the gap.
+      - name: Check the release is complete
+        env:
+          TAG: ${{ steps.info.outputs.tag }}
+          VERSION: ${{ steps.info.outputs.version }}
+        run: |
+          assets=$(gh api "repos/$REPO/releases" --paginate -q ".[] | select(.tag_name == \"$TAG\") | .assets[].name")
+          missing=""
+          for p in $PLATFORMS; do
+            if ! grep -q -- "-$p\." <<< "$assets"; then missing="$missing $p"; fi
+          done
+          {
+            echo "## Release $TAG"
+            echo
+            echo "| Platform | On the release |"
+            echo "|---|---|"
+            for p in $PLATFORMS; do
+              if grep -q -- "-$p\." <<< "$assets"; then echo "| $p | ✅ |"; else echo "| $p | ❌ missing |"; fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$missing" ]; then
+            echo "::warning::Release $TAG has no files yet for:$missing. To add them: Actions › Build executables › Run workflow, tick only those platforms, version $VERSION, Publish ticked."
+            {
+              echo
+              echo "**Missing:**$missing"
+              echo
+              echo "To add them: Actions › **Build executables** › Run workflow › tick only those platforms, version \`$VERSION\`, **Publish** ticked."
+              echo "If they were built in an earlier run, use Actions › **Publish release** with that run's ID instead."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

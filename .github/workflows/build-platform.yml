@@ -1,0 +1,141 @@
+name: Build one platform
+
+# Reusable: builds and packages Mango3S for one platform and uploads the files
+# as the run artifact "mango3s-<version>-<name>". Called by build.yml for each
+# chosen platform; not run on its own.
+on:
+  workflow_call:
+    inputs:
+      name:
+        description: "Platform name used in file names, e.g. macos-arm64"
+        type: string
+        required: true
+      platform:
+        description: "Wails platform, e.g. darwin/arm64"
+        type: string
+        required: true
+      runs-on:
+        description: "Runner as JSON: a label string or a list of labels"
+        type: string
+        required: true
+      tags:
+        description: "Go build tags"
+        type: string
+        default: ""
+      version:
+        type: string
+        required: true
+      platform_base_url:
+        type: string
+        default: "https://mango3s.com"
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.16.0
+  NODE_VERSION: "22"
+
+jobs:
+  build:
+    name: ${{ inputs.name }}
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      NAME: mango3s-${{ inputs.version }}-${{ inputs.name }}
+      LDFLAGS: >-
+        -X mango3s/internal/api.Version=${{ inputs.version }}
+        -X mango3s/internal/api.PlatformBaseURL=${{ inputs.platform_base_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev pkg-config
+
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install NSIS
+        if: inputs.platform == 'windows/amd64'
+        run: |
+          if ! command -v makensis >/dev/null; then
+            choco install nsis -y --no-progress
+            echo "C:\Program Files (x86)\NSIS" >> "$GITHUB_PATH"
+          fi
+
+      # Windows x64 also gets the NSIS installer from the same build. Wails'
+      # installer script supports amd64 and arm64 only, so x86 ships as a
+      # plain .exe.
+      - name: Build
+        run: |
+          args=(build -clean -platform "${{ inputs.platform }}" -ldflags "$LDFLAGS")
+          if [ -n "${{ inputs.tags }}" ]; then
+            args+=(-tags "${{ inputs.tags }}")
+          fi
+          if [ "${{ inputs.platform }}" = "windows/amd64" ]; then
+            args+=(-nsis)
+          fi
+          wails "${args[@]}"
+          ls -la build/bin
+
+      - name: Package
+        run: |
+          rm -rf dist && mkdir -p dist
+          case "${{ runner.os }}" in
+            macOS)
+              # ditto keeps the .app bundle's symlinks and permissions intact.
+              ditto -c -k --keepParent build/bin/Mango3S.app "dist/$NAME.zip"
+              # Disk image whose window shows the app, an arrow and an
+              # Applications shortcut to drag it onto (build/darwin/dmg-settings.py).
+              python3 -m venv "$RUNNER_TEMP/dmgbuild"
+              "$RUNNER_TEMP/dmgbuild/bin/pip" install --quiet "dmgbuild>=1.6,<2"
+              "$RUNNER_TEMP/dmgbuild/bin/dmgbuild" -s build/darwin/dmg-settings.py \
+                -D app=build/bin/Mango3S.app "Mango3S" "dist/$NAME.dmg"
+              ;;
+            Windows)
+              cp build/bin/mango3s.exe "dist/$NAME.exe"
+              7z a "dist/$NAME.zip" ./build/bin/mango3s.exe
+              if [ "${{ inputs.platform }}" = "windows/amd64" ]; then
+                cp build/bin/Mango3S-amd64-installer.exe "dist/$NAME-setup.exe"
+              fi
+              ;;
+            Linux)
+              go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.41.1
+              VERSION="${{ inputs.version }}" nfpm package --config build/linux/nfpm.yaml --packager deb --target build/bin/
+              cp build/bin/*.deb "dist/$NAME.deb"
+              # tar keeps the executable bit, which upload-artifact would drop.
+              tar -czf "dist/$NAME.tar.gz" -C build/bin mango3s
+              ;;
+          esac
+          # One checksum file per download, so a platform re-published on its
+          # own never overwrites the others' sums.
+          cd dist
+          for f in *; do
+            if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi
+          done
+          ls -la
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: dist/*
+          if-no-files-found: error

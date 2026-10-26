@@ -16,7 +16,7 @@ LDFLAGS := -X mango3s/internal/api.Version=$(VERSION) -X mango3s/internal/api.Pl
 PLATFORM_URL ?=
 PLATFORM_ENV := $(if $(PLATFORM_URL),MANGO3S_PLATFORM_URL=$(PLATFORM_URL))
 
-.PHONY: notices dev platform-check platform-api build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down rs-up sharded-up docker-build docker-test bindings mcp
+.PHONY: notices dev platform-check platform-api build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down rs-up sharded-up docker-build docker-test bindings mcp dmg-background
 
 dev: ## Run the app with hot reload in test mode: request log + API console (Settings › Diagnostics)
 	$(PLATFORM_ENV) MANGO3S_TEST_MODE=1 $(WAILS) dev -ldflags "$(LDFLAGS)"
@@ -29,6 +29,12 @@ platform-check: ## Test the web platform APIs: all, or one with CHECK=notificati
 
 build: ## Build the desktop app for this OS into build/bin
 	$(WAILS) build -clean -ldflags "$(LDFLAGS)"
+
+dmg-background: ## Regenerate the macOS .dmg window background (needs rsvg-convert: brew install librsvg)
+	rsvg-convert -w 660 -h 400 build/darwin/dmg-background.svg -o build/darwin/.bg-1x.png
+	rsvg-convert -w 1320 -h 800 build/darwin/dmg-background.svg -o build/darwin/.bg-2x.png
+	tiffutil -cathidpicheck build/darwin/.bg-1x.png build/darwin/.bg-2x.png -out build/darwin/dmg-background.tiff
+	rm build/darwin/.bg-1x.png build/darwin/.bg-2x.png
 
 notices: ## Regenerate the third-party license list shown in About › License
 	scripts/third-party-notices.sh
