@@ -1,12 +1,13 @@
 <div align="center">
 
+<a href="https://mango3s.com"><img src="build/appicon.png" alt="Mango3S app icon" width="112" height="112" /></a>
+
 <a href="https://mango3s.com"><img src="docs/media/banner.svg" alt="Mango3S: the free desktop IDE for MongoDB" width="880" /></a>
 
 *Say it fast: Mango Trees.* 🌳🥭
 
 [![Latest release](https://img.shields.io/github/v/release/SamanFekri/Mango3S?label=latest&color=f08c2a&logo=github)](https://github.com/SamanFekri/Mango3S/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/SamanFekri/Mango3S/total?color=16a34a&label=downloads)](https://github.com/SamanFekri/Mango3S/releases)
-[![Tests](https://img.shields.io/github/actions/workflow/status/SamanFekri/Mango3S/ci.yml?branch=main&label=tests)](https://github.com/SamanFekri/Mango3S/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-2563eb)](LICENSE)
 <br />
 [![macOS · Windows · Linux](https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-desktop-555)](https://github.com/SamanFekri/Mango3S/releases/latest)
@@ -111,7 +112,7 @@ The full list is in **[docs/FEATURES.md](docs/FEATURES.md)**.
 
 And yes, there's Mango 🥭, a small mascot who cheers you on. You can hide it in Settings.
 
-## ⬇️ Get Mango3S
+## <img src="build/appicon.png" alt="" width="28" height="28" align="top" /> Get Mango3S
 
 Download the latest version from **[GitHub Releases](https://github.com/SamanFekri/Mango3S/releases/latest)**
 or **[mango3s.com](https://mango3s.com)**, which detects your system and picks the right file.
