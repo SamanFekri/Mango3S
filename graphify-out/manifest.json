@@ -1720,8 +1720,8 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/DownloadsView.vue": {
-    "mtime": 1792573510.2692642,
-    "ast_hash": "8a5f159093e9b138a40b6f5bda229360",
+    "mtime": 1792699694.1509137,
+    "ast_hash": "658d4ac85174b6d86ff981a5fc2f3944",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/InstallationsView.vue": {
@@ -1825,8 +1825,8 @@
     "semantic_hash": ""
   },
   "web/packages/contracts/src/enums.ts": {
-    "mtime": 1792571929.122211,
-    "ast_hash": "4c13df20b7f09a480f917c30f98f14b1",
+    "mtime": 1792699683.5912426,
+    "ast_hash": "553213de3f3d7e3cf0ac5088a33f7f15",
     "semantic_hash": ""
   },
   "web/packages/contracts/src/index.ts": {
@@ -1935,8 +1935,8 @@
     "semantic_hash": ""
   },
   "web/docs/API_CONTRACT.md": {
-    "mtime": 1792696968.025033,
-    "ast_hash": "f10f5e6bca7725c4f5739997b1c98e26",
+    "mtime": 1792699748.7423418,
+    "ast_hash": "17100521eb84077601c8affe1409a98e",
     "semantic_hash": ""
   },
   "web/docs/ARCHITECTURE.md": {
@@ -1980,8 +1980,8 @@
     "semantic_hash": ""
   },
   "web/apps/api/src/modules/download-links/service.ts": {
-    "mtime": 1792696800.6064181,
-    "ast_hash": "f23afcf8ddd4359a16fac411be49e1f0",
+    "mtime": 1792699683.590895,
+    "ast_hash": "3bd9bcfcfd98d71ab774047e8a014295",
     "semantic_hash": ""
   },
   "web/apps/api/tests/download-links.test.ts": {
@@ -1995,18 +1995,18 @@
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/lib/platforms.ts": {
-    "mtime": 1792571929.1229248,
-    "ast_hash": "8c4b4a0fcc67c18e1f6fc785588af1fa",
+    "mtime": 1792699683.588787,
+    "ast_hash": "908fc5d0fae24b9574cda7c04397d944",
     "semantic_hash": ""
   },
   "web/apps/dashboard/src/views/DownloadLinksView.vue": {
-    "mtime": 1792696826.142019,
-    "ast_hash": "d568887e45fccc3baf646e0302fbafbd",
+    "mtime": 1792699683.590439,
+    "ast_hash": "6d47fe2783571d71a6318000db0a384b",
     "semantic_hash": ""
   },
   "web/apps/dashboard/tests/platforms.test.ts": {
-    "mtime": 1792571984.8937356,
-    "ast_hash": "192665a1f6bae778c2a79ecd5f1eb686",
+    "mtime": 1792699702.133488,
+    "ast_hash": "f478fbbfc8310a7728a083faf2cac30b",
     "semantic_hash": ""
   },
   "web/packages/contracts/src/schemas/downloads.ts": {
@@ -2015,8 +2015,8 @@
     "semantic_hash": ""
   },
   "app/.github/workflows/build.yml": {
-    "mtime": 1792690274.7704477,
-    "ast_hash": "3ebdf2a1728e58fcac0c46b4d92aeb7c",
+    "mtime": 1793004062.460398,
+    "ast_hash": "7ef75feb544d84ea6a213ebeb7e75503",
     "semantic_hash": ""
   },
   "app/frontend/src/components/AccountSettings.tsx": {
@@ -2510,8 +2510,8 @@
     "semantic_hash": ""
   },
   "app/docs/RELEASING.md": {
-    "mtime": 1792570273.8941576,
-    "ast_hash": "4428214b81a7232ac63585b219fef8d6",
+    "mtime": 1793004128.111653,
+    "ast_hash": "34e3c3d095aca1d77378183fc07d5920",
     "semantic_hash": ""
   },
   "app/docs/REFERENCE.md": {
@@ -2807,6 +2807,16 @@
   "web/apps/dashboard/public/og-image.png": {
     "mtime": 1792573535.5548143,
     "ast_hash": "09d7e80eceb663174b7be6663a4fa350",
+    "semantic_hash": ""
+  },
+  "app/.github/workflows/build-platform.yml": {
+    "mtime": 1793003979.6310122,
+    "ast_hash": "c5c470332ee82e2486e87cadf9d5e94e",
+    "semantic_hash": ""
+  },
+  "app/.github/workflows/publish-release.yml": {
+    "mtime": 1793004037.2480612,
+    "ast_hash": "a68431391d4c9680c68746b8e7eec174",
     "semantic_hash": ""
   }
 }
