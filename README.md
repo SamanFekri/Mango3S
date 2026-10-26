@@ -1,8 +1,8 @@
 <div align="center">
 
-<a href="https://mango3s.com"><img src="build/appicon.png" alt="Mango3S app icon" width="112" height="112" /></a>
-
 <a href="https://mango3s.com"><img src="docs/media/banner.svg" alt="Mango3S: the free desktop IDE for MongoDB" width="880" /></a>
+
+<a href="https://mango3s.com"><img src="build/appicon.png" alt="Mango3S app icon" width="112" height="112" /></a>
 
 *Say it fast: Mango Trees.* 🌳🥭
 
