@@ -325,3 +325,64 @@ func TestExportImportDefinitionsResetApproval(t *testing.T) {
 		t.Fatal("foreign file accepted")
 	}
 }
+
+func TestNotifyWants(t *testing.T) {
+	for _, c := range []struct {
+		n     Notify
+		state string
+		want  bool
+	}{
+		{Notify{On: NotifyFailure, Desktop: true}, RunFailed, true},
+		{Notify{On: NotifyFailure, Webhook: true}, RunInterrupted, true},
+		{Notify{On: NotifyFailure, Desktop: true}, RunSucceeded, false},
+		{Notify{On: NotifyFailure, Desktop: true}, RunSkipped, false},
+		{Notify{On: NotifyAlways, Desktop: true}, RunSucceeded, true},
+		{Notify{On: NotifyAlways, Desktop: true}, RunRunning, false},
+		{Notify{On: NotifyAlways}, RunFailed, false}, // nowhere to send it
+		{Notify{On: NotifyNever, Desktop: true, Webhook: true}, RunFailed, false},
+	} {
+		if got := c.n.Wants(c.state); got != c.want {
+			t.Errorf("%+v.Wants(%s) = %v", c.n, c.state, got)
+		}
+	}
+}
+
+func TestNotifierHearsFinishedRuns(t *testing.T) {
+	f := newFixture(t, t.TempDir())
+	got := make(chan Run, 4)
+	f.s.SetNotifier(func(task Task, r Run) {
+		if task.Notify.On == NotifyFailure && task.Notify.Webhook {
+			got <- r
+		}
+	})
+	task, err := f.s.Save(Task{Name: "flaky", Type: "noop", Enabled: true, Schedule: Schedule{Kind: KindInterval, EveryMinutes: 60},
+		Notify: Notify{On: NotifyFailure, Webhook: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.s.Approve(task.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.fail.Store(1)
+	if _, err := f.s.RunNow(task.ID); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-got:
+		if r.State != RunFailed || r.TaskName != "flaky" || len(r.Errors) != 1 {
+			t.Fatalf("notified run: %+v", r)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the notifier was not called")
+	}
+	// An unknown "on" value is stored as never.
+	task.Notify.On = "sometimes"
+	if task, _ = f.s.Save(task); task.Notify.On != NotifyNever {
+		t.Fatalf("notify.on = %q", task.Notify.On)
+	}
+	// Exports keep the setting but not the webhook.
+	b, _, _ := f.s.ExportDefinitions(nil)
+	if !strings.Contains(string(b), `"desktop": false`) && !strings.Contains(string(b), `"desktop":false`) || strings.Contains(string(b), `"webhook": true`) || strings.Contains(string(b), `"webhook":true`) {
+		t.Fatalf("export: %s", b)
+	}
+}

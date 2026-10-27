@@ -193,6 +193,18 @@
  },
  {
   "kind": "go",
+  "name": "github.com/richardlehane/mscfb",
+  "version": "v1.0.7",
+  "license": "Apache-2.0"
+ },
+ {
+  "kind": "go",
+  "name": "github.com/richardlehane/msoleps",
+  "version": "v1.0.6",
+  "license": "Apache-2.0"
+ },
+ {
+  "kind": "go",
   "name": "github.com/rivo/uniseg",
   "version": "v0.4.7",
   "license": "MIT"
@@ -241,6 +253,12 @@
  },
  {
   "kind": "go",
+  "name": "github.com/tiendc/go-deepcopy",
+  "version": "v1.7.2",
+  "license": "MIT"
+ },
+ {
+  "kind": "go",
   "name": "github.com/wailsapp/wails/v2",
   "version": "v2.16.0",
   "license": "MIT"
@@ -256,6 +274,24 @@
   "name": "github.com/xdg-go/stringprep",
   "version": "v1.0.4",
   "license": "Apache-2.0"
+ },
+ {
+  "kind": "go",
+  "name": "github.com/xuri/efp",
+  "version": "v0.0.1",
+  "license": "BSD-3-Clause"
+ },
+ {
+  "kind": "go",
+  "name": "github.com/xuri/excelize/v2",
+  "version": "v2.11.0",
+  "license": "BSD-3-Clause"
+ },
+ {
+  "kind": "go",
+  "name": "github.com/xuri/nfp",
+  "version": "v0.0.2-0.20250530014748-2ddeb826f9a9",
+  "license": "BSD-3-Clause"
  },
  {
   "kind": "go",

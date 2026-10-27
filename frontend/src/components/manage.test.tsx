@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionInfo } from '../lib/types'
 
 const backend = vi.hoisted(() => ({
+  listSearchIndexes: vi.fn().mockResolvedValue({ supported: false, reason: 'No Atlas Search here.', indexes: [] }),
   listCollections: vi.fn(),
   createCollection: vi.fn(),
   createCollectionWithOptions: vi.fn(),

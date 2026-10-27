@@ -44,6 +44,7 @@ import (
 	"mango3s/internal/streams"
 	"mango3s/internal/transfer"
 	"mango3s/internal/transform"
+	"mango3s/internal/users"
 )
 
 // Version is set at build time with -ldflags "-X mango3s/internal/api.Version=...".
@@ -105,6 +106,7 @@ type App struct {
 	// Phases 2–5 (docs/ROADMAP.md)
 	monitor *monitor.Service
 	gridfs  *gridfs.Service
+	users   *users.Service
 	js      *jsengine.Runner
 	charts  *charts.Service
 	streams *streams.Service
@@ -137,6 +139,7 @@ func New(d Deps) *App {
 	a.transfer = transfer.New(d.Conns, a.jobs)
 	a.monitor = monitor.New(d.Conns, nil)
 	a.gridfs = gridfs.New(d.Conns)
+	a.users = users.New(d.Conns)
 	a.js = jsengine.New(d.Conns, 50)
 	a.charts = charts.New(d.Conns)
 	a.streams = streams.New(d.Conns)

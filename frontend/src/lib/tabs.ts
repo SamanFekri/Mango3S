@@ -5,7 +5,7 @@ export type SettingsSection = 'general' | 'ai' | 'mcp' | 'keymap' | 'account' | 
 
 export type TabKind =
   | 'welcome' | 'collection' | 'aggregation' | 'shell' | 'settings' | 'schema' | 'sql' | 'library'
-  | 'compare' | 'reschema' | 'mask' | 'migrate' | 'tasks' | 'connection' | 'monitor' | 'gridfs' | 'changes'
+  | 'compare' | 'reschema' | 'mask' | 'migrate' | 'tasks' | 'connection' | 'monitor' | 'gridfs' | 'changes' | 'users'
 
 /** Content a tab opens with, e.g. from a saved item or the history. */
 export interface TabInit {
@@ -89,16 +89,18 @@ export function tabTitle(t: Omit<Tab, 'id' | 'title'>): string {
       return `${t.coll ?? t.db ?? ''} · GridFS`
     case 'changes':
       return `Changes · ${t.coll ?? t.db ?? t.connName ?? ''}`
+    case 'users':
+      return `Users · ${t.connName ?? ''}`
   }
 }
 
 function sameTarget(a: Omit<Tab, 'id' | 'title'>, b: Tab): boolean {
-  if (a.kind === 'connection' || a.kind === 'monitor') return b.kind === a.kind && a.connId === b.connId
+  if (a.kind === 'connection' || a.kind === 'monitor' || a.kind === 'users') return b.kind === a.kind && a.connId === b.connId
   return a.kind === b.kind && a.connId === b.connId && a.db === b.db && a.coll === b.coll
 }
 
 /** Kinds that exist at most once (per connection for workspaces). */
-const SINGLETONS = new Set<TabKind>(['settings', 'welcome', 'library', 'tasks', 'connection', 'monitor'])
+const SINGLETONS = new Set<TabKind>(['settings', 'welcome', 'library', 'tasks', 'connection', 'monitor', 'users'])
 
 export function tabsReducer(state: TabsState, action: TabsAction): TabsState {
   switch (action.type) {

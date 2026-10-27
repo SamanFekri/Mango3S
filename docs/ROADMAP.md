@@ -38,7 +38,7 @@ Change streams, replication lag and replica set status all need a replica set, a
 
   Integration suites skip when their server isn't running, as they already do for `MONGO_AUTH_URI`.
 - [x] **0.3 Fix outdated docs (S).** `docs/P2.md` still says "no task dependencies or chains" (multi-step tasks now exist) and "Anthropic Claude only; no local models" (local models are now supported).
-- [ ] **0.4 Split large frontend files (M).**
+- [x] **0.4 Split large frontend files (M).** Done: explorer menus in `components/explorer/menus.tsx`, its dialogs in `ExplorerDialogs.tsx` (Sidebar 788 → 573 lines); paging and document editing of `CollectionView` in `views/collection/usePagedQuery.ts` and `useDocumentActions.tsx`.
   - Move the explorer menus and dialog state out of `Sidebar.tsx` (748 lines) into `explorer/menus.ts` and `ExplorerDialogs.tsx`.
   - Move the editor and paging logic out of `CollectionView.tsx` (656 lines) into hooks.
   - No behavior change: the existing tests must still pass.
@@ -58,11 +58,11 @@ Change streams, replication lag and replica set status all need a replica set, a
   - **UI:** an SVG tree with one box per stage, showing documents and keys examined and time. Collection scans are highlighted.
   - **Compare plans:** run explain twice (for example before and after an index) and show the two plans side by side with the differences.
   - **Index advisor:** offer "Compare plan" after **Create**.
-- [ ] **1.3 Export aggregation results (S).**
+- [x] **1.3 Export aggregation results (S).** Done: `ExportOptions.Pipeline`, *Export results…* in the aggregation editor.
   - **Backend:** add an optional pipeline to `transfer.ExportOptions`. When it is set, `RunExport` streams the aggregation cursor instead of a find; writing to the file is unchanged.
   - **UI:** an "Export results…" button in the aggregation editor.
   - **Tests:** export a pipeline result, then import it.
-- [ ] **1.4 Notifications for scheduled tasks (S–M).**
+- [x] **1.4 Notifications for scheduled tasks (S–M).** Done: `internal/notify`, per-task settings, webhook URL in the credential store.
   - **Webhook:** set per task. Mango3S POSTs JSON on failure, or on every run if chosen. The URL is stored as a secret.
   - **Desktop notifications:** Wails v2 has no notification API, so they go through the OS:
     - macOS: `osascript`;
@@ -85,7 +85,7 @@ Change streams, replication lag and replica set status all need a replica set, a
     - unit tests for the rate calculations;
     - a real server lists and kills a slow `$where` operation;
     - lag is shown on the `rs` test server.
-- [ ] **2.2 Users and roles (L).**
+- [x] **2.2 Users and roles (L).** Done: `internal/users`, the *Users and roles* tab, shell helpers; shell history masks passwords.
   - **Backend:** new package `internal/users`.
     - Read with `usersInfo` and `rolesInfo`, including built-in roles and their privileges.
     - Create users and change passwords. A typed password is never logged; a password generator is optional.
@@ -168,10 +168,10 @@ Change streams, replication lag and replica set status all need a replica set, a
     - Copying gets the same option.
   - **Profiler:** offers to connect to individual shards, since profiling runs per shard.
   - **Tests:** back up a sharded collection, restore it, and check it is sharded again with the same key.
-- [ ] **5.2 Compare and sync improvements (M).**
+- [x] **5.2 Compare and sync improvements (M).** Done: `compare.Options.MatchKey`; `syncer.DiffSchema`/`ApplySchema` with a stale-preview check.
   - Match documents by a custom key, not only `_id`.
   - Sync indexes and validation rules too, after a preview and confirmation. Today they are only reported.
-- [ ] **5.3 Atlas Search and Vector Search indexes (M).**
+- [x] **5.3 Atlas Search and Vector Search indexes (M).** Done: `manage.*SearchIndex*`, compose profile `search` (`make search-up`, port 27022), CI runs it.
   - **Backend:** list, create, update and drop search indexes (`listSearchIndexes`, `createSearchIndex`, `updateSearchIndex`, `dropSearchIndex`).
   - **UI:**
     - a Search indexes section in the index manager;
@@ -184,7 +184,7 @@ Change streams, replication lag and replica set status all need a replica set, a
 
 ## Phase 6: Platform
 
-- [ ] **6.1 Excel import and export (M).**
+- [x] **6.1 Excel import and export (M).** Done: `transfer/excel.go`; numbers and dates import from the stored value, so they round-trip exactly.
   - Use `excelize` (BSD-3 license).
   - **Export:** one sheet per collection or query, with typed cells. Values that don't fit a cell are written as Extended JSON.
   - **Import:** the same column mapping as CSV, reusing the type conversion in `transfer`.

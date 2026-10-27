@@ -328,10 +328,7 @@ func Apply(ctx context.Context, src mongox.Source, s Spec, fn Func, operation, b
 			if err := bk.Replaced(d); err != nil {
 				return rep, err
 			}
-			filter := bson.D{
-				{Key: "_id", Value: bson.D{{Key: "$eq", Value: idOf(d)}}},
-				{Key: "$expr", Value: bson.D{{Key: "$eq", Value: bson.A{"$$ROOT", bson.D{{Key: "$literal", Value: d}}}}}},
-			}
+			filter := mongox.UnchangedFilter(idOf(d), d)
 			batch = append(batch, mongo.NewReplaceOneModel().SetFilter(filter).SetReplacement(out))
 			remember(out)
 		}

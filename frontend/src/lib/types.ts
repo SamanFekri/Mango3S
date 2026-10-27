@@ -663,7 +663,7 @@ export interface Job {
   log?: string[]
 }
 
-export type TransferFormat = 'json' | 'csv'
+export type TransferFormat = 'json' | 'csv' | 'xlsx'
 
 export interface ColumnSpec {
   name: string
@@ -678,6 +678,8 @@ export interface ImportOptions {
   path: string
   format: TransferFormat | ''
   delimiter: string
+  /** Excel: the sheet to read ('' = the first). */
+  sheet?: string
   columns: ColumnSpec[]
   keepBlanks: boolean
   mode: 'insert' | 'upsert'
@@ -703,6 +705,10 @@ export interface ExportOptions {
   delimiter: string
   noHeader: boolean
   fields: string[]
+  /** Export these pipeline results instead of a find (filter, sort, skip,
+   * limit and fields are then ignored). */
+  pipeline?: Stage[]
+  allowDiskUse?: boolean
 }
 
 export interface ColumnPreview {
@@ -716,6 +722,8 @@ export interface ImportPreview {
   sizeBytes: number
   documents: Doc[]
   columns: ColumnPreview[]
+  /** Excel: the workbook's sheets. */
+  sheets?: string[]
   error?: string
 }
 
@@ -899,6 +907,26 @@ export interface CompareOptions {
   ignoreFields: string[]
   ignoreFieldOrder: boolean
   sampleSize: number
+  /** Match documents by these fields instead of _id. */
+  matchKey?: string[]
+}
+
+export interface SchemaChange {
+  id: string
+  kind: 'createIndex' | 'replaceIndex' | 'dropIndex' | 'validator'
+  name?: string
+  source?: string
+  target?: string
+}
+
+export interface SchemaDiff {
+  changes: SchemaChange[]
+  fingerprint: string
+}
+
+export interface SchemaResult {
+  applied: string[]
+  failed: string[]
 }
 
 export interface FieldChange {
@@ -1204,11 +1232,20 @@ export interface Task {
   enabled: boolean
   retry: { maxAttempts: number; backoffSeconds: number }
   misfire: 'skip' | 'runOnce'
+  notify?: TaskNotify
   approvedHash: string
   approvedAt?: string
   nextRun: string
   createdAt: string
   updatedAt: string
+}
+
+/** When a task tells the user how a run went. The webhook URL itself is in
+ * the credential store (SetTaskWebhook). */
+export interface TaskNotify {
+  on: 'never' | 'failure' | 'always'
+  desktop: boolean
+  webhook: boolean
 }
 
 export interface TaskRun {
@@ -1928,4 +1965,93 @@ export interface TestDataPreview {
   documents: { id: string; text: string; json: string }[]
   existing: number
   generators: { name: string; help: string; example: string }[]
+}
+
+// ---- users and roles (Explorer › connection › Users and roles…) -------------
+
+export interface DbRole {
+  role: string
+  db: string
+}
+
+export interface PrivilegeResource {
+  db?: string
+  collection?: string
+  cluster?: boolean
+  anyResource?: boolean
+}
+
+export interface Privilege {
+  resource: PrivilegeResource
+  actions: string[]
+}
+
+export interface DbUser {
+  user: string
+  db: string
+  roles: DbRole[]
+  mechanisms?: string[]
+  /** The user this connection is signed in as. */
+  self: boolean
+}
+
+export interface RoleInfo {
+  role: string
+  db: string
+  isBuiltin: boolean
+  roles: DbRole[]
+  privileges: Privilege[]
+}
+
+export interface UserEffective {
+  roles: DbRole[]
+  privileges: Privilege[]
+}
+
+export interface NewUser {
+  connId: string
+  db: string
+  user: string
+  password: string
+  roles: DbRole[]
+}
+
+export interface RoleSpec {
+  connId: string
+  db: string
+  role: string
+  privileges: Privilege[]
+  roles: DbRole[]
+}
+
+export interface UserChange {
+  connId: string
+  db: string
+  user: string
+  drop: boolean
+  roles: DbRole[]
+}
+
+// ---- Atlas Search and Vector Search indexes --------------------------------
+
+export interface SearchIndex {
+  name: string
+  type: 'search' | 'vectorSearch' | string
+  status: string
+  queryable: boolean
+  /** Definition in mongosh syntax. */
+  definition: string
+  message?: string
+}
+
+export interface SearchIndexList {
+  supported: boolean
+  reason?: string
+  indexes: SearchIndex[]
+}
+
+export interface SearchIndexInput {
+  name: string
+  type: string
+  definition: string
 }

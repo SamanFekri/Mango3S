@@ -4,7 +4,7 @@ import { ErrorBanner, Modal, Segmented } from '../components/common'
 import { backend } from '../lib/backend'
 import { toAppError, type AppError } from '../lib/errors'
 import { timeAgo } from '../lib/library'
-import type { Task, TaskRun, TaskSchedule, TaskType } from '../lib/types'
+import type { Task, TaskNotify, TaskRun, TaskSchedule, TaskType } from '../lib/types'
 import { useApp } from '../state/AppContext'
 
 const TEMPLATES: Record<string, object> = {
@@ -37,6 +37,11 @@ interface Draft {
   retry: { maxAttempts: number; backoffSeconds: number }
   misfire: 'skip' | 'runOnce'
   enabled: boolean
+  notify: TaskNotify
+  /** A new webhook URL to store; undefined keeps the stored one. */
+  webhookUrl?: string
+  /** Host of the stored webhook ('' = none). */
+  webhookHost: string
 }
 
 function toDraft(t?: Task, type = 'export'): Draft {
@@ -49,6 +54,8 @@ function toDraft(t?: Task, type = 'export'): Draft {
     retry: t?.retry ?? { maxAttempts: 2, backoffSeconds: 60 },
     misfire: t?.misfire ?? 'skip',
     enabled: t?.enabled ?? true,
+    notify: t?.notify ?? { on: 'never', desktop: true, webhook: false },
+    webhookHost: '',
   }
 }
 
@@ -79,6 +86,16 @@ export function TasksView() {
     return () => window.clearInterval(id)
   }, [load])
 
+  // The stored webhook's host, for the task being edited.
+  const editingId = draft?.id
+  useEffect(() => {
+    if (!editingId) return
+    backend
+      .taskWebhookHost(editingId)
+      .then((host) => setDraft((d) => (d && d.id === editingId ? { ...d, webhookHost: host } : d)))
+      .catch(() => undefined)
+  }, [editingId])
+
   const save = async () => {
     if (!draft) return
     setError(null)
@@ -90,7 +107,18 @@ export function TasksView() {
       return
     }
     try {
-      await backend.saveTask({ id: draft.id, name: draft.name, type: draft.type, params, schedule: draft.schedule, retry: draft.retry, misfire: draft.misfire, enabled: draft.enabled })
+      const saved = await backend.saveTask({
+        id: draft.id,
+        name: draft.name,
+        type: draft.type,
+        params,
+        schedule: draft.schedule,
+        retry: draft.retry,
+        misfire: draft.misfire,
+        enabled: draft.enabled,
+        notify: draft.notify,
+      })
+      if (draft.webhookUrl !== undefined) await backend.setTaskWebhook(saved.id, draft.webhookUrl)
       setDraft(null)
       load()
       toast({ kind: 'info', title: 'Task saved', message: 'Review and approve it before it can run.' })
@@ -346,6 +374,59 @@ export function TasksView() {
               Enabled
             </label>
           </div>
+          <h4>Notifications</h4>
+          <div className="field-row">
+            <label className="field">
+              <span>Tell me</span>
+              <select
+                value={draft.notify.on}
+                onChange={(e) => setDraft({ ...draft, notify: { ...draft.notify, on: e.target.value as TaskNotify['on'] } })}
+                aria-label="When to notify"
+              >
+                <option value="never">never</option>
+                <option value="failure">when a run fails</option>
+                <option value="always">after every run</option>
+              </select>
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={draft.notify.desktop} onChange={(e) => setDraft({ ...draft, notify: { ...draft.notify, desktop: e.target.checked } })} />
+              Desktop notification
+            </label>
+            <label className="check">
+              <input type="checkbox" checked={draft.notify.webhook} onChange={(e) => setDraft({ ...draft, notify: { ...draft.notify, webhook: e.target.checked } })} />
+              Webhook
+            </label>
+          </div>
+          {draft.notify.webhook && (
+            <div className="field-row">
+              <label className="field">
+                <span>Webhook URL (Mango3S POSTs the run as JSON; kept in your system's credential store)</span>
+                <input
+                  className="mono"
+                  value={draft.webhookUrl ?? ''}
+                  onChange={(e) => setDraft({ ...draft, webhookUrl: e.target.value })}
+                  placeholder={draft.webhookHost ? `stored: ${draft.webhookHost}/… (type to replace)` : 'https://hooks.example.com/…'}
+                  aria-label="Webhook URL"
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+              </label>
+              {draft.webhookHost && draft.webhookUrl === undefined && (
+                <button className="small ghost" onClick={() => setDraft({ ...draft, webhookUrl: '', webhookHost: '' })}>
+                  Remove
+                </button>
+              )}
+            </div>
+          )}
+          {draft.id && (draft.notify.desktop || draft.notify.webhook) && (
+            <button
+              className="small"
+              title="Uses the saved settings: save first if you changed them"
+              onClick={() => act(() => backend.testTaskNotification(draft.id), 'Test notification sent')}
+            >
+              Send a test notification
+            </button>
+          )}
         </Modal>
       )}
     </div>

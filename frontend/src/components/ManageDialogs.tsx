@@ -7,6 +7,7 @@ import type { CollectionDetails, CollectionSharding, CreateCollectionOptions, Da
 import { useApp } from '../state/AppContext'
 import { ErrorBanner, Modal, Segmented, Spinner } from './common'
 import { ConfirmInput, JobStatus } from './p2common'
+import { SearchIndexes } from './SearchIndexes'
 
 const emptyCreate = (): CreateCollectionOptions => ({
   name: '',
@@ -271,7 +272,12 @@ export function CollectionInfoDialog({ conn, db, coll, tab: initial = 'overview'
         ]}
       />
       {tab === 'overview' && (details ? <Overview d={details} /> : !error && <Spinner />)}
-      {tab === 'indexes' && <IndexManager conn={conn} db={db} coll={coll} />}
+      {tab === 'indexes' && (
+        <>
+          <IndexManager conn={conn} db={db} coll={coll} />
+          <SearchIndexes conn={conn} db={db} coll={coll} />
+        </>
+      )}
       {tab === 'validation' && <ValidationEditor conn={conn} db={db} coll={coll} />}
     </Modal>
   )

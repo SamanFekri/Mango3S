@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"mango3s/internal/ai"
 	"mango3s/internal/api"
@@ -669,5 +670,149 @@ func TestMCPAgainstRealServer(t *testing.T) {
 	backups, _ := app.ListBackups()
 	if len(backups) != 1 || backups[0].Deleted != 1 {
 		t.Fatalf("MCP delete must be backed up: %+v", backups)
+	}
+}
+
+// Roadmap 5.2: documents matched by a business key, not _id. The target
+// keeps its own _ids; duplicates of the key are refused.
+func TestSyncByMatchKey(t *testing.T) {
+	e := setup(t)
+	secondConn(t, e, "it-target", false)
+	src := coll(t, e, e.conn, e.db, "accounts")
+	dst := coll(t, e, "it-target", e.db+"_copy", "accounts")
+	t.Cleanup(func() { _ = dst.Database().Drop(context.Background()) })
+	acct := func(id any, email, plan string, n int32) bson.D {
+		return bson.D{{Key: "_id", Value: id}, {Key: "profile", Value: bson.D{{Key: "email", Value: email}}}, {Key: "plan", Value: plan}, {Key: "n", Value: n}}
+	}
+	_, _ = src.InsertMany(e.ctx, []any{acct(1, "a@x", "pro", 1), acct(2, "b@x", "free", 2), acct(3, "c@x", "pro", 3)})
+	_, _ = dst.InsertMany(e.ctx, []any{acct("t-a", "a@x", "pro", 1), acct("t-b", "b@x", "pro", 2), acct("t-z", "z@x", "free", 9)})
+
+	jm := jobs.NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), 2)
+	cmp := compare.New(e.mgr, jm)
+	svc := syncer.New(e.mgr, jm, cmp, t.TempDir())
+	o := compare.Options{
+		Source:   compare.Endpoint{ConnID: e.conn, DB: e.db, Coll: "accounts"},
+		Target:   compare.Endpoint{ConnID: "it-target", DB: e.db + "_copy", Coll: "accounts"},
+		MatchKey: []string{"profile.email"},
+	}
+	cj, _ := cmp.StartCollections(o)
+	runJob(t, jm, cj)
+	r, err := cmp.CollectionResult(cj.ID)
+	if err != nil || r.Identical != 1 || r.Changed != 1 || r.OnlySource != 1 || r.OnlyTarget != 1 {
+		t.Fatalf("by email (the _ids differ, so by _id nothing would match): %+v %v", r, err)
+	}
+	if len(r.Samples) == 0 || !strings.Contains(r.Samples[0].ID, "@x") {
+		t.Fatalf("samples should name the key: %+v", r.Samples)
+	}
+	pv, err := svc.Preview(cj.ID, syncer.Options{Insert: true, Replace: true, Delete: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, err := svc.StartApply(pv.PlanID, pv.ConfirmText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runJob(t, jm, j)
+	out, _ := svc.Outcome(j.ID)
+	if out == nil || out.Applied != (syncer.Counts{Inserts: 1, Replaces: 1, Deletes: 1}) || !out.VerifiedEqual {
+		t.Fatalf("apply: %+v", out)
+	}
+	var b bson.D
+	if err := dst.FindOne(e.ctx, bson.D{{Key: "profile.email", Value: "b@x"}}).Decode(&b); err != nil {
+		t.Fatal(err)
+	}
+	if id, _ := mql.Lookup(b, "_id"); id != "t-b" {
+		t.Fatalf("the replaced document lost its _id: %v", mql.Compact(b))
+	}
+	if plan, _ := mql.Lookup(b, "plan"); plan != "free" {
+		t.Fatalf("not replaced: %v", mql.Compact(b))
+	}
+	if n, _ := dst.CountDocuments(e.ctx, bson.D{{Key: "profile.email", Value: "z@x"}}); n != 0 {
+		t.Fatal("the target-only account was not deleted")
+	}
+
+	// A key that is not unique is refused.
+	_, _ = src.InsertOne(e.ctx, acct(4, "a@x", "free", 4))
+	cj, _ = cmp.StartCollections(o)
+	if done := runJob(t, jm, cj); done.State != jobs.Failed || !strings.Contains(done.Error, "must be unique") {
+		t.Fatalf("duplicate key: %+v", done)
+	}
+}
+
+// Roadmap 5.2: indexes and validation rules are synced too, after a preview;
+// a stale preview is refused, and dropping or rebuilding needs confirmation.
+func TestSyncIndexesAndValidation(t *testing.T) {
+	e := setup(t)
+	secondConn(t, e, "it-target", false)
+	src := coll(t, e, e.conn, e.db, "users")
+	dst := coll(t, e, "it-target", e.db+"_copy", "users")
+	t.Cleanup(func() { _ = dst.Database().Drop(context.Background()) })
+	s, _ := e.mgr.Session(e.conn)
+	if err := s.Client.Database(e.db).CreateCollection(e.ctx, "users", options.CreateCollection().
+		SetValidator(bson.D{{Key: "$jsonSchema", Value: bson.D{{Key: "required", Value: bson.A{"email"}}}}}).SetValidationLevel("moderate")); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = src.Indexes().CreateMany(e.ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "n", Value: 1}}, Options: options.Index().SetName("n_idx")},
+	})
+	_, _ = dst.Indexes().CreateMany(e.ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "n", Value: -1}}, Options: options.Index().SetName("n_idx")},
+		{Keys: bson.D{{Key: "extra", Value: 1}}},
+	})
+	o := compare.Options{Source: compare.Endpoint{ConnID: e.conn, DB: e.db, Coll: "users"}, Target: compare.Endpoint{ConnID: "it-target", DB: e.db + "_copy", Coll: "users"}}
+
+	d, err := syncer.DiffSchema(e.ctx, e.mgr, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]string{}
+	for _, c := range d.Changes {
+		kinds[c.ID] = c.Kind
+	}
+	want := map[string]string{"index:email_1": syncer.CreateIndex, "index:n_idx": syncer.ReplaceIndex, "index:extra_1": syncer.DropIndex, "validator": syncer.SetValidator}
+	if fmt.Sprint(kinds) != fmt.Sprint(want) {
+		t.Fatalf("changes: %+v", d.Changes)
+	}
+
+	// Additive changes need no confirmation.
+	r, err := syncer.ApplySchema(e.ctx, e.mgr, o, []string{"index:email_1", "validator"}, d.Fingerprint, "")
+	if err != nil || len(r.Applied) != 2 || len(r.Failed) != 0 {
+		t.Fatalf("apply: %+v %v", r, err)
+	}
+	// The old preview is now stale.
+	if _, err := syncer.ApplySchema(e.ctx, e.mgr, o, []string{"index:n_idx"}, d.Fingerprint, o.Target.String()); err == nil || !strings.Contains(err.Error(), "changed since the preview") {
+		t.Fatalf("stale preview: %v", err)
+	}
+	d, _ = syncer.DiffSchema(e.ctx, e.mgr, o)
+	if len(d.Changes) != 2 {
+		t.Fatalf("left: %+v", d.Changes)
+	}
+	if _, err := syncer.ApplySchema(e.ctx, e.mgr, o, []string{"index:n_idx", "index:extra_1"}, d.Fingerprint, "nope"); err == nil {
+		t.Fatal("dropped indexes without confirmation")
+	}
+	if r, err := syncer.ApplySchema(e.ctx, e.mgr, o, []string{"index:n_idx", "index:extra_1"}, d.Fingerprint, o.Target.String()); err != nil || len(r.Applied) != 2 {
+		t.Fatalf("apply: %+v %v", r, err)
+	}
+	if d, _ = syncer.DiffSchema(e.ctx, e.mgr, o); len(d.Changes) != 0 {
+		t.Fatalf("still different: %+v", d.Changes)
+	}
+	// The validator really applies on the target.
+	if _, err := dst.InsertOne(e.ctx, bson.D{{Key: "name", Value: "no email"}}); err == nil {
+		t.Fatal("the synced validator does not reject a document without email")
+	}
+
+	// A target collection that does not exist yet gets created.
+	o.Target.Coll = "users_new"
+	d, err = syncer.DiffSchema(e.ctx, e.mgr, o)
+	if err != nil || len(d.Changes) != 3 {
+		t.Fatalf("new target: %+v %v", d.Changes, err)
+	}
+	ids := []string{}
+	for _, c := range d.Changes {
+		ids = append(ids, c.ID)
+	}
+	if r, err := syncer.ApplySchema(e.ctx, e.mgr, o, ids, d.Fingerprint, ""); err != nil || len(r.Failed) != 0 {
+		t.Fatalf("new target apply: %+v %v", r, err)
 	}
 }

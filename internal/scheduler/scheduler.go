@@ -88,6 +88,7 @@ type Task struct {
 	Enabled      bool            `json:"enabled"`
 	Retry        Retry           `json:"retry"`
 	Misfire      string          `json:"misfire"`
+	Notify       Notify          `json:"notify"`
 	ApprovedHash string          `json:"approvedHash"`
 	ApprovedAt   *time.Time      `json:"approvedAt,omitempty"`
 	NextRun      time.Time       `json:"nextRun"`
@@ -109,6 +110,35 @@ func ParamsHash(t Task) string {
 	}
 	sum := sha256.Sum256([]byte(buf.String()))
 	return hex.EncodeToString(sum[:12])
+}
+
+// When a task tells the user how a run went.
+const (
+	NotifyNever   = "never"
+	NotifyFailure = "failure"
+	NotifyAlways  = "always"
+)
+
+// Notify configures a task's notifications. The webhook URL itself is kept in
+// the credential store (it may contain a token), not in tasks.json.
+type Notify struct {
+	On      string `json:"on"`      // never | failure | always
+	Desktop bool   `json:"desktop"` // a desktop notification on this computer
+	Webhook bool   `json:"webhook"` // POST the result to the task's webhook URL
+}
+
+// Wants reports whether a finished run in state should be notified.
+func (n Notify) Wants(state string) bool {
+	if !n.Desktop && !n.Webhook {
+		return false
+	}
+	switch n.On {
+	case NotifyAlways:
+		return state != RunRunning
+	case NotifyFailure:
+		return state == RunFailed || state == RunInterrupted
+	}
+	return false
 }
 
 // Approved reports whether the current type and params were approved.
@@ -160,6 +190,9 @@ type Scheduler struct {
 	now   func() time.Time
 	sleep func(ctx context.Context, d time.Duration) error
 
+	// notify is called (in its own goroutine) when a run finishes.
+	notify func(Task, Run)
+
 	mu      sync.Mutex
 	types   map[string]TaskType
 	running map[string]bool
@@ -189,6 +222,16 @@ func New(log *slog.Logger, jm *jobs.Manager, dir string) *Scheduler {
 // SetClock replaces time.Now and the backoff sleep (tests).
 func (s *Scheduler) SetClock(now func() time.Time, sleep func(context.Context, time.Duration) error) {
 	s.now, s.sleep = now, sleep
+}
+
+// SetNotifier sets the function told about every finished run; it decides
+// from the task's Notify settings whether to tell the user.
+func (s *Scheduler) SetNotifier(f func(Task, Run)) { s.notify = f }
+
+func (s *Scheduler) finished(t Task, r Run) {
+	if s.notify != nil {
+		go s.notify(t, r)
+	}
 }
 
 // Register adds an allowed task type.
@@ -349,6 +392,9 @@ func (s *Scheduler) Save(t Task) (Task, error) {
 	}
 	if t.Misfire != MisfireRunOnce {
 		t.Misfire = MisfireSkip
+	}
+	if t.Notify.On != NotifyFailure && t.Notify.On != NotifyAlways {
+		t.Notify.On = NotifyNever
 	}
 	now := s.now().UTC()
 	t.UpdatedAt = now
@@ -589,11 +635,13 @@ func (s *Scheduler) trigger(t Task, trigger string) (Run, bool) {
 		run.State, run.FinishedAt = RunFailed, run.StartedAt
 		run.Errors = append(run.Errors, fmt.Sprintf("Task type %q is no longer allowed.", t.Type))
 		_ = s.putRun(run)
+		s.finished(t, run)
 		return run, false
 	case busy:
 		run.State, run.FinishedAt = RunSkipped, run.StartedAt
 		run.Errors = append(run.Errors, "Skipped: the previous run is still in progress.")
 		_ = s.putRun(run)
+		s.finished(t, run)
 		return run, false
 	}
 	run.State = RunRunning
@@ -622,6 +670,7 @@ func (s *Scheduler) trigger(t Task, trigger string) (Run, bool) {
 			s.log.Warn("scheduler: cannot record run", "err", perr)
 		}
 		s.log.Info("task finished", "task", t.Name, "state", run.State, "attempts", run.Attempts)
+		s.finished(t, run)
 		return result, err
 	})
 	run.JobID = job.ID
@@ -678,6 +727,9 @@ type TaskDefinition struct {
 	Enabled  bool            `json:"enabled"`
 	Retry    Retry           `json:"retry"`
 	Misfire  string          `json:"misfire"`
+	// Notify travels without the webhook: its URL stays in this computer's
+	// credential store.
+	Notify Notify `json:"notify"`
 }
 
 type taskDefinitions struct {
@@ -703,7 +755,9 @@ func (s *Scheduler) ExportDefinitions(ids []string) ([]byte, int, error) {
 		if len(want) > 0 && !want[t.ID] {
 			continue
 		}
-		f.Tasks = append(f.Tasks, TaskDefinition{Name: t.Name, Type: t.Type, Params: t.Params, Schedule: t.Schedule, Enabled: t.Enabled, Retry: t.Retry, Misfire: t.Misfire})
+		n := t.Notify
+		n.Webhook = false
+		f.Tasks = append(f.Tasks, TaskDefinition{Name: t.Name, Type: t.Type, Params: t.Params, Schedule: t.Schedule, Enabled: t.Enabled, Retry: t.Retry, Misfire: t.Misfire, Notify: n})
 	}
 	if len(f.Tasks) == 0 {
 		return nil, 0, apperr.Invalid("There are no tasks to export.")
@@ -733,7 +787,8 @@ func (s *Scheduler) ImportDefinitions(data []byte) (ImportResult, error) {
 	}
 	res := ImportResult{Imported: []string{}, Errors: []string{}}
 	for _, d := range f.Tasks {
-		t := Task{Name: d.Name, Type: d.Type, Params: d.Params, Schedule: d.Schedule, Enabled: d.Enabled, Retry: d.Retry, Misfire: d.Misfire}
+		d.Notify.Webhook = false
+		t := Task{Name: d.Name, Type: d.Type, Params: d.Params, Schedule: d.Schedule, Enabled: d.Enabled, Retry: d.Retry, Misfire: d.Misfire, Notify: d.Notify}
 		if _, err := s.Save(t); err != nil {
 			res.Errors = append(res.Errors, fmt.Sprintf("%s: %s", d.Name, apperr.From(err).Message))
 			continue

@@ -13,6 +13,10 @@ const backend = vi.hoisted(() => ({
   listTaskTypes: vi.fn(),
   approveTask: vi.fn(),
   runTaskNow: vi.fn(),
+  saveTask: vi.fn(),
+  setTaskWebhook: vi.fn(),
+  taskWebhookHost: vi.fn(),
+  testTaskNotification: vi.fn(),
   exportTasks: vi.fn(),
   importTasks: vi.fn(),
   exportTextFile: vi.fn(),
@@ -173,6 +177,24 @@ describe('TasksView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Import…' }))
     await waitFor(() => expect(backend.importTasks).toHaveBeenCalledWith('{"format":"mango3s-tasks","tasks":[]}'))
     await waitFor(() => expect(app.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Imported 1 task', message: 'Review and approve them before they run.' })))
+  })
+
+  it('saves notification settings and keeps the webhook URL out of the task', async () => {
+    backend.taskWebhookHost.mockResolvedValue('hooks.example.com')
+    backend.saveTask.mockResolvedValue(task)
+    backend.setTaskWebhook.mockResolvedValue(undefined)
+    render(<TasksView />)
+    await screen.findByText('needs approval')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(await screen.findByLabelText('When to notify'), { target: { value: 'failure' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Webhook' }))
+    expect(await screen.findByPlaceholderText('stored: hooks.example.com/… (type to replace)')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Webhook URL'), { target: { value: 'https://hooks.example.com/new?token=x' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(backend.setTaskWebhook).toHaveBeenCalledWith('t1', 'https://hooks.example.com/new?token=x'))
+    const saved = backend.saveTask.mock.calls[0][0]
+    expect(saved.notify).toEqual({ on: 'failure', desktop: true, webhook: true })
+    expect(JSON.stringify(saved)).not.toContain('token=x')
   })
 
   it('offers Run now once approved', async () => {

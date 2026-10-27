@@ -3,6 +3,7 @@ import { AIDialog } from '../components/AIDialog'
 import { CodeDialog } from '../components/CodeDialog'
 import { CodeEditor } from '../components/CodeEditor'
 import { ExplainDialog } from '../components/ExplainDialog'
+import { ExportWizard } from '../components/ExportWizard'
 import { ErrorBanner, Spinner } from '../components/common'
 import { ResultsView, type ViewMode } from '../components/ResultsView'
 import { backend } from '../lib/backend'
@@ -26,7 +27,9 @@ export function AggregationView({ tab }: { tab: Tab }) {
     tab.init?.stages?.length ? pipelineReducer([], { type: 'replace', stages: tab.init.stages }) : [newStage('$match')],
   )
   const [savedId, setSavedId] = useState(tab.init?.savedId)
-  const [dialog, setDialog] = useState<{ kind: 'explain'; req: ExplainRequest } | { kind: 'code'; req: Omit<CodeRequest, 'language'> } | { kind: 'ai' } | null>(null)
+  const [dialog, setDialog] = useState<
+    { kind: 'explain'; req: ExplainRequest } | { kind: 'code'; req: Omit<CodeRequest, 'language'> } | { kind: 'ai' } | { kind: 'export' } | null
+  >(null)
   const [allowDiskUse, setAllowDiskUse] = useState(false)
   const [view, setView] = useState<ViewMode>(settings?.defaultView ?? 'tree')
   const [pageSize, setPageSize] = useState(settings?.pageSize ?? 50)
@@ -149,6 +152,9 @@ export function AggregationView({ tab }: { tab: Tab }) {
         </button>
         <button className="small ghost" disabled={!!textMode} onClick={() => setDialog({ kind: 'code', req: { source: 'aggregate', db, coll, stages: toStages(stages) } })}>
           Code
+        </button>
+        <button className="small ghost" disabled={!!textMode || enabledCount === 0} onClick={() => setDialog({ kind: 'export' })} title="Write all of the pipeline's results to a JSON or CSV file">
+          Export results…
         </button>
         <button className="small ghost" disabled={!!textMode} onClick={() => void savePipeline()} title={`Save (${shortcutHint('query.save')})`}>
           Save
@@ -275,6 +281,14 @@ export function AggregationView({ tab }: { tab: Tab }) {
       </div>
       {dialog?.kind === 'explain' && <ExplainDialog request={dialog.req} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'code' && <CodeDialog request={dialog.req} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'export' && (
+        <ExportWizard
+          query={{ connId, db, coll, filter: '', projection: '', sort: '', skip: 0, limit: 0, page: 0, pageSize }}
+          pipeline={toStages(stages)}
+          allowDiskUse={allowDiskUse}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog?.kind === 'ai' && (
         <AIDialog
           connId={connId}

@@ -50,10 +50,15 @@ type CSVOptions struct {
 	KeepBlanks bool
 }
 
-// CSVReader reads a CSV file with a header row. Dotted header names
-// ("address.city") produce nested documents.
+// rowSource yields rows of cells: a CSV file, or an Excel sheet.
+type rowSource interface {
+	Read() ([]string, error)
+}
+
+// CSVReader reads a table with a header row: a CSV file or an Excel sheet.
+// Dotted header names ("address.city") produce nested documents.
 type CSVReader struct {
-	r      *csv.Reader
+	r      rowSource
 	header []string
 	types  []string
 	skip   []bool
@@ -74,14 +79,20 @@ func NewCSVReader(r io.Reader, opts CSVOptions) (*CSVReader, error) {
 	cr.Comma = opts.Delimiter
 	cr.FieldsPerRecord = -1
 	cr.LazyQuotes = true
-	header, err := cr.Read()
+	return newTableReader(cr, opts)
+}
+
+// newTableReader reads the header row from src and prepares the column
+// conversions; the rest of src is read row by row.
+func newTableReader(src rowSource, opts CSVOptions) (*CSVReader, error) {
+	header, err := src.Read()
 	if err == io.EOF {
 		return nil, fmt.Errorf("the file is empty")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("header row: %w", err)
 	}
-	c := &CSVReader{r: cr, opts: opts, row: 1}
+	c := &CSVReader{r: src, opts: opts, row: 1}
 	seen := map[string]bool{}
 	for i, h := range header {
 		h = strings.TrimSpace(h)
@@ -148,7 +159,7 @@ func (c *CSVReader) Next() (bson.D, error) {
 			}
 			return nil, err
 		}
-		if len(rec) == 1 && strings.TrimSpace(rec[0]) == "" {
+		if len(rec) == 0 || len(rec) == 1 && strings.TrimSpace(rec[0]) == "" {
 			continue // blank line
 		}
 		if len(rec) > len(c.header) {

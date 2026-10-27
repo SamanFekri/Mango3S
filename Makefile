@@ -16,7 +16,7 @@ LDFLAGS := -X mango3s/internal/api.Version=$(VERSION) -X mango3s/internal/api.Pl
 PLATFORM_URL ?=
 PLATFORM_ENV := $(if $(PLATFORM_URL),MANGO3S_PLATFORM_URL=$(PLATFORM_URL))
 
-.PHONY: notices dev platform-check platform-api build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down rs-up sharded-up docker-build docker-test bindings mcp dmg-background
+.PHONY: notices dev platform-check platform-api build test test-go test-frontend test-integration test-integration-sql lint mongo-up mongo-down sql-up sql-down rs-up sharded-up search-up docker-build docker-test bindings mcp dmg-background
 
 dev: ## Run the app with hot reload in test mode: request log + API console (Settings › Diagnostics)
 	$(PLATFORM_ENV) MANGO3S_TEST_MODE=1 $(WAILS) dev -ldflags "$(LDFLAGS)"
@@ -71,6 +71,9 @@ rs-up: ## Start a single-node replica set on localhost:27020 (change streams, re
 
 sharded-up: ## Start a sharded cluster (config server, 2 shards, mongos on localhost:27021)
 	docker compose --profile sharded up -d --wait
+
+search-up: ## Start a local Atlas deployment with Atlas Search on localhost:27022 (search indexes)
+	docker compose --profile search up -d --wait mongo-atlas
 
 sql-down:
 	docker compose --profile sql down

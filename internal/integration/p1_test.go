@@ -224,6 +224,81 @@ func TestCSVExportImport(t *testing.T) {
 	}
 }
 
+// Roadmap 1.3: exporting an aggregation's results streams the pipeline, and
+// the file imports back.
+func TestExportAggregationResults(t *testing.T) {
+	e := setup(t)
+	seedDocs(t, e, "orders", representative(1200))
+	dir := t.TempDir()
+	jm := jobs.NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), 2)
+	svc := transfer.New(e.mgr, jm)
+	stages := []aggregate.Stage{
+		{Operator: "$match", Body: `{status: "shipped"}`, Enabled: true},
+		{Operator: "$group", Body: `{_id: "$customer.city", n: {$sum: 1}}`, Enabled: true},
+		{Operator: "$limit", Body: `1`, Enabled: false}, // disabled stages are skipped
+		{Operator: "$sort", Body: `{_id: 1}`, Enabled: true},
+	}
+	s, _ := e.mgr.Session(e.conn)
+	db := s.Client.Database(e.db)
+
+	jsonPath := filepath.Join(dir, "by-city.json")
+	j, err := svc.StartExport(transfer.ExportOptions{ConnID: e.conn, DB: e.db, Coll: "orders", Path: jsonPath, Format: transfer.FormatJSON,
+		Pipeline: stages, Filter: `{status: "pending"}`}) // the filter is ignored with a pipeline
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := runJob(t, jm, j)
+	if done.State != jobs.Succeeded || done.Total != 0 || done.Done == 0 {
+		t.Fatalf("pipeline export: %+v", done)
+	}
+	j, err = svc.StartImport(transfer.ImportOptions{ConnID: e.conn, DB: e.db, Coll: "by_city", Path: jsonPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imp := runJob(t, jm, j); imp.State != jobs.Succeeded {
+		t.Fatalf("import: %+v", imp)
+	}
+	back := allDocs(t, e.ctx, db.Collection("by_city"))
+	if int64(len(back)) != done.Done {
+		t.Fatalf("imported %d of %d exported", len(back), done.Done)
+	}
+	var total int64
+	for _, d := range back {
+		switch n, _ := mql.Lookup(d, "n"); v := n.(type) {
+		case int32:
+			total += int64(v)
+		case int64:
+			total += v
+		default:
+			t.Fatalf("n = %T %v", n, n)
+		}
+	}
+	if shipped, _ := db.Collection("orders").CountDocuments(e.ctx, bson.D{{Key: "status", Value: "shipped"}}); total != shipped {
+		t.Fatalf("group counts add up to %d, want %d shipped orders", total, shipped)
+	}
+
+	// CSV takes its columns from the results.
+	csvPath := filepath.Join(dir, "by-city.csv")
+	j, err = svc.StartExport(transfer.ExportOptions{ConnID: e.conn, DB: e.db, Coll: "orders", Path: csvPath, Format: transfer.FormatCSV, Pipeline: stages})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := runJob(t, jm, j); d.State != jobs.Succeeded {
+		t.Fatalf("csv pipeline export: %+v", d)
+	}
+	data, _ := os.ReadFile(csvPath)
+	if lines := strings.Split(strings.TrimSpace(string(data)), "\n"); lines[0] != "_id,n" || int64(len(lines)-1) != done.Done {
+		t.Fatalf("csv: header %q, %d rows", lines[0], len(lines)-1)
+	}
+
+	// A pipeline that writes its own results is refused up front.
+	_, err = svc.StartExport(transfer.ExportOptions{ConnID: e.conn, DB: e.db, Coll: "orders", Path: filepath.Join(dir, "x.json"),
+		Pipeline: append(stages, aggregate.Stage{Operator: "$out", Body: `"elsewhere"`, Enabled: true})})
+	if err == nil || !strings.Contains(err.Error(), "$out") {
+		t.Fatalf("$out export: %v", err)
+	}
+}
+
 func TestImportConflictsAndModes(t *testing.T) {
 	e := setup(t)
 	dir := t.TempDir()
@@ -525,5 +600,64 @@ func TestSQLHistoryAndLibraryThroughAPI(t *testing.T) {
 	}
 	if h, _ := app2.ListHistory("", "", 0); len(h) != len(hist) {
 		t.Fatalf("history after restart: %d vs %d", len(h), len(hist))
+	}
+}
+
+// Roadmap 6.1: export to .xlsx and import it back with the CSV column
+// mapping; typed cells come back typed.
+func TestExcelExportImport(t *testing.T) {
+	e := setup(t)
+	src := seedDocs(t, e, "orders", representative(600))
+	original := byID(allDocs(t, e.ctx, src))
+	path := filepath.Join(t.TempDir(), "orders.xlsx")
+	jm := jobs.NewManager(slog.New(slog.NewTextHandler(io.Discard, nil)), 2)
+	svc := transfer.New(e.mgr, jm)
+
+	j, err := svc.StartExport(transfer.ExportOptions{ConnID: e.conn, DB: e.db, Coll: "orders", Path: path}) // format from the extension
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done := runJob(t, jm, j); done.State != jobs.Succeeded || done.Done != 600 {
+		t.Fatalf("export: %+v", done)
+	}
+	preview, err := transfer.PreviewFile(transfer.ImportOptions{Path: path}, 3)
+	if err != nil || preview.Format != transfer.FormatExcel || len(preview.Sheets) != 1 || preview.Sheets[0] != "orders" || len(preview.Documents) != 3 {
+		t.Fatalf("preview: %+v %v", preview, err)
+	}
+	inferred := map[string]string{}
+	for _, c := range preview.Columns {
+		inferred[c.Name] = c.Inferred
+	}
+	for col, want := range map[string]string{"_id": transfer.TypeObjectID, "qty": transfer.TypeInt, "orderNo": transfer.TypeInt, "rating": transfer.TypeDouble,
+		"createdAt": transfer.TypeDate, "active": transfer.TypeBool, "customer.city": transfer.TypeString} {
+		if inferred[col] != want {
+			t.Errorf("column %s inferred as %q, want %q", col, inferred[col], want)
+		}
+	}
+
+	j, err = svc.StartImport(transfer.ImportOptions{ConnID: e.conn, DB: e.db, Coll: "from_xlsx", Path: path,
+		Columns: []transfer.ColumnSpec{{Name: "orderNo", Type: transfer.TypeLong}, {Name: "price", Type: transfer.TypeDecimal}, {Name: "tags", Type: transfer.TypeJSON},
+			{Name: "rating", Type: transfer.TypeDouble}}}) // 0.0 is stored as 0: a column type keeps it a double, as with CSV
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done := runJob(t, jm, j); done.State != jobs.Succeeded || !strings.Contains(done.Result, "600 inserted") {
+		t.Fatalf("import: %+v", done)
+	}
+	s, _ := e.mgr.Session(e.conn)
+	back := allDocs(t, e.ctx, s.Client.Database(e.db).Collection("from_xlsx"))
+	for _, d := range back {
+		id, _ := mql.Lookup(d, "_id")
+		orig := original[mql.Compact(id)]
+		if orig == nil {
+			t.Fatalf("unknown _id %v", mql.Compact(id))
+		}
+		for _, f := range []string{"orderNo", "qty", "price", "rating", "status", "createdAt", "customer", "tags", "active"} {
+			a, _ := mql.Lookup(orig, f)
+			b, _ := mql.Lookup(d, f)
+			if !mql.Equal(a, b) {
+				t.Fatalf("field %s changed: %s vs %s", f, mql.Compact(a), mql.Compact(b))
+			}
+		}
 	}
 }

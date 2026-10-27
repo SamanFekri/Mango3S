@@ -21,6 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"mango3s/internal/apperr"
+	"mango3s/internal/docpath"
 	"mango3s/internal/jobs"
 	"mango3s/internal/mongox"
 	"mango3s/internal/mql"
@@ -43,6 +44,43 @@ type Options struct {
 	IgnoreFields     []string `json:"ignoreFields"`     // dotted paths excluded from comparison
 	IgnoreFieldOrder bool     `json:"ignoreFieldOrder"` // {a,b} equals {b,a}
 	SampleSize       int      `json:"sampleSize"`       // differences returned with field detail
+	// MatchKey pairs documents by these fields (dotted paths) instead of
+	// _id, e.g. ["email"] or ["tenant", "orderNo"]. The key must be unique on
+	// each side; a missing field counts as null. _id is then ignored in the
+	// comparison, since matched documents may have different _ids.
+	MatchKey []string `json:"matchKey,omitempty"`
+}
+
+// byKey reports whether documents are matched by a custom key.
+func (o Options) byKey() bool { return len(o.MatchKey) > 0 }
+
+// ignored is IgnoreFields, plus _id when matching by a custom key.
+func (o Options) ignored() []string {
+	if !o.byKey() {
+		return o.IgnoreFields
+	}
+	return append(append([]string{}, o.IgnoreFields...), "_id")
+}
+
+// keyOf returns a document's match key: its canonical _id key, or the
+// canonical form of its MatchKey values.
+func (o Options) keyOf(d bson.D) (string, bool) {
+	if !o.byKey() {
+		id, ok := lookupID(d)
+		if !ok {
+			return "", false
+		}
+		return IDKey(id), true
+	}
+	vals := make(bson.A, len(o.MatchKey))
+	for i, f := range o.MatchKey {
+		v, ok := docpath.Get(d, strings.TrimSpace(f))
+		if !ok {
+			v = nil
+		}
+		vals[i] = v
+	}
+	return IDKey(vals), true
 }
 
 // Kinds of entries.
@@ -55,10 +93,14 @@ const (
 // Hash is a digest of a normalized document.
 type Hash [16]byte
 
-// Entry is one differing document, identified by its canonical _id key.
+// Entry is one differing document, identified by its canonical match key
+// (the _id key unless Options.MatchKey is set). SourceID and TargetID are the
+// _id keys of the document on each side ("" where it is missing).
 type Entry struct {
 	Key        string `json:"key"`
 	Kind       string `json:"kind"`
+	SourceID   string `json:"-"`
+	TargetID   string `json:"-"`
 	SourceHash Hash   `json:"-"`
 	TargetHash Hash   `json:"-"`
 }
@@ -176,7 +218,7 @@ func HashDoc(d bson.D) Hash {
 
 // HashFor normalizes and hashes a document with the comparison options.
 func (o Options) HashFor(d bson.D) Hash {
-	return HashDoc(Normalize(d, o.IgnoreFields, o.IgnoreFieldOrder))
+	return HashDoc(Normalize(d, o.ignored(), o.IgnoreFieldOrder))
 }
 
 func lookupID(d bson.D) (any, bool) {
@@ -257,13 +299,21 @@ func Run(ctx context.Context, src mongox.Source, o Options, p *jobs.Progress) (*
 		p.SetTotal(srcTotal+tgtTotal, "documents")
 	}
 
-	hashes := make(map[string]Hash, srcTotal)
+	type seen struct {
+		hash Hash
+		id   string
+	}
+	hashes := make(map[string]seen, srcTotal)
 	err = scan(ctx, sc, filter, func(d bson.D) error {
 		id, ok := lookupID(d)
 		if !ok {
 			return nil
 		}
-		hashes[IDKey(id)] = o.HashFor(d)
+		key, _ := o.keyOf(d)
+		if _, dup := hashes[key]; dup && o.byKey() {
+			return duplicateKey("source", o, key)
+		}
+		hashes[key] = seen{hash: o.HashFor(d), id: IDKey(id)}
 		r.SourceCount++
 		if p != nil {
 			p.Add(1)
@@ -276,12 +326,20 @@ func Run(ctx context.Context, src mongox.Source, o Options, p *jobs.Progress) (*
 
 	fp := newFingerprint()
 	var zero Hash
+	targetKeys := map[string]bool{}
 	err = scan(ctx, tc, filter, func(d bson.D) error {
 		id, ok := lookupID(d)
 		if !ok {
 			return nil
 		}
-		key := IDKey(id)
+		key, _ := o.keyOf(d)
+		if o.byKey() {
+			if targetKeys[key] {
+				return duplicateKey("target", o, key)
+			}
+			targetKeys[key] = true
+		}
+		tid := IDKey(id)
 		th := o.HashFor(d)
 		r.TargetCount++
 		if p != nil {
@@ -291,16 +349,16 @@ func Run(ctx context.Context, src mongox.Source, o Options, p *jobs.Progress) (*
 		switch {
 		case !inSource:
 			r.OnlyTarget++
-			r.Entries = append(r.Entries, Entry{Key: key, Kind: KindOnlyTarget, TargetHash: th})
+			r.Entries = append(r.Entries, Entry{Key: key, Kind: KindOnlyTarget, TargetID: tid, TargetHash: th})
 			fp.add(key, zero, th, KindOnlyTarget)
-		case sh == th:
+		case sh.hash == th:
 			r.Identical++
-			fp.add(key, sh, th, "same")
+			fp.add(key, sh.hash, th, "same")
 			delete(hashes, key)
 		default:
 			r.Changed++
-			r.Entries = append(r.Entries, Entry{Key: key, Kind: KindChanged, SourceHash: sh, TargetHash: th})
-			fp.add(key, sh, th, KindChanged)
+			r.Entries = append(r.Entries, Entry{Key: key, Kind: KindChanged, SourceID: sh.id, TargetID: tid, SourceHash: sh.hash, TargetHash: th})
+			fp.add(key, sh.hash, th, KindChanged)
 			delete(hashes, key)
 		}
 		return nil
@@ -310,8 +368,8 @@ func Run(ctx context.Context, src mongox.Source, o Options, p *jobs.Progress) (*
 	}
 	for key, sh := range hashes {
 		r.OnlySource++
-		r.Entries = append(r.Entries, Entry{Key: key, Kind: KindOnlySource, SourceHash: sh})
-		fp.add(key, sh, zero, KindOnlySource)
+		r.Entries = append(r.Entries, Entry{Key: key, Kind: KindOnlySource, SourceID: sh.id, SourceHash: sh.hash})
+		fp.add(key, sh.hash, zero, KindOnlySource)
 	}
 	sort.Slice(r.Entries, func(i, j int) bool { return r.Entries[i].Key < r.Entries[j].Key })
 	r.Fingerprint = fp.String()
@@ -324,6 +382,12 @@ func Run(ctx context.Context, src mongox.Source, o Options, p *jobs.Progress) (*
 	}
 	r.DurationMs = time.Since(start).Milliseconds()
 	return r, nil
+}
+
+func duplicateKey(side string, o Options, key string) error {
+	v, _ := ParseIDKey(key)
+	return apperr.Invalid("Several documents in the %s have the match key %s = %s. The match key must be unique on both sides; add fields to it or filter the documents.",
+		side, strings.Join(o.MatchKey, " + "), mql.Compact(v))
 }
 
 func scan(ctx context.Context, c *mongo.Collection, filter bson.D, f func(bson.D) error) error {
@@ -371,25 +435,30 @@ func (r *Result) loadSamples(ctx context.Context, sc, tc *mongo.Collection) erro
 	if n == 0 {
 		return nil
 	}
-	keys := make([]string, n)
-	for i := range keys {
-		keys[i] = r.Entries[i].Key
+	var srcIDs, tgtIDs []string
+	for _, e := range r.Entries[:n] {
+		if e.SourceID != "" {
+			srcIDs = append(srcIDs, e.SourceID)
+		}
+		if e.TargetID != "" {
+			tgtIDs = append(tgtIDs, e.TargetID)
+		}
 	}
-	srcDocs, err := FetchByKeys(ctx, sc, keys)
+	srcDocs, err := FetchByKeys(ctx, sc, srcIDs)
 	if err != nil {
 		return err
 	}
-	tgtDocs, err := FetchByKeys(ctx, tc, keys)
+	tgtDocs, err := FetchByKeys(ctx, tc, tgtIDs)
 	if err != nil {
 		return err
 	}
+	ign := r.Options.ignored()
 	for _, e := range r.Entries[:n] {
 		id, _ := ParseIDKey(e.Key)
 		dd := DocDiff{ID: mql.Compact(id), Kind: e.Kind, Fields: []FieldChange{}}
-		s, t := srcDocs[e.Key], tgtDocs[e.Key]
+		s, t := srcDocs[e.SourceID], tgtDocs[e.TargetID]
 		if s != nil && t != nil {
-			dd.Fields = Diff(Normalize(s, r.Options.IgnoreFields, r.Options.IgnoreFieldOrder),
-				Normalize(t, r.Options.IgnoreFields, r.Options.IgnoreFieldOrder), "")
+			dd.Fields = Diff(Normalize(s, ign, r.Options.IgnoreFieldOrder), Normalize(t, ign, r.Options.IgnoreFieldOrder), "")
 		}
 		r.Samples = append(r.Samples, dd)
 	}

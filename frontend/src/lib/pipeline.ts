@@ -26,6 +26,16 @@ export const STAGE_TEMPLATES: { operator: string; body: string; hint: string }[]
   { operator: '$bucket', body: '{\n  groupBy: "$field",\n  boundaries: [0, 10, 100],\n  default: "other"\n}', hint: 'Bucket by ranges' },
   { operator: '$replaceRoot', body: '{\n  newRoot: "$subDocument"\n}', hint: 'Promote a sub-document' },
   { operator: '$sortByCount', body: '"$field"', hint: 'Group, count and sort' },
+  {
+    operator: '$search',
+    body: '{\n  index: "default",\n  text: { query: "words to find", path: "title" }\n}',
+    hint: 'Atlas Search full-text query (must be first; needs a search index)',
+  },
+  {
+    operator: '$vectorSearch',
+    body: '{\n  index: "vector_index",\n  path: "embedding",\n  queryVector: [0.1, 0.2, 0.3],\n  numCandidates: 100,\n  limit: 10\n}',
+    hint: 'Atlas Vector Search: nearest neighbours (must be first; needs a vector index)',
+  },
   { operator: '$out', body: '"outputCollection"', hint: 'Write results to a collection (must be last)' },
   { operator: '$merge', body: '{\n  into: "outputCollection"\n}', hint: 'Merge results into a collection (must be last)' },
 ]

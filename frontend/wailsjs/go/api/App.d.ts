@@ -6,18 +6,19 @@ import {manage} from '../models';
 import {schema} from '../models';
 import {scheduler} from '../models';
 import {config} from '../models';
+import {users} from '../models';
 import {codegen} from '../models';
 import {explorer} from '../models';
+import {compare} from '../models';
+import {syncer} from '../models';
 import {mongox} from '../models';
 import {query} from '../models';
 import {tools} from '../models';
 import {ai} from '../models';
 import {explain} from '../models';
-import {compare} from '../models';
 import {model} from '../models';
 import {documents} from '../models';
 import {monitor} from '../models';
-import {syncer} from '../models';
 import {transform} from '../models';
 import {dump} from '../models';
 import {migrate} from '../models';
@@ -76,6 +77,8 @@ export function CancelOperation(arg1:string):Promise<boolean>;
 
 export function CheckForUpdatesNow():Promise<update.Status>;
 
+export function CheckUserChange(arg1:users.Change):Promise<Array<string>>;
+
 export function CheckValidator(arg1:string,arg2:string,arg3:string,arg4:string):Promise<manage.ValidationReport>;
 
 export function ChooseConnectionsFile():Promise<string>;
@@ -114,6 +117,8 @@ export function CollectionDetails(arg1:string,arg2:string,arg3:string):Promise<m
 
 export function CollectionStats(arg1:string,arg2:string,arg3:string):Promise<explorer.CollectionStats>;
 
+export function CompareSchema(arg1:compare.Options):Promise<syncer.SchemaDiff>;
+
 export function Connect(arg1:string):Promise<mongox.SessionInfo>;
 
 export function ConnectToShard(arg1:string,arg2:string):Promise<mongox.SessionInfo>;
@@ -131,6 +136,10 @@ export function CreateCollection(arg1:string,arg2:string,arg3:string):Promise<vo
 export function CreateCollectionWithOptions(arg1:string,arg2:string,arg3:manage.CreateOptions):Promise<void>;
 
 export function CreateIndex(arg1:string,arg2:string,arg3:string,arg4:string,arg5:manage.IndexOptions):Promise<string>;
+
+export function CreateSearchIndex(arg1:string,arg2:string,arg3:string,arg4:manage.SearchIndexInput):Promise<string>;
+
+export function CreateUser(arg1:users.NewUser):Promise<void>;
 
 export function CreateView(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string):Promise<void>;
 
@@ -159,6 +168,12 @@ export function DropCollection(arg1:string,arg2:string,arg3:string):Promise<void
 export function DropDatabase(arg1:string,arg2:string):Promise<void>;
 
 export function DropIndex(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function DropRole(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function DropSearchIndex(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function DropUser(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function DuplicateProfile(arg1:string):Promise<config.Profile>;
 
@@ -270,7 +285,11 @@ export function ListProfile(arg1:string,arg2:string,arg3:manage.ProfileQuery):Pr
 
 export function ListProfiles():Promise<Array<config.Profile>>;
 
+export function ListRoles(arg1:string,arg2:string,arg3:boolean):Promise<Array<users.RoleInfo>>;
+
 export function ListSaved(arg1:string):Promise<Array<library.Item>>;
+
+export function ListSearchIndexes(arg1:string,arg2:string,arg3:string):Promise<manage.SearchIndexList>;
 
 export function ListShards(arg1:string):Promise<Array<manage.Shard>>;
 
@@ -279,6 +298,8 @@ export function ListTaskRuns(arg1:string,arg2:number):Promise<Array<scheduler.Ru
 export function ListTaskTypes():Promise<Array<scheduler.TaskType>>;
 
 export function ListTasks():Promise<Array<scheduler.Task>>;
+
+export function ListUsers(arg1:string,arg2:string):Promise<Array<users.User>>;
 
 export function MaskMethods():Promise<Array<masking.MethodInfo>>;
 
@@ -370,6 +391,8 @@ export function SaveMaskRuleSet(arg1:masking.RuleSet):Promise<masking.RuleSet>;
 
 export function SaveProfile(arg1:api.ProfileInput):Promise<config.Profile>;
 
+export function SaveRole(arg1:users.RoleSpec,arg2:boolean):Promise<void>;
+
 export function SaveSettings(arg1:config.Settings):Promise<config.Settings>;
 
 export function SaveTask(arg1:scheduler.Task):Promise<scheduler.Task>;
@@ -388,7 +411,13 @@ export function SetProfiling(arg1:string,arg2:string,arg3:manage.Profiling):Prom
 
 export function SetTaskEnabled(arg1:string,arg2:boolean):Promise<scheduler.Task>;
 
+export function SetTaskWebhook(arg1:string,arg2:string):Promise<void>;
+
 export function SetUnsavedWork(arg1:boolean):Promise<void>;
+
+export function SetUserPassword(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
+export function SetUserRoles(arg1:string,arg2:string,arg3:string,arg4:Array<users.Role>):Promise<void>;
 
 export function SetValidation(arg1:string,arg2:string,arg3:string,arg4:manage.Validation):Promise<void>;
 
@@ -438,7 +467,11 @@ export function SyncNow():Promise<api.SyncReport>;
 
 export function SyncPull(arg1:string):Promise<api.SyncReport>;
 
+export function SyncSchema(arg1:compare.Options,arg2:Array<string>,arg3:string,arg4:string):Promise<syncer.SchemaResult>;
+
 export function SyncWipe(arg1:string):Promise<void>;
+
+export function TaskWebhookHost(arg1:string):Promise<string>;
 
 export function TestAI(arg1:string):Promise<string>;
 
@@ -450,6 +483,14 @@ export function TestDataTemplateFromSchema(arg1:string,arg2:string,arg3:string):
 
 export function TestPlatformConnection(arg1:boolean):Promise<update.ProbeReport>;
 
+export function TestTaskNotification(arg1:string):Promise<void>;
+
 export function TranslateSQL(arg1:string):Promise<api.SQLTranslation>;
 
 export function UpdateField(arg1:documents.FieldUpdate):Promise<documents.FieldResult>;
+
+export function UpdateSearchIndex(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
+
+export function UserCan(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:Array<string>):Promise<Array<string>>;
+
+export function UserEffective(arg1:string,arg2:string,arg3:string):Promise<users.Effective>;

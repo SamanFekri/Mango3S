@@ -86,6 +86,10 @@ export function CheckForUpdatesNow() {
   return window['go']['api']['App']['CheckForUpdatesNow']();
 }
 
+export function CheckUserChange(arg1) {
+  return window['go']['api']['App']['CheckUserChange'](arg1);
+}
+
 export function CheckValidator(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['CheckValidator'](arg1, arg2, arg3, arg4);
 }
@@ -162,6 +166,10 @@ export function CollectionStats(arg1, arg2, arg3) {
   return window['go']['api']['App']['CollectionStats'](arg1, arg2, arg3);
 }
 
+export function CompareSchema(arg1) {
+  return window['go']['api']['App']['CompareSchema'](arg1);
+}
+
 export function Connect(arg1) {
   return window['go']['api']['App']['Connect'](arg1);
 }
@@ -196,6 +204,14 @@ export function CreateCollectionWithOptions(arg1, arg2, arg3) {
 
 export function CreateIndex(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['api']['App']['CreateIndex'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function CreateSearchIndex(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['CreateSearchIndex'](arg1, arg2, arg3, arg4);
+}
+
+export function CreateUser(arg1) {
+  return window['go']['api']['App']['CreateUser'](arg1);
 }
 
 export function CreateView(arg1, arg2, arg3, arg4, arg5, arg6) {
@@ -252,6 +268,18 @@ export function DropDatabase(arg1, arg2) {
 
 export function DropIndex(arg1, arg2, arg3, arg4) {
   return window['go']['api']['App']['DropIndex'](arg1, arg2, arg3, arg4);
+}
+
+export function DropRole(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['DropRole'](arg1, arg2, arg3, arg4);
+}
+
+export function DropSearchIndex(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['DropSearchIndex'](arg1, arg2, arg3, arg4);
+}
+
+export function DropUser(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['DropUser'](arg1, arg2, arg3, arg4);
 }
 
 export function DuplicateProfile(arg1) {
@@ -474,8 +502,16 @@ export function ListProfiles() {
   return window['go']['api']['App']['ListProfiles']();
 }
 
+export function ListRoles(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ListRoles'](arg1, arg2, arg3);
+}
+
 export function ListSaved(arg1) {
   return window['go']['api']['App']['ListSaved'](arg1);
+}
+
+export function ListSearchIndexes(arg1, arg2, arg3) {
+  return window['go']['api']['App']['ListSearchIndexes'](arg1, arg2, arg3);
 }
 
 export function ListShards(arg1) {
@@ -492,6 +528,10 @@ export function ListTaskTypes() {
 
 export function ListTasks() {
   return window['go']['api']['App']['ListTasks']();
+}
+
+export function ListUsers(arg1, arg2) {
+  return window['go']['api']['App']['ListUsers'](arg1, arg2);
 }
 
 export function MaskMethods() {
@@ -674,6 +714,10 @@ export function SaveProfile(arg1) {
   return window['go']['api']['App']['SaveProfile'](arg1);
 }
 
+export function SaveRole(arg1, arg2) {
+  return window['go']['api']['App']['SaveRole'](arg1, arg2);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['api']['App']['SaveSettings'](arg1);
 }
@@ -710,8 +754,20 @@ export function SetTaskEnabled(arg1, arg2) {
   return window['go']['api']['App']['SetTaskEnabled'](arg1, arg2);
 }
 
+export function SetTaskWebhook(arg1, arg2) {
+  return window['go']['api']['App']['SetTaskWebhook'](arg1, arg2);
+}
+
 export function SetUnsavedWork(arg1) {
   return window['go']['api']['App']['SetUnsavedWork'](arg1);
+}
+
+export function SetUserPassword(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['SetUserPassword'](arg1, arg2, arg3, arg4);
+}
+
+export function SetUserRoles(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['SetUserRoles'](arg1, arg2, arg3, arg4);
 }
 
 export function SetValidation(arg1, arg2, arg3, arg4) {
@@ -810,8 +866,16 @@ export function SyncPull(arg1) {
   return window['go']['api']['App']['SyncPull'](arg1);
 }
 
+export function SyncSchema(arg1, arg2, arg3, arg4) {
+  return window['go']['api']['App']['SyncSchema'](arg1, arg2, arg3, arg4);
+}
+
 export function SyncWipe(arg1) {
   return window['go']['api']['App']['SyncWipe'](arg1);
+}
+
+export function TaskWebhookHost(arg1) {
+  return window['go']['api']['App']['TaskWebhookHost'](arg1);
 }
 
 export function TestAI(arg1) {
@@ -834,10 +898,26 @@ export function TestPlatformConnection(arg1) {
   return window['go']['api']['App']['TestPlatformConnection'](arg1);
 }
 
+export function TestTaskNotification(arg1) {
+  return window['go']['api']['App']['TestTaskNotification'](arg1);
+}
+
 export function TranslateSQL(arg1) {
   return window['go']['api']['App']['TranslateSQL'](arg1);
 }
 
 export function UpdateField(arg1) {
   return window['go']['api']['App']['UpdateField'](arg1);
+}
+
+export function UpdateSearchIndex(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['api']['App']['UpdateSearchIndex'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function UserCan(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['api']['App']['UserCan'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function UserEffective(arg1, arg2, arg3) {
+  return window['go']['api']['App']['UserEffective'](arg1, arg2, arg3);
 }

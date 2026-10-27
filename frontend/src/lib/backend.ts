@@ -5,6 +5,17 @@ import { EventsOn, Quit } from '../../wailsjs/runtime/runtime'
 import { toAppError } from './errors'
 import type {
   AggregateRequest,
+  SchemaDiff,
+  SchemaResult,
+  SearchIndexInput,
+  SearchIndexList,
+  DbRole,
+  DbUser,
+  NewUser,
+  RoleInfo,
+  RoleSpec,
+  UserChange,
+  UserEffective,
   AppInfo,
   CollectionInfo,
   CollectionStats,
@@ -390,6 +401,35 @@ export const backend = {
   // Sharded clusters.
   listShards: (connId: string) => wrap<ShardInfo[]>(a.ListShards(connId)),
   connectToShard: (connId: string, shardId: string) => wrap<SessionInfo>(a.ConnectToShard(connId, shardId)),
+
+  // Atlas Search and Vector Search indexes.
+  listSearchIndexes: (connId: string, db: string, coll: string) => wrap<SearchIndexList>(a.ListSearchIndexes(connId, db, coll)),
+  createSearchIndex: (connId: string, db: string, coll: string, i: SearchIndexInput) => wrap<string>(a.CreateSearchIndex(connId, db, coll, i)),
+  updateSearchIndex: (connId: string, db: string, coll: string, name: string, definition: string) => wrap<void>(a.UpdateSearchIndex(connId, db, coll, name, definition)),
+  dropSearchIndex: (connId: string, db: string, coll: string, name: string) => wrap<void>(a.DropSearchIndex(connId, db, coll, name)),
+
+  // Index and validation sync (Compare & sync).
+  compareSchema: (o: CompareOptions) => wrap<SchemaDiff>(a.CompareSchema(o)),
+  syncSchema: (o: CompareOptions, ids: string[], fingerprint: string, confirm: string) => wrap<SchemaResult>(a.SyncSchema(o, ids, fingerprint, confirm)),
+
+  // Task notifications.
+  setTaskWebhook: (taskId: string, url: string) => wrap<void>(a.SetTaskWebhook(taskId, url)),
+  taskWebhookHost: (taskId: string) => wrap<string>(a.TaskWebhookHost(taskId)),
+  testTaskNotification: (taskId: string) => wrap<void>(a.TestTaskNotification(taskId)),
+
+  // Users and roles.
+  listUsers: (connId: string, db: string) => wrap<DbUser[]>(a.ListUsers(connId, db)),
+  listRoles: (connId: string, db: string, builtin: boolean) => wrap<RoleInfo[]>(a.ListRoles(connId, db, builtin)),
+  userEffective: (connId: string, db: string, user: string) => wrap<UserEffective>(a.UserEffective(connId, db, user)),
+  userCan: (connId: string, db: string, user: string, targetDb: string, coll: string, actions: string[]) =>
+    wrap<string[]>(a.UserCan(connId, db, user, targetDb, coll, actions)),
+  createUser: (u: NewUser) => wrap<void>(a.CreateUser(u)),
+  setUserPassword: (connId: string, db: string, user: string, password: string) => wrap<void>(a.SetUserPassword(connId, db, user, password)),
+  setUserRoles: (connId: string, db: string, user: string, roles: DbRole[]) => wrap<void>(a.SetUserRoles(connId, db, user, roles)),
+  dropUser: (connId: string, db: string, user: string, confirm: string) => wrap<void>(a.DropUser(connId, db, user, confirm)),
+  checkUserChange: (c: UserChange) => wrap<string[]>(a.CheckUserChange(c)),
+  saveRole: (r: RoleSpec, create: boolean) => wrap<void>(a.SaveRole(r, create)),
+  dropRole: (connId: string, db: string, role: string, confirm: string) => wrap<void>(a.DropRole(connId, db, role, confirm)),
 
   // GridFS browser.
   listGridFSBuckets: (connId: string, db: string) => wrap<GridFSBucket[]>(a.ListGridFSBuckets(connId, db)),

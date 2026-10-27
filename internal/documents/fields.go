@@ -396,10 +396,7 @@ func (s *service) UpdateField(ctx context.Context, u FieldUpdate) (FieldResult, 
 	}
 	// Match the exact document just read: a write that raced in between
 	// makes this match nothing instead of being overwritten.
-	filter := bson.D{
-		{Key: "_id", Value: bson.D{{Key: "$eq", Value: idv}}},
-		{Key: "$expr", Value: bson.D{{Key: "$eq", Value: bson.A{"$$ROOT", bson.D{{Key: "$literal", Value: current}}}}}},
-	}
+	filter := mongox.UnchangedFilter(idv, current)
 	res, err := c.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return FieldResult{}, apperr.From(err)

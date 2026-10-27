@@ -17,6 +17,7 @@ import (
 	"mango3s/internal/explain"
 	"mango3s/internal/jobs"
 	"mango3s/internal/library"
+	"mango3s/internal/logging"
 	"mango3s/internal/model"
 	"mango3s/internal/mql"
 	"mango3s/internal/query"
@@ -280,6 +281,8 @@ func oneLine(s string) string {
 
 // record stores a history entry; failures to persist are logged, not surfaced.
 func (a *App) record(e library.Entry, d time.Duration, err error) {
+	// Shell code may hold passwords (createUser, changeUserPassword).
+	e.Summary, e.Text = logging.RedactScript(e.Summary), logging.RedactScript(e.Text)
 	e.DurationMs = d.Milliseconds()
 	e.OK = err == nil
 	if err != nil {

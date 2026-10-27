@@ -244,19 +244,19 @@ func Apply(ctx context.Context, src mongox.Source, p Plan, backupDir string, pr 
 	// Inserts: source must still hash to the previewed value; insert fails if the target gained the _id.
 	for i := 0; i < len(p.Inserts); i += batchSize {
 		batch := p.Inserts[i:min(i+batchSize, len(p.Inserts))]
-		srcDocs, err := compare.FetchByKeys(ctx, sc, keys(batch))
+		srcDocs, err := compare.FetchByKeys(ctx, sc, sourceIDs(batch))
 		if err != nil {
 			return out, err
 		}
 		var models []mongo.WriteModel
 		for _, e := range batch {
-			d, ok := srcDocs[e.Key]
+			d, ok := srcDocs[e.SourceID]
 			if !ok || p.Compare.HashFor(d) != e.SourceHash {
 				out.Skipped.Inserts++
 				skip(e.Key)
 				continue
 			}
-			id, _ := compare.ParseIDKey(e.Key)
+			id, _ := compare.ParseIDKey(e.SourceID)
 			if err := bk.Inserted(id); err != nil {
 				return out, err
 			}
@@ -285,23 +285,23 @@ func Apply(ctx context.Context, src mongox.Source, p Plan, backupDir string, pr 
 		}
 		for i := 0; i < len(entries); i += batchSize {
 			batch := entries[i:min(i+batchSize, len(entries))]
-			tgtDocs, err := compare.FetchByKeys(ctx, tc, keys(batch))
+			tgtDocs, err := compare.FetchByKeys(ctx, tc, targetIDs(batch))
 			if err != nil {
 				return out, err
 			}
 			var srcDocs map[string]bson.D
 			if kind == "replace" {
-				if srcDocs, err = compare.FetchByKeys(ctx, sc, keys(batch)); err != nil {
+				if srcDocs, err = compare.FetchByKeys(ctx, sc, sourceIDs(batch)); err != nil {
 					return out, err
 				}
 			}
 			var models []mongo.WriteModel
 			for _, e := range batch {
-				t, ok := tgtDocs[e.Key]
+				t, ok := tgtDocs[e.TargetID]
 				drift := !ok || p.Compare.HashFor(t) != e.TargetHash
 				var sd bson.D
 				if kind == "replace" {
-					sd, ok = srcDocs[e.Key]
+					sd, ok = srcDocs[e.SourceID]
 					drift = drift || !ok || p.Compare.HashFor(sd) != e.SourceHash
 				}
 				if drift {
@@ -313,13 +313,15 @@ func Apply(ctx context.Context, src mongox.Source, p Plan, backupDir string, pr 
 					skip(e.Key)
 					continue
 				}
-				id, _ := compare.ParseIDKey(e.Key)
-				filter := unchangedFilter(id, t)
+				id, _ := compare.ParseIDKey(e.TargetID)
+				filter := mongox.UnchangedFilter(id, t)
 				if kind == "replace" {
 					if err := bk.Replaced(t); err != nil {
 						return out, err
 					}
-					models = append(models, mongo.NewReplaceOneModel().SetFilter(filter).SetReplacement(sd))
+					// Matched by a custom key the _ids may differ; a
+					// replacement keeps the target's.
+					models = append(models, mongo.NewReplaceOneModel().SetFilter(filter).SetReplacement(withID(sd, id)))
 				} else {
 					if err := bk.Deleted(t); err != nil {
 						return out, err
@@ -374,18 +376,30 @@ func Apply(ctx context.Context, src mongox.Source, p Plan, backupDir string, pr 
 	return out, nil
 }
 
-// unchangedFilter matches the document only if it is still exactly t.
-func unchangedFilter(id any, t bson.D) bson.D {
-	return bson.D{
-		{Key: "_id", Value: bson.D{{Key: "$eq", Value: id}}},
-		{Key: "$expr", Value: bson.D{{Key: "$eq", Value: bson.A{"$$ROOT", bson.D{{Key: "$literal", Value: t}}}}}},
+// withID returns d with its _id set to id (d unchanged when it already is).
+func withID(d bson.D, id any) bson.D {
+	out := make(bson.D, 0, len(d))
+	out = append(out, bson.E{Key: "_id", Value: id})
+	for _, e := range d {
+		if e.Key != "_id" {
+			out = append(out, e)
+		}
 	}
+	return out
 }
 
-func keys(es []compare.Entry) []string {
+func sourceIDs(es []compare.Entry) []string {
 	out := make([]string, len(es))
 	for i, e := range es {
-		out[i] = e.Key
+		out[i] = e.SourceID
+	}
+	return out
+}
+
+func targetIDs(es []compare.Entry) []string {
+	out := make([]string, len(es))
+	for i, e := range es {
+		out[i] = e.TargetID
 	}
 	return out
 }

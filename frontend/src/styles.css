@@ -4049,3 +4049,75 @@ tr.clickable {
   max-height: 520px;
   overflow: auto;
 }
+
+/* ---------- Users and roles ---------- */
+.users-body {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 12px 12px;
+}
+.users-body > .table-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.users-detail {
+  width: 460px;
+  flex: none;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+.users-detail h3 {
+  word-break: break-all;
+}
+.users-detail section {
+  margin-bottom: 18px;
+}
+.role-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.role-boxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.privilege-matrix td {
+  vertical-align: top;
+}
+.privilege-matrix td:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+}
+.matrix-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+.matrix-actions input.small {
+  width: 100%;
+}
+.search-indexes {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.search-index-form {
+  margin-top: 10px;
+}
+.search-index-form textarea {
+  width: 100%;
+}
+.schema-spec {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

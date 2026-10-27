@@ -430,3 +430,62 @@ func (a *App) AnalyzeIndexes(opID, connID, db string, o manage.AdviceOptions) (m
 		return manage.Analyze(ctx, s.Client.Database(db), o)
 	})
 }
+
+// ---- Atlas Search and Vector Search indexes (Collection info › Indexes) ----
+
+// ListSearchIndexes lists a collection's search indexes; Supported is false
+// when the server has no Atlas Search.
+func (a *App) ListSearchIndexes(connID, db, coll string) (manage.SearchIndexList, error) {
+	return call(a, "ListSearchIndexes", "", func(ctx context.Context) (manage.SearchIndexList, error) {
+		s, err := a.conns.Session(connID)
+		if err != nil {
+			return manage.SearchIndexList{}, err
+		}
+		return manage.ListSearchIndexes(ctx, s.Client.Database(db), coll)
+	})
+}
+
+// CreateSearchIndex starts building a search or vector search index.
+func (a *App) CreateSearchIndex(connID, db, coll string, in manage.SearchIndexInput) (string, error) {
+	name, err := call(a, "CreateSearchIndex", "", func(ctx context.Context) (string, error) {
+		s, err := a.writableSession(connID)
+		if err != nil {
+			return "", err
+		}
+		return manage.CreateSearchIndex(ctx, s.Client.Database(db), coll, in)
+	})
+	if err == nil {
+		a.log.Info("search index created", "db", db, "coll", coll, "index", name, "type", in.Type)
+	}
+	return name, err
+}
+
+// UpdateSearchIndex replaces a search index's definition.
+func (a *App) UpdateSearchIndex(connID, db, coll, name, definition string) error {
+	_, err := call(a, "UpdateSearchIndex", "", func(ctx context.Context) (struct{}, error) {
+		s, err := a.writableSession(connID)
+		if err != nil {
+			return struct{}{}, err
+		}
+		return struct{}{}, manage.UpdateSearchIndex(ctx, s.Client.Database(db), coll, name, definition)
+	})
+	if err == nil {
+		a.log.Info("search index updated", "db", db, "coll", coll, "index", name)
+	}
+	return err
+}
+
+// DropSearchIndex deletes a search index.
+func (a *App) DropSearchIndex(connID, db, coll, name string) error {
+	_, err := call(a, "DropSearchIndex", "", func(ctx context.Context) (struct{}, error) {
+		s, err := a.writableSession(connID)
+		if err != nil {
+			return struct{}{}, err
+		}
+		return struct{}{}, manage.DropSearchIndex(ctx, s.Client.Database(db), coll, name)
+	})
+	if err == nil {
+		a.log.Info("search index dropped", "db", db, "coll", coll, "index", name)
+	}
+	return err
+}

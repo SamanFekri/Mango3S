@@ -6,6 +6,7 @@
 #   docker compose --profile sql up -d postgres mysql   # relational sources for migration tests
 #   docker compose --profile rs up -d --wait mongo-rs   # single-node replica set on localhost:27020
 #   docker compose --profile sharded up -d --wait       # sharded cluster: mongos on localhost:27021
+#   docker compose --profile search up -d --wait mongo-atlas  # Atlas Search / Vector Search on localhost:27022
 #   docker compose --profile gui up --build app     # Linux + X11 only (experimental)
 #   docker compose down -v                          # stop and delete data
 name: mango3s
@@ -106,6 +107,17 @@ services:
       timeout: 10s
       retries: 30
       start_period: 10s
+
+  # Local Atlas deployment with Atlas Search (mongot): search and vector
+  # search indexes. Connect with mongodb://localhost:27022/?directConnection=true
+  mongo-atlas:
+    profiles: ["search"]
+    image: mongodb/mongodb-atlas-local:8.0
+    hostname: mongo-atlas
+    ports:
+      - "${MONGO_ATLAS_PORT:-27022}:27017"
+    environment:
+      DO_NOT_TRACK: "1"
 
   # Sharded cluster: a config server, two single-node shards and a mongos on
   # 27021 (connect to the mongos only): mongodb://localhost:27021

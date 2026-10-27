@@ -69,7 +69,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Start MongoDB, with auth, a replica set, a sharded cluster, PostgreSQL and MySQL
-        run: docker compose --profile auth --profile sql --profile rs --profile sharded up -d --wait mongo mongo-auth mongo-rs mongo-mongos postgres mysql
+        run: docker compose --profile auth --profile sql --profile rs --profile sharded --profile search up -d --wait mongo mongo-auth mongo-rs mongo-mongos mongo-atlas postgres mysql
       - name: Install the MongoDB Database Tools and mongosh
         run: |
           curl -fsSL https://pgp.mongodb.com/server-8.0.asc | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
@@ -83,12 +83,13 @@ jobs:
           MONGO_AUTH_URI: mongodb://admin:change-me@localhost:27018/?authSource=admin
           MONGO_RS_URI: mongodb://localhost:27020/?replicaSet=rs0
           MONGO_SHARDED_URI: mongodb://localhost:27021
+          MONGO_SEARCH_URI: mongodb://localhost:27022/?directConnection=true
           PG_DSN: postgres://mango_reader:reader@localhost:5433/shop?sslmode=disable
           MYSQL_DSN: mango_reader:reader@tcp(localhost:3307)/shop
         run: go test -tags integration -count=1 -v ./internal/integration/...
       - name: Server logs on failure
         if: failure()
-        run: docker compose --profile auth --profile sql --profile rs --profile sharded logs --tail 200
+        run: docker compose --profile auth --profile sql --profile rs --profile sharded --profile search logs --tail 200
 
   # Windows and Linux: the whole Go suite on the real OS, and the OS credential
   # store (Windows Credential Manager, the Linux Secret Service).

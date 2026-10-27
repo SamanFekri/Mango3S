@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"mango3s/internal/aggregate"
 	"mango3s/internal/apperr"
 	"mango3s/internal/jobs"
 	"mango3s/internal/model"
@@ -34,6 +35,7 @@ type ImportOptions struct {
 	Path        string       `json:"path"`
 	Format      Format       `json:"format"` // "" = by extension
 	Delimiter   string       `json:"delimiter"`
+	Sheet       string       `json:"sheet,omitempty"` // Excel: the sheet to read ("" = the first)
 	Columns     []ColumnSpec `json:"columns"`
 	KeepBlanks  bool         `json:"keepBlanks"`
 	Mode        string       `json:"mode"`
@@ -60,6 +62,12 @@ type ExportOptions struct {
 	Delimiter  string   `json:"delimiter"`
 	NoHeader   bool     `json:"noHeader"`
 	Fields     []string `json:"fields"` // selected fields; CSV columns
+	// Pipeline, when set, exports the aggregation's results instead of a
+	// find; Filter, Projection, Sort, Skip, Limit and Fields are then ignored
+	// (put them in the pipeline). A pipeline ending in $out or $merge is
+	// refused: it writes its own results.
+	Pipeline     []aggregate.Stage `json:"pipeline,omitempty"`
+	AllowDiskUse bool              `json:"allowDiskUse,omitempty"`
 }
 
 // ColumnPreview describes a CSV column in a preview.
@@ -75,6 +83,7 @@ type Preview struct {
 	SizeBytes int64            `json:"sizeBytes"`
 	Documents []model.Document `json:"documents"`
 	Columns   []ColumnPreview  `json:"columns"`
+	Sheets    []string         `json:"sheets,omitempty"` // Excel: the workbook's sheets
 	Error     string           `json:"error,omitempty"`
 }
 
@@ -86,6 +95,12 @@ func openReader(f io.Reader, o ImportOptions) (Reader, error) {
 			return nil, apperr.Invalid("%v", err)
 		}
 		r, err := NewCSVReader(f, CSVOptions{Delimiter: d, Columns: o.Columns, KeepBlanks: o.KeepBlanks})
+		if err != nil {
+			return nil, apperr.Invalid("%v", err)
+		}
+		return r, nil
+	case FormatExcel:
+		r, err := NewExcelReader(f, o.Sheet, CSVOptions{Columns: o.Columns, KeepBlanks: o.KeepBlanks})
 		if err != nil {
 			return nil, apperr.Invalid("%v", err)
 		}
@@ -137,7 +152,7 @@ func PreviewFile(o ImportOptions, n int) (Preview, error) {
 		p.SizeBytes = info.Size()
 	}
 
-	if o.Format == FormatCSV {
+	if o.Format == FormatCSV || o.Format == FormatExcel {
 		cols, err := previewColumns(o)
 		if err != nil {
 			return Preview{}, err
@@ -150,6 +165,12 @@ func PreviewFile(o ImportOptions, n int) (Preview, error) {
 	r, err := openReader(f, o)
 	if err != nil {
 		return Preview{}, err
+	}
+	if c, ok := r.(io.Closer); ok {
+		defer c.Close()
+	}
+	if x, ok := r.(*ExcelReader); ok {
+		p.Sheets = x.Sheets
 	}
 	for len(p.Documents) < n {
 		d, err := r.Next()
@@ -171,13 +192,22 @@ func previewColumns(o ImportOptions) ([]ColumnPreview, error) {
 		return nil, err
 	}
 	defer f.Close()
-	d, err := ParseDelimiter(o.Delimiter)
-	if err != nil {
-		return nil, apperr.Invalid("%v", err)
-	}
-	r, err := NewCSVReader(f, CSVOptions{Delimiter: d})
-	if err != nil {
-		return nil, apperr.Invalid("%v", err)
+	var r *CSVReader
+	if o.Format == FormatExcel {
+		x, err := NewExcelReader(f, o.Sheet, CSVOptions{})
+		if err != nil {
+			return nil, apperr.Invalid("%v", err)
+		}
+		defer x.Close()
+		r = x.CSVReader
+	} else {
+		d, err := ParseDelimiter(o.Delimiter)
+		if err != nil {
+			return nil, apperr.Invalid("%v", err)
+		}
+		if r, err = NewCSVReader(f, CSVOptions{Delimiter: d}); err != nil {
+			return nil, apperr.Invalid("%v", err)
+		}
 	}
 	cols := make([]ColumnPreview, len(r.Header()))
 	types := make([]map[string]bool, len(cols))
@@ -309,6 +339,9 @@ func RunImport(ctx context.Context, c *mongo.Collection, o ImportOptions, p *job
 	r, err := openReader(counter, o)
 	if err != nil {
 		return "", err
+	}
+	if c, ok := r.(io.Closer); ok {
+		defer c.Close()
 	}
 	if o.DropFirst {
 		if err := c.Drop(ctx); err != nil {
@@ -469,11 +502,20 @@ func normalizeExport(o *ExportOptions) error {
 	if o.Format == "" {
 		o.Format = DetectFormat(o.Path)
 	}
-	if o.Format != FormatJSON && o.Format != FormatCSV {
+	if o.Format != FormatJSON && o.Format != FormatCSV && o.Format != FormatExcel {
 		return apperr.Invalid("Unsupported format %q.", o.Format)
 	}
 	if _, err := ParseDelimiter(o.Delimiter); err != nil {
 		return apperr.Invalid("%v", err)
+	}
+	if len(o.Pipeline) > 0 {
+		pipe, err := aggregate.Build(o.Pipeline, -1)
+		if err != nil {
+			return err
+		}
+		if aggregate.IsWrite(pipe) {
+			return apperr.Invalid("This pipeline ends with %s, which writes its own results. Remove that stage to export the results to a file.", pipe[len(pipe)-1][0].Key)
+		}
 	}
 	dir := filepath.Dir(o.Path)
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
@@ -518,32 +560,25 @@ func RunExport(ctx context.Context, c *mongo.Collection, o ExportOptions, p *job
 	if err := normalizeExport(&o); err != nil {
 		return "", err
 	}
-	q, err := query.Parse(exportQuery(o))
+	src, err := newExportSource(ctx, c, o)
 	if err != nil {
 		return "", err
 	}
-	if len(o.Fields) > 0 && len(q.Projection) == 0 {
-		q.Projection = fieldsProjection(o.Fields)
-	}
-
-	countOpts := options.Count()
-	if o.Skip > 0 {
-		countOpts.SetSkip(o.Skip)
-	}
-	if o.Limit > 0 {
-		countOpts.SetLimit(o.Limit)
-	}
-	total, err := c.CountDocuments(ctx, q.Filter, countOpts)
-	if err != nil {
-		return "", apperr.From(err)
-	}
 	if p != nil {
+		// An aggregation's result count is unknown until it has run (0).
+		total, err := src.count(ctx)
+		if err != nil {
+			return "", err
+		}
 		p.SetTotal(total, "documents")
 	}
 
 	fields := o.Fields
-	if o.Format == FormatCSV && len(fields) == 0 {
-		if fields, err = sampleLeafPaths(ctx, c, q, 1000); err != nil {
+	if len(o.Pipeline) > 0 {
+		fields = nil
+	}
+	if (o.Format == FormatCSV || o.Format == FormatExcel) && len(fields) == 0 {
+		if fields, err = src.sampleLeafPaths(ctx, 1000); err != nil {
 			return "", err
 		}
 		if len(fields) == 0 {
@@ -570,26 +605,17 @@ func RunExport(ctx context.Context, c *mongo.Collection, o ExportOptions, p *job
 		if w, err = NewCSVWriter(tmp, fields, delim, !o.NoHeader); err != nil {
 			return "", apperr.Invalid("%v", err)
 		}
+	case FormatExcel:
+		if w, err = NewExcelWriter(tmp, o.Coll, fields, !o.NoHeader); err != nil {
+			return "", apperr.Invalid("%v", err)
+		}
 	default:
 		w = NewJSONWriter(tmp, o.JSONMode, o.Canonical, o.Pretty)
 	}
 
-	findOpts := options.Find().SetBatchSize(1000)
-	if len(q.Projection) > 0 {
-		findOpts.SetProjection(q.Projection)
-	}
-	if len(q.Sort) > 0 {
-		findOpts.SetSort(q.Sort)
-	}
-	if o.Skip > 0 {
-		findOpts.SetSkip(o.Skip)
-	}
-	if o.Limit > 0 {
-		findOpts.SetLimit(o.Limit)
-	}
-	cur, err := c.Find(ctx, q.Filter, findOpts)
+	cur, err := src.open(ctx, 0)
 	if err != nil {
-		return "", apperr.From(err)
+		return "", err
 	}
 	defer cur.Close(context.Background())
 
@@ -623,14 +649,89 @@ func RunExport(ctx context.Context, c *mongo.Collection, o ExportOptions, p *job
 	return fmt.Sprintf("%d documents written to %s", n, filepath.Base(o.Path)), nil
 }
 
-func sampleLeafPaths(ctx context.Context, c *mongo.Collection, q query.Parsed, n int64) ([]string, error) {
-	opts := options.Find().SetLimit(n)
-	if len(q.Projection) > 0 {
-		opts.SetProjection(q.Projection)
+// exportSource is what an export reads: a find with the export's query, or
+// an aggregation pipeline.
+type exportSource struct {
+	c        *mongo.Collection
+	o        ExportOptions
+	q        query.Parsed
+	pipeline mongo.Pipeline
+}
+
+func newExportSource(ctx context.Context, c *mongo.Collection, o ExportOptions) (*exportSource, error) {
+	s := &exportSource{c: c, o: o}
+	if len(o.Pipeline) > 0 {
+		pipe, err := aggregate.Build(o.Pipeline, -1)
+		if err != nil {
+			return nil, err
+		}
+		s.pipeline = pipe
+		return s, nil
 	}
-	cur, err := c.Find(ctx, q.Filter, opts)
+	q, err := query.Parse(exportQuery(o))
 	if err != nil {
-		return nil, apperr.From(err)
+		return nil, err
+	}
+	if len(o.Fields) > 0 && len(q.Projection) == 0 {
+		q.Projection = fieldsProjection(o.Fields)
+	}
+	s.q = q
+	return s, nil
+}
+
+// count is the number of documents a find export writes; 0 (unknown) for a
+// pipeline.
+func (s *exportSource) count(ctx context.Context) (int64, error) {
+	if s.pipeline != nil {
+		return 0, nil
+	}
+	opts := options.Count()
+	if s.o.Skip > 0 {
+		opts.SetSkip(s.o.Skip)
+	}
+	if s.o.Limit > 0 {
+		opts.SetLimit(s.o.Limit)
+	}
+	n, err := s.c.CountDocuments(ctx, s.q.Filter, opts)
+	return n, apperr.Check(err)
+}
+
+// open returns a cursor over the documents to write; limit > 0 caps it (for
+// sampling CSV columns).
+func (s *exportSource) open(ctx context.Context, limit int64) (*mongo.Cursor, error) {
+	if s.pipeline != nil {
+		pipe := s.pipeline
+		if limit > 0 {
+			pipe = append(append(mongo.Pipeline{}, pipe...), bson.D{{Key: "$limit", Value: limit}})
+		}
+		cur, err := s.c.Aggregate(ctx, pipe, options.Aggregate().SetAllowDiskUse(s.o.AllowDiskUse).SetBatchSize(1000))
+		return cur, apperr.Check(err)
+	}
+	opts := options.Find().SetBatchSize(1000)
+	if len(s.q.Projection) > 0 {
+		opts.SetProjection(s.q.Projection)
+	}
+	if limit > 0 {
+		opts.SetLimit(limit)
+	} else {
+		if len(s.q.Sort) > 0 {
+			opts.SetSort(s.q.Sort)
+		}
+		if s.o.Skip > 0 {
+			opts.SetSkip(s.o.Skip)
+		}
+		if s.o.Limit > 0 {
+			opts.SetLimit(s.o.Limit)
+		}
+	}
+	cur, err := s.c.Find(ctx, s.q.Filter, opts)
+	return cur, apperr.Check(err)
+}
+
+func (s *exportSource) sampleLeafPaths(ctx context.Context, n int64) ([]string, error) {
+	cur, err := s.open(ctx, n)
+	if err != nil {
+		return nil, err
 	}
 	defer cur.Close(context.Background())
 	seen := map[string]bool{}

@@ -329,6 +329,9 @@ func (e *executor) dbMethod(ctx context.Context, db string, m segment) (Output, 
 		}
 		return value(bson.D{{Key: "ok", Value: 1}, {Key: "dropped", Value: db}}), nil
 	}
+	if _, ok := userMethods[m.name]; ok {
+		return e.userMethod(ctx, d, m)
+	}
 	return Output{}, apperr.New(apperr.CodeUnsupported, "db.%s() is not supported (try help).", m.name)
 }
 
@@ -914,6 +917,10 @@ const helpText = `Supported commands (this is a MongoDB command shell, not a Jav
   db.version()                       db.serverStatus()     db.dropDatabase()
   db.createCollection(name, opts)    db.runCommand(cmd)    db.adminCommand(cmd)
   db.getSiblingDB(name).<...>        db.getCollection(name).<method>(...)
+
+Users and roles: getUsers getUser createUser updateUser changeUserPassword dropUser
+  grantRolesToUser revokeRolesFromUser getRoles getRole createRole updateRole dropRole
+  grantRolesToRole revokeRolesFromRole grantPrivilegesToRole revokePrivilegesFromRole
 
 Collection methods: db.<coll>.<method>(...)
   find(filter, projection) .sort() .skip() .limit() .projection() .count() .explain()

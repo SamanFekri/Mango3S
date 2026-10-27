@@ -22,6 +22,26 @@ var (
 	keyValue = regexp.MustCompile(`(?i)("?(?:password|passwd|pwd|secret|token)"?\s*[:=]\s*"?)([^"&,\s}]+)`)
 )
 
+// A quoted string in shell code: "...", '...' or `...`, with escapes.
+const quoted = `"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|` + "`[^`]*`"
+
+var (
+	// createUser({user: "u", pwd: "a b,c"}), updateUser(..., {password: '...'})
+	scriptPassword = regexp.MustCompile(`(?i)(\b(?:pwd|password|passwd)["']?\s*:\s*)(` + quoted + `)`)
+	// db.changeUserPassword("u", "secret")
+	changePassword = regexp.MustCompile(`(changeUserPassword\s*\(\s*(?:` + quoted + `)\s*,\s*)(` + quoted + `)`)
+)
+
+// RedactScript masks passwords in shell code (createUser, updateUser,
+// changeUserPassword, connection strings) before it is stored, e.g. in the
+// query history. A quoted password is masked whole, spaces and commas
+// included.
+func RedactScript(s string) string {
+	s = scriptPassword.ReplaceAllString(s, `$1"****"`)
+	s = changePassword.ReplaceAllString(s, `$1"****"`)
+	return Redact(s)
+}
+
 // Redact masks passwords embedded in connection strings and key/value text.
 func Redact(s string) string {
 	s = uriUserInfo.ReplaceAllString(s, "$1$2:****@")

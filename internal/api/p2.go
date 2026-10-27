@@ -65,6 +65,7 @@ func newP2(a *App) *p2 {
 	}
 	p.sync = syncer.New(a.conns, a.jobs, p.compare, backup.Dir(a.store.Dir()))
 	p.scheduler = scheduler.New(a.log, a.jobs, a.store.Dir())
+	p.scheduler.SetNotifier(a.notifyTaskRun)
 	return p
 }
 
@@ -107,6 +108,27 @@ func (a *App) StartSync(planID, confirm string) (jobs.Job, error) {
 		a.log.Info("sync started", "job", j.ID)
 	}
 	return j, a.encode("StartSync", err)
+}
+
+// CompareSchema lists the index and validation differences between the
+// source and target collections of o.
+func (a *App) CompareSchema(o compare.Options) (syncer.SchemaDiff, error) {
+	return call(a, "CompareSchema", "", func(ctx context.Context) (syncer.SchemaDiff, error) {
+		return syncer.DiffSchema(ctx, a.conns, o)
+	})
+}
+
+// SyncSchema copies the chosen index and validation changes to the target.
+// fingerprint comes from CompareSchema; confirm must repeat the target
+// namespace when indexes are dropped or rebuilt.
+func (a *App) SyncSchema(o compare.Options, ids []string, fingerprint, confirm string) (syncer.SchemaResult, error) {
+	r, err := call(a, "SyncSchema", "", func(ctx context.Context) (syncer.SchemaResult, error) {
+		return syncer.ApplySchema(ctx, a.conns, o, ids, fingerprint, confirm)
+	})
+	if err == nil {
+		a.log.Info("schema synced", "target", o.Target.String(), "applied", len(r.Applied), "failed", len(r.Failed))
+	}
+	return r, err
 }
 
 // GetSyncOutcome returns the result of a sync job.
@@ -398,7 +420,15 @@ func (a *App) SaveTask(t scheduler.Task) (scheduler.Task, error) {
 }
 
 // DeleteTask removes a task.
-func (a *App) DeleteTask(id string) error { return a.encode("DeleteTask", a.p2.scheduler.Delete(id)) }
+func (a *App) DeleteTask(id string) error {
+	if err := a.p2.scheduler.Delete(id); err != nil {
+		return a.encode("DeleteTask", err)
+	}
+	if err := a.secrets.Delete(taskWebhookSecret(id)); err != nil {
+		a.log.Warn("could not delete the task's webhook URL", "err", err)
+	}
+	return nil
+}
 
 // ApproveTask records the user's approval of the task's current parameters.
 func (a *App) ApproveTask(id string) (scheduler.Task, error) {

@@ -222,11 +222,16 @@ make sql-up && make test-integration-sql   # adds the PostgreSQL and MySQL migra
 | `internal/integration/advanced_test.go` | Multi-step task (export + backup) through the API; task import resets approval; mongodump/mongorestore with authentication, password absent from the job log |
 | **P2** `internal/integration/p2_test.go` | Repeatable compare; sync preview == apply, then restore; reschema/masking integrity; migrations from SQLite, PostgreSQL and MySQL with read-only users; scheduled export through the API; AI proposals gated (fake provider); MCP tools against a real server. Acceptance criteria are mapped to tests in [docs/P2.md](P2.md#tests) |
 | Roadmap phases 1–6 `internal/{charts,datagen,gridfs,jsengine,monitor,scriptrun,streams}`, `internal/manage/sharding.go`, `internal/schema/jsonschema.go` | Chart pipelines; template generators and seeds; GridFS bucket detection; JavaScript ↔ BSON conversion; monitor rates and replica lag; mongosh connection strings; change events. Real-server tests in `internal/integration/{charts,datagen,gridfs,jsengine,monitor,scriptrun,sharding,streams}_test.go` — the replica set (`MONGO_RS_URI`, `make rs-up`) and sharded cluster (`MONGO_SHARDED_URI`, `make sharded-up`) tests skip when those servers aren't running |
+| Roadmap 1.3, 1.4, 2.2, 5.2, 5.3, 6.1 `internal/{users,notify}`, `internal/transfer/excel.go`, `internal/syncer/schema.go`, `internal/manage/search.go` | Role diffs and resource matching; webhook delivery and desktop notifications with text passed as data; Excel round trip of every type; index and validator diffs. Real-server tests: `users_test.go` (auth server), `search_test.go` (Atlas local), `TestExportAggregationResults`, `TestExcelExportImport`, `TestSyncByMatchKey`, `TestSyncIndexesAndValidation` |
 | `frontend/src/**/*.test.ts(x)` | Query builder, pipeline and tab reducers, Extended JSON cell rendering, error parsing, results view (paging, selection, read-only), builder UI, full-app connect → browse → query flow. **P1:** shell completion rules, history recall, library → tab mapping, job progress and cancel in the status bar, library tab |
 
-To run the authentication test:
+To run the authentication, users and roles test:
 `docker compose --profile auth up -d mongo-auth`, then
 `MONGO_AUTH_URI='mongodb://admin:change-me@localhost:27018/?authSource=admin' make test-integration`.
+The Atlas Search test needs a local Atlas deployment: `make search-up`, then
+`MONGO_SEARCH_URI='mongodb://localhost:27022/?directConnection=true' make test-integration`.
+The suite runs on MongoDB 4.4 and later; run it against both an old and a current server
+before a release.
 
 ---
 
@@ -428,8 +433,8 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
 - **Shell:** the *Built-in* mode is a MongoDB command interpreter (paged results); use the
   *JavaScript* mode (embedded engine) or the *mongosh* mode for variables, loops and functions.
   No `load()` in the JavaScript mode; mongosh mode can't go through SSH tunnels or proxies.
-- **Import/export:** Excel, and exporting aggregation results (export runs a find query).
-  Multi-collection and BSON exports are covered by backups; see [docs/FEATURES.md](FEATURES.md#limits)
+- **Import/export:** an Excel import reads one sheet, an Excel export writes one (at most
+  1,048,575 rows). Multi-collection and BSON exports are covered by backups; see [docs/FEATURES.md](FEATURES.md#limits)
   for the limits of backup, restore, copy and SQL export.
 - **SQL:** joins, subqueries, expressions and functions beyond `COUNT/SUM/AVG/MIN/MAX`, and
   `INSERT/UPDATE/DELETE` (see [SQL subset](#sql-subset)).
@@ -440,8 +445,7 @@ can't run inside a container on macOS or Windows; build it natively with `wails 
 - **Connection, editing and shortcut limits:** see [Unsupported and limitations](UI.md#unsupported-and-limitations)
   (Kerberos, interactive OIDC, SSH keyboard-interactive 2FA, SOCKS4, socket timeout and wtimeout
   in Go driver v2, keymap customization, …).
-- User and role management UI (use the shell, or include users and roles in an archive backup),
-  and multiple windows.
+- Multiple windows, and client-side field-level encryption.
 - Code signing and notarization of release builds.
 
 ## Troubleshooting

@@ -5,7 +5,7 @@ import { Modal, Spinner } from '../components/common'
 import { AIDialog } from '../components/AIDialog'
 import { BulkWriteDialog } from '../components/BulkWriteDialog'
 import { CodeDialog } from '../components/CodeDialog'
-import { DocumentEditor, INSERT_TEMPLATE } from '../components/DocumentEditor'
+import { DocumentEditor } from '../components/DocumentEditor'
 import { ExplainDialog } from '../components/ExplainDialog'
 import { ExportWizard } from '../components/ExportWizard'
 import { ImportWizard } from '../components/ImportWizard'
@@ -18,17 +18,13 @@ import { toAppError, type AppError } from '../lib/errors'
 import { formatBytes, formatCount } from '../lib/format'
 import { emptyBuilder, type BuilderState } from '../lib/queryBuilder'
 import type { Tab } from '../lib/tabs'
-import type { CodeRequest, CollectionStats, Doc, ExplainRequest, Page, QueryRequest } from '../lib/types'
+import type { CodeRequest, CollectionStats, ExplainRequest, QueryRequest } from '../lib/types'
 import { buildQueryText, type QueryParts } from '../lib/queryText'
 import { shortcutHint } from '../lib/shortcuts'
 import { useApp, useTabDirty } from '../state/AppContext'
 import { useShortcut } from '../state/shortcuts'
-
-interface EditorState {
-  mode: 'insert' | 'edit'
-  doc?: Doc
-  text: string
-}
+import { useDocumentActions } from './collection/useDocumentActions'
+import { usePagedQuery } from './collection/usePagedQuery'
 
 export function CollectionView({ tab }: { tab: Tab }) {
   const { settings, sessions, toast, toastError, confirm, dispatchTabs, prompt } = useApp()
@@ -72,20 +68,10 @@ export function CollectionView({ tab }: { tab: Tab }) {
   )
   const [queryError, setQueryError] = useState<AppError | null>(null)
 
-  const [page, setPage] = useState<Page | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<AppError | null>(null)
-  const [total, setTotal] = useState<number | null>(null)
-  const [counting, setCounting] = useState(false)
-
   const [fields, setFields] = useState<string[]>([])
   const [showBuilder, setShowBuilder] = useState(false)
   const [builder, setBuilder] = useState<BuilderState>(emptyBuilder)
-  const [editor, setEditor] = useState<EditorState | null>(null)
   const [stats, setStats] = useState<CollectionStats | 'loading' | null>(null)
-
-  // Keep the last executed request so paging re-runs exactly what produced the results.
-  const lastReq = useRef<QueryRequest | null>(null)
 
   const buildReq = useCallback(
     (pageNo: number, size = pageSize): QueryRequest => ({
@@ -103,26 +89,9 @@ export function CollectionView({ tab }: { tab: Tab }) {
     [connId, db, coll, filter, projection, sort, skip, limit, pageSize],
   )
 
-  const execute = useCallback(
-    async (req: QueryRequest) => {
-      setLoading(true)
-      setError(null)
-      try {
-        const p = await backend.runQuery(opId, req)
-        if (lastReq.current?.filter !== req.filter || lastReq.current?.skip !== req.skip || lastReq.current?.limit !== req.limit) {
-          setTotal(null)
-        }
-        lastReq.current = req
-        setPage(p)
-      } catch (err) {
-        const e = toAppError(err)
-        if (e.code !== 'CANCELED') setError(e)
-      } finally {
-        setLoading(false)
-      }
-    },
-    [opId],
-  )
+  const results = usePagedQuery(opId, `count-${tab.id}`, () => buildReq(0))
+  const { page, loading, error, setError, total, counting, lastReq, execute } = results
+  const docs = useDocumentActions({ connId, db, coll, readOnly }, results)
 
   const applyParts = (q: QueryParts) => {
     setFilter(q.filter)
@@ -202,19 +171,6 @@ export function CollectionView({ tab }: { tab: Tab }) {
     }
   }
 
-  const goto = (n: number) => execute({ ...(lastReq.current ?? buildReq(0)), page: n })
-
-  const count = async () => {
-    setCounting(true)
-    try {
-      setTotal(await backend.countQuery(`count-${tab.id}`, lastReq.current ?? buildReq(0)))
-    } catch (err) {
-      toastError(err, 'Count failed')
-    } finally {
-      setCounting(false)
-    }
-  }
-
   // Initial load: first page of the collection plus field names for autocomplete.
   useEffect(() => {
     void execute(buildReq(0))
@@ -224,7 +180,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
     }
   }, [connId, db, coll])
 
-  const refresh = () => execute(lastReq.current ?? buildReq(0))
+  const refresh = results.refresh
 
   // Collection History (Connection Manager → Collection History).
   useEffect(() => {
@@ -242,24 +198,8 @@ export function CollectionView({ tab }: { tab: Tab }) {
     }),
     [connId, db, coll],
   )
-  const onDocumentChanged = useCallback(
-    (nd: Doc) => setPage((p) => (p ? { ...p, documents: p.documents.map((d) => (d.id === nd.id ? nd : d)) } : p)),
-    [],
-  )
-  useTabDirty(tab.id, cellDirty || (editor ? 'an open document editor' : null))
+  useTabDirty(tab.id, cellDirty || (docs.editor ? 'an open document editor' : null))
 
-  const [bulk, setBulk] = useState<{ kind: 'update' | 'remove'; ids: string[] } | null>(null)
-  const refreshDocument = async (doc: Doc) => {
-    try {
-      onDocumentChanged(await backend.getDocument(connId, db, coll, doc.id))
-    } catch (err) {
-      const e = toAppError(err)
-      if (e.code === 'NOT_FOUND') {
-        setPage((p) => (p ? { ...p, documents: p.documents.filter((d) => d.id !== doc.id) } : p))
-        toast({ kind: 'info', title: 'Document is gone', message: 'It was deleted since the page loaded.' })
-      } else toastError(err, 'Could not refresh the document')
-    }
-  }
   const followReference = async (ref: { coll?: string; db?: string; idJSON: string }) => {
     let target = ref.coll
     const targetDb = ref.db ?? db
@@ -271,45 +211,6 @@ export function CollectionView({ tab }: { tab: Tab }) {
     }
     const filter = `{ _id: ${ref.idJSON} }`
     dispatchTabs({ type: 'open', tab: { kind: 'collection', connId, connName: tab.connName, db: targetDb, coll: target, init: { query: { filter, projection: '', sort: '', skip: 0, limit: 0 } } } })
-  }
-
-  const onDelete = async (docs: Doc[], opts?: { keyboard?: boolean }) => {
-    if (settings?.confirmDeletes !== false || opts?.keyboard) {
-      const ok = await confirm({
-        title: docs.length === 1 ? 'Delete document' : `Delete ${docs.length} documents`,
-        message: (
-          <>
-            Permanently delete {docs.length === 1 ? <code>{docs[0].id}</code> : `${docs.length} documents`} from{' '}
-            <code>
-              {db}.{coll}
-            </code>
-            ?
-          </>
-        ),
-        confirmLabel: 'Delete',
-        danger: true,
-      })
-      if (!ok) return
-    }
-    try {
-      const n = await backend.deleteDocuments(connId, db, coll, docs.map((d) => d.id))
-      toast({ kind: 'success', title: `Deleted ${n} document${n === 1 ? '' : 's'}` })
-      if (n < docs.length) toast({ kind: 'info', title: `${docs.length - n} document(s) were already gone` })
-      setTotal(null)
-      refresh()
-    } catch (err) {
-      toastError(err, 'Delete failed')
-    }
-  }
-
-  const onEdit = async (doc: Doc) => {
-    // Re-read so the editor starts from the current server version.
-    try {
-      const fresh = await backend.getDocument(connId, db, coll, doc.id)
-      setEditor({ mode: 'edit', doc: fresh, text: fresh.text })
-    } catch (err) {
-      toastError(err, 'Could not open document')
-    }
   }
 
   const copyAsShell = async () => {
@@ -356,7 +257,7 @@ export function CollectionView({ tab }: { tab: Tab }) {
     }
   }
   const openAggregation = () => dispatchTabs({ type: 'open', tab: { kind: 'aggregation', connId, connName: tab.connName, db, coll } })
-  const insert = (text = INSERT_TEMPLATE) => (readOnly ? false : setEditor({ mode: 'insert', text }))
+  const insert = docs.insert
 
   useShortcut('query.run', () => void run())
   useShortcut('view.refresh', () => void refresh())
@@ -526,69 +427,57 @@ export function CollectionView({ tab }: { tab: Tab }) {
         view={view}
         onViewChange={setView}
         chart={<ChartPanel connId={connId} db={db} coll={coll} filter={lastReq.current?.filter ?? filter} fields={fields} initial={tab.init?.chart} />}
-        onPage={goto}
+        onPage={results.goto}
         pageSize={pageSize}
         onPageSize={(n) => {
           setPageSize(n)
-          execute({ ...(lastReq.current ?? buildReq(0)), page: 0, pageSize: n })
+          void results.resize(n)
         }}
         total={total}
         counting={counting}
-        onCount={count}
+        onCount={results.count}
         onCancel={() => backend.cancel(opId)}
-        onEdit={onEdit}
-        onDelete={onDelete}
+        onEdit={docs.edit}
+        onDelete={docs.remove}
         readOnly={readOnly}
         fieldApi={fieldApi}
-        onDocumentChanged={onDocumentChanged}
+        onDocumentChanged={results.replaceDocument}
         onDirtyChange={setCellDirty}
         confirm={(message) => confirm({ title: 'Please confirm', message, confirmLabel: 'OK', danger: true })}
         onInsert={(text) => void insert(text)}
-        onRefreshDocument={refreshDocument}
+        onRefreshDocument={docs.refreshDocument}
         onFollowReference={(ref) => void followReference(ref)}
-        onBulkDialog={readOnly ? undefined : (kind, ids) => setBulk({ kind, ids })}
+        onBulkDialog={readOnly ? undefined : (kind, ids) => docs.setBulk({ kind, ids })}
       />
 
-      {bulk && (
+      {docs.bulk && (
         <BulkWriteDialog
           connId={connId}
           db={db}
           coll={coll}
-          kind={bulk.kind}
-          selectedIds={bulk.ids}
+          kind={docs.bulk.kind}
+          selectedIds={docs.bulk.ids}
           queryFilter={lastReq.current?.filter ?? filter}
-          onClose={() => setBulk(null)}
+          onClose={() => docs.setBulk(null)}
           onDone={(r) => {
             toast({
               kind: 'success',
-              title: bulk.kind === 'remove' ? `Removed ${r.deleted} document${r.deleted === 1 ? '' : 's'}` : `Updated ${r.modified} of ${r.matched} documents`,
+              title: docs.bulk?.kind === 'remove' ? `Removed ${r.deleted} document${r.deleted === 1 ? '' : 's'}` : `Updated ${r.modified} of ${r.matched} documents`,
               message: 'The previous versions were backed up (Library → Backups).',
             })
-            setTotal(null)
-            refresh()
+            results.changed()
           }}
         />
       )}
 
-      {editor && (
+      {docs.editor && (
         <DocumentEditor
-          mode={editor.mode}
-          title={editor.mode === 'insert' ? `Insert into ${db}.${coll}` : `Edit ${editor.doc?.id}`}
-          initial={editor.text}
+          mode={docs.editor.mode}
+          title={docs.editor.mode === 'insert' ? `Insert into ${db}.${coll}` : `Edit ${docs.editor.doc?.id}`}
+          initial={docs.editor.text}
           fields={fields}
-          onClose={() => setEditor(null)}
-          onSave={async (text) => {
-            if (editor.mode === 'insert') {
-              const ids = await backend.insertDocuments(connId, db, coll, text)
-              toast({ kind: 'success', title: `Inserted ${ids.length} document${ids.length === 1 ? '' : 's'}` })
-            } else {
-              await backend.replaceDocument(connId, db, coll, editor.doc!.id, text)
-              toast({ kind: 'success', title: 'Document saved' })
-            }
-            setEditor(null)
-            setTotal(null)
-            refresh()
-          }}
+          onClose={() => docs.setEditor(null)}
+          onSave={docs.saveEditor}
         />
       )}
 

@@ -15,8 +15,9 @@ import (
 type Format string
 
 const (
-	FormatJSON Format = "json" // a JSON array, or newline-delimited / concatenated documents
-	FormatCSV  Format = "csv"
+	FormatJSON  Format = "json" // a JSON array, or newline-delimited / concatenated documents
+	FormatCSV   Format = "csv"
+	FormatExcel Format = "xlsx" // one sheet, a header row and one column per field
 )
 
 // JSON output layouts.
@@ -30,6 +31,8 @@ func DetectFormat(path string) Format {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".csv", ".tsv", ".txt":
 		return FormatCSV
+	case ".xlsx":
+		return FormatExcel
 	}
 	return FormatJSON
 }

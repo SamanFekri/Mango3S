@@ -7,6 +7,7 @@ import { formatCount, formatDuration } from '../lib/format'
 import type { Tab } from '../lib/tabs'
 import type { CompareResult, DBCompareResult, DocDiff, Endpoint, SyncOptions, SyncOutcome, SyncPreview } from '../lib/types'
 import { useApp } from '../state/AppContext'
+import { SchemaSync } from '../components/SchemaSync'
 
 function DiffList({ samples }: { samples: DocDiff[] }) {
   if (samples.length === 0) return null
@@ -55,6 +56,7 @@ export function CompareView({ tab }: { tab: Tab }) {
   const [filter, setFilter] = useState('')
   const [ignore, setIgnore] = useState('')
   const [ignoreOrder, setIgnoreOrder] = useState(true)
+  const [matchKey, setMatchKey] = useState('')
   const [deep, setDeep] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
   const [compareJob, setCompareJob] = useState<string | null>(null)
@@ -84,6 +86,23 @@ export function CompareView({ tab }: { tab: Tab }) {
     }
   })
 
+  const keyFields = matchKey
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const collOptions = {
+    source,
+    target,
+    filter,
+    ignoreFields: ignore
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    ignoreFieldOrder: ignoreOrder,
+    sampleSize: 50,
+    matchKey: keyFields,
+  }
+
   const run = async () => {
     setError(null)
     setResult(null)
@@ -95,14 +114,7 @@ export function CompareView({ tab }: { tab: Tab }) {
     try {
       const job =
         mode === 'collection'
-          ? await backend.startCompare({
-              source,
-              target,
-              filter,
-              ignoreFields: ignore.split(',').map((s) => s.trim()).filter(Boolean),
-              ignoreFieldOrder: ignoreOrder,
-              sampleSize: 50,
-            })
+          ? await backend.startCompare(collOptions)
           : await backend.startCompareDatabases({ sourceConnId: source.connId, sourceDb: source.db, targetConnId: target.connId, targetDb: target.db, deep })
       setCompareJob(job.id)
     } catch (err) {
@@ -172,6 +184,10 @@ export function CompareView({ tab }: { tab: Tab }) {
             <span>Ignore fields (comma-separated paths)</span>
             <input className="mono" value={ignore} onChange={(e) => setIgnore(e.target.value)} placeholder="updatedAt, meta.etag" />
           </label>
+          <label className="field">
+            <span>Match documents by (empty = _id)</span>
+            <input className="mono" value={matchKey} onChange={(e) => setMatchKey(e.target.value)} placeholder="email  or  tenant, orderNo" aria-label="Match documents by" />
+          </label>
           <label className="check">
             <input type="checkbox" checked={ignoreOrder} onChange={(e) => setIgnoreOrder(e.target.checked)} />
             Ignore field order
@@ -187,7 +203,10 @@ export function CompareView({ tab }: { tab: Tab }) {
         <button className="primary" onClick={run} disabled={busy || !!running}>
           {busy || running ? <Spinner small /> : null} Compare
         </button>
-        <span className="muted small">Documents are matched by _id. Results are repeatable: equal inputs give the same fingerprint.</span>
+        <span className="muted small">
+          Documents are matched by {keyFields.length ? keyFields.join(' + ') + ' (must be unique on both sides; the target keeps its _ids)' : '_id'}. Results are
+          repeatable: equal inputs give the same fingerprint.
+        </span>
       </div>
       <ErrorBanner error={error} onDismiss={() => setError(null)} />
       <JobStatus jobId={compareJob} />
@@ -203,7 +222,7 @@ export function CompareView({ tab }: { tab: Tab }) {
           </div>
           <p className="muted small">
             {formatCount(result.sourceCount)} source and {formatCount(result.targetCount)} target documents compared in {formatDuration(result.durationMs)}.
-            {result.samples.length > 0 && ` First ${result.samples.length} differences (sorted by _id):`}
+            {result.samples.length > 0 && ` First ${result.samples.length} differences (sorted by ${keyFields.length ? keyFields.join(' + ') : '_id'}):`}
           </p>
           <DiffList samples={result.samples} />
 
@@ -247,6 +266,8 @@ export function CompareView({ tab }: { tab: Tab }) {
           )}
         </section>
       )}
+
+      {mode === 'collection' && <SchemaSync options={collOptions} />}
 
       <JobStatus jobId={syncJob} />
       {outcome && (

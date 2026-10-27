@@ -32,6 +32,7 @@ import { SqlView } from './views/SqlView'
 import { MonitorView } from './views/MonitorView'
 import { GridFSView } from './views/GridFSView'
 import { ChangesView } from './views/ChangesView'
+import { UsersView } from './views/users/UsersView'
 import { WelcomeView } from './views/WelcomeView'
 
 class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -95,6 +96,8 @@ function TabContent({ tab }: { tab: Tab }) {
       return <GridFSView tab={tab} />
     case 'changes':
       return <ChangesView tab={tab} />
+    case 'users':
+      return <UsersView tab={tab} />
   }
 }
 

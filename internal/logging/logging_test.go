@@ -43,3 +43,18 @@ func TestRedactingHandler(t *testing.T) {
 		t.Fatalf("expected redacted uri in %s", out)
 	}
 }
+
+func TestRedactScript(t *testing.T) {
+	for in, want := range map[string]string{
+		`db.createUser({user: "ann", pwd: "a b,c}", roles: []})`:          `db.createUser({user: "ann", pwd: "****", roles: []})`,
+		`db.createUser({ user: 'ann', "pwd": 'it\'s', roles: ["read"] })`: `db.createUser({ user: 'ann', "pwd": "****", roles: ["read"] })`,
+		`db.updateUser("ann", {password: ` + "`x y`" + `})`:               `db.updateUser("ann", {password: "****"})`,
+		`db.changeUserPassword("ann", "new pass, 2")`:                     `db.changeUserPassword("ann", "****")`,
+		`db.changeUserPassword('ann',passwordPrompt())`:                   `db.changeUserPassword('ann',passwordPrompt())`,
+		`db.users.find({name: "pwd"})`:                                    `db.users.find({name: "pwd"})`,
+	} {
+		if got := RedactScript(in); got != want {
+			t.Errorf("RedactScript(%q)\n got %q\nwant %q", in, got, want)
+		}
+	}
+}

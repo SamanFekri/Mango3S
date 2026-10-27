@@ -39,7 +39,8 @@ export function ImportWizard({ connId, db, coll, onClose }: { connId: string; db
   const set = <K extends keyof ImportOptions>(k: K, v: ImportOptions[K]) => setOpts((o) => ({ ...o, [k]: v }))
 
   // Re-run the preview whenever parsing options change.
-  const previewKey = JSON.stringify([opts.path, opts.format, opts.delimiter, opts.columns, opts.keepBlanks])
+  const previewKey = JSON.stringify([opts.path, opts.format, opts.delimiter, opts.sheet, opts.columns, opts.keepBlanks])
+  const table = opts.format === 'csv' || opts.format === 'xlsx'
   useEffect(() => {
     if (!opts.path) return
     let cancelled = false
@@ -51,7 +52,7 @@ export function ImportWizard({ connId, db, coll, onClose }: { connId: string; db
         if (cancelled) return
         setPreview(p)
         if (opts.format === '') set('format', p.format)
-        if (p.format === 'csv' && opts.columns.length === 0 && p.columns.length > 0) {
+        if ((p.format === 'csv' || p.format === 'xlsx') && opts.columns.length === 0 && p.columns.length > 0) {
           set('columns', p.columns.map((c) => ({ name: c.name, type: 'auto', skip: false })))
         }
       })
@@ -66,7 +67,7 @@ export function ImportWizard({ connId, db, coll, onClose }: { connId: string; db
     try {
       const path = await backend.chooseImportFile()
       if (!path) return
-      setOpts((o) => ({ ...o, path, format: '', columns: [] }))
+      setOpts((o) => ({ ...o, path, format: '', sheet: '', columns: [] }))
       if (!coll) {
         const base = path.split(/[\\/]/).pop() ?? ''
         set('coll', base.replace(/\.[^.]+$/, '').replace(/[^\w-]/g, '_'))
@@ -154,8 +155,21 @@ export function ImportWizard({ connId, db, coll, onClose }: { connId: string; db
                 <option value="">Detect from extension</option>
                 <option value="json">JSON (array, NDJSON or mongoexport)</option>
                 <option value="csv">CSV / TSV</option>
+                <option value="xlsx">Excel (.xlsx)</option>
               </select>
             </label>
+            {opts.format === 'xlsx' && (preview?.sheets?.length ?? 0) > 1 && (
+              <label className="field">
+                <span>Sheet</span>
+                <select value={opts.sheet || preview?.sheets?.[0]} onChange={(e) => setOpts((o) => ({ ...o, sheet: e.target.value, columns: [] }))} aria-label="Sheet">
+                  {preview?.sheets?.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {opts.format === 'csv' && (
               <label className="field">
                 <span>Delimiter</span>
@@ -169,15 +183,15 @@ export function ImportWizard({ connId, db, coll, onClose }: { connId: string; db
               </label>
             )}
           </div>
-          {opts.format === 'csv' && (
+          {table && (
             <label className="check">
               <input type="checkbox" checked={opts.keepBlanks} onChange={(e) => set('keepBlanks', e.target.checked)} />
               Import empty cells as empty strings (default: omit the field)
             </label>
           )}
           <p className="muted small">
-            JSON files keep every BSON type (Extended JSON). CSV headers like <code>address.city</code> create nested documents; types
-            are inferred per cell unless you set them in the next step.
+            JSON files keep every BSON type (Extended JSON). CSV and Excel headers like <code>address.city</code> create nested documents;
+            types are inferred per cell unless you set them in the next step. Excel imports one sheet, with its first row as the header.
           </p>
         </div>
       )}
@@ -193,7 +207,7 @@ export function ImportWizard({ connId, db, coll, onClose }: { connId: string; db
               </div>
             </div>
           )}
-          {opts.format === 'csv' && opts.columns.length > 0 && (
+          {table && opts.columns.length > 0 && (
             <table className="grid compact columns-table">
               <thead>
                 <tr>
